@@ -1,0 +1,4 @@
+name: modem_controller
+build:
+  cmake: .
+  kconfig: Kconfig

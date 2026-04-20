@@ -1,71 +1,93 @@
 cmake_minimum_required(VERSION 3.20)
+project(modem_controller VERSION 1.0.0 LANGUAGES CXX)
 
-# Only look for Zephyr when explicitly building via west (ZEPHYR_BASE is set)
-if(DEFINED ENV{ZEPHYR_BASE} OR DEFINED ZEPHYR_BASE)
-    find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+option(MODEM_BUILD_TESTS "Build unit tests" ON)
+option(MODEM_BUILD_SHARED "Build shared library" OFF)
+
+# --- Detect platform ---
+if(CONFIG_ZEPHYR)
+    set(MODEM_PLATFORM "zephyr")
+elseif(WIN32)
+    set(MODEM_PLATFORM "windows")
+elseif(APPLE)
+    set(MODEM_PLATFORM "macos")
+elseif(UNIX)
+    set(MODEM_PLATFORM "linux")
+else()
+    message(FATAL_ERROR "Unsupported platform")
 endif()
 
-if(Zephyr_FOUND)
-    set(PLATFORM_ZEPHYR TRUE)
-    project(modem_controller VERSION 0.1.0 LANGUAGES CXX)
+message(STATUS "Modem Controller — platform: ${MODEM_PLATFORM}")
 
-    target_sources(app PRIVATE
-        src/main.cpp
-        src/modem_controller.cpp
-        src/at_command.cpp
-        src/xe310.cpp
-        src/hal/zephyr_uart.cpp
-    )
-    target_include_directories(app PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_compile_definitions(app PUBLIC PLATFORM_ZEPHYR)
+# --- Core sources (platform-independent) ---
+set(MODEM_CORE_SOURCES
+    src/at_command.cpp
+    src/modem_controller.cpp
+    src/xe310.cpp
+)
+
+# --- HAL sources (platform-specific) ---
+if(MODEM_PLATFORM STREQUAL "zephyr")
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp)
+elseif(MODEM_PLATFORM STREQUAL "windows")
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp)
 else()
-    project(modem_controller VERSION 0.1.0 LANGUAGES CXX)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp)
+endif()
 
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# --- Library target ---
+if(MODEM_BUILD_SHARED)
+    add_library(modem_controller SHARED ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
+else()
+    add_library(modem_controller STATIC ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
+endif()
 
-    option(BUILD_TESTS "Build unit tests" ON)
-    option(ENABLE_CPPCHECK "Enable cppcheck static analysis" OFF)
+target_include_directories(modem_controller
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
 
-    if(ENABLE_CPPCHECK)
-        find_program(CPPCHECK cppcheck)
-        if(CPPCHECK)
-            set(CMAKE_CXX_CPPCHECK
-                ${CPPCHECK}
-                --enable=warning,style,performance,portability
-                --std=c++17
-                --suppress=missingIncludeSystem
-                --quiet
-            )
-        endif()
-    endif()
+target_compile_features(modem_controller PUBLIC cxx_std_17)
 
-    add_library(modem_controller
-        src/modem_controller.cpp
-        src/at_command.cpp
-        src/xe310.cpp
-    )
+# --- Platform-specific link dependencies ---
+if(MODEM_PLATFORM STREQUAL "windows")
+    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_WINDOWS)
+elseif(MODEM_PLATFORM STREQUAL "macos")
+    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_POSIX)
+    find_library(IOKIT_FRAMEWORK IOKit)
+    target_link_libraries(modem_controller PRIVATE ${IOKIT_FRAMEWORK})
+elseif(MODEM_PLATFORM STREQUAL "linux")
+    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_POSIX)
+elseif(MODEM_PLATFORM STREQUAL "zephyr")
+    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_ZEPHYR)
+endif()
 
-    target_include_directories(modem_controller PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
+# --- Install rules ---
+include(GNUInstallDirs)
 
-    if(WIN32)
-        target_sources(modem_controller PRIVATE src/hal/win32_uart.cpp)
-        target_compile_definitions(modem_controller PUBLIC PLATFORM_WINDOWS)
-    else()
-        target_sources(modem_controller PRIVATE src/hal/posix_uart.cpp)
-        target_compile_definitions(modem_controller PUBLIC PLATFORM_POSIX)
-    endif()
+install(TARGETS modem_controller
+    EXPORT modem_controller-targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
-    if(BUILD_TESTS)
-        enable_testing()
-        add_subdirectory(tests)
-    endif()
+install(DIRECTORY include/modem
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
-    add_executable(modem_app src/main.cpp)
-    target_link_libraries(modem_app PRIVATE modem_controller)
+install(EXPORT modem_controller-targets
+    FILE modem_controller-config.cmake
+    NAMESPACE modem::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modem_controller
+)
+
+# --- Tests (desktop only) ---
+if(MODEM_BUILD_TESTS AND NOT MODEM_PLATFORM STREQUAL "zephyr")
+    enable_testing()
+    add_subdirectory(tests)
 endif()
