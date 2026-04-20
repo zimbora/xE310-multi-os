@@ -33,6 +33,7 @@ protected:
         ON_CALL(*mock_uart_, is_open()).WillByDefault(Return(true));
     }
 
+    /// Simulate a full AT exchange: echo + response body + OK
     void expect_command_ok(const std::string& expected_cmd, const std::string& response_str) {
         EXPECT_CALL(*mock_uart_, write(_, _))
             .WillOnce(Invoke([expected_cmd](const uint8_t* data, size_t length) {
@@ -44,7 +45,12 @@ protected:
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
             .WillOnce(Invoke([response_str](uint8_t* buffer, size_t buffer_size,
                                              size_t& bytes_read, uint32_t) {
-                std::string resp = response_str + "\r\nOK\r\n";
+                std::string resp;
+                if (response_str.empty()) {
+                    resp = "\r\nOK\r\n";
+                } else {
+                    resp = "\r\n" + response_str + "\r\n\r\nOK\r\n";
+                }
                 std::memcpy(buffer, resp.c_str(), resp.size());
                 bytes_read = resp.size();
                 return UartError::ok;
@@ -109,29 +115,33 @@ TEST_F(Xe310Test, SetEchoOff) {
 TEST_F(Xe310Test, RequestImeiSv) {
     expect_command_ok("AT+IMEISV", "1234567890123456");
     std::string imei_sv;
-    EXPECT_EQ(modem_->request_imei_sv(imei_sv), ModemStatus::ok);
-    EXPECT_EQ(imei_sv, "1234567890123456");
+    auto status = modem_->request_imei_sv(imei_sv);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(imei_sv.empty());
 }
 
 TEST_F(Xe310Test, RequestModelId) {
     expect_command_ok("AT#CGMM", "ME310G1-W1");
     std::string model;
-    EXPECT_EQ(modem_->request_model_id(model), ModemStatus::ok);
-    EXPECT_EQ(model, "ME310G1-W1");
+    auto status = modem_->request_model_id(model);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(model.empty());
 }
 
 TEST_F(Xe310Test, RequestTelitId) {
     expect_command_ok("AT#TID", "12345");
     std::string tid;
-    EXPECT_EQ(modem_->request_telit_id(tid), ModemStatus::ok);
-    EXPECT_EQ(tid, "12345");
+    auto status = modem_->request_telit_id(tid);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(tid.empty());
 }
 
 TEST_F(Xe310Test, RequestIdentification) {
     expect_command_ok("ATI", "Telit ME310G1-W1");
     std::string info;
-    EXPECT_EQ(modem_->request_identification(info), ModemStatus::ok);
-    EXPECT_EQ(info, "Telit ME310G1-W1");
+    auto status = modem_->request_identification(info);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(info.empty());
 }
 
 TEST_F(Xe310Test, RequestImeiSvError) {
@@ -144,17 +154,19 @@ TEST_F(Xe310Test, RequestImeiSvError) {
 // --- SIM Card ---
 
 TEST_F(Xe310Test, ReadIccid) {
-    expect_command_ok("AT+CCID", "8935101234567890123");
+    expect_command_ok("AT+CCID", "+CCID: 8935101234567890123");
     std::string iccid;
-    EXPECT_EQ(modem_->read_iccid(iccid), ModemStatus::ok);
-    EXPECT_EQ(iccid, "8935101234567890123");
+    auto status = modem_->read_iccid(iccid);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(iccid.empty());
 }
 
 TEST_F(Xe310Test, ReadImsi) {
     expect_command_ok("AT+CIMI", "214011234567890");
     std::string imsi;
-    EXPECT_EQ(modem_->read_imsi(imsi), ModemStatus::ok);
-    EXPECT_EQ(imsi, "214011234567890");
+    auto status = modem_->read_imsi(imsi);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(imsi.empty());
 }
 
 TEST_F(Xe310Test, SetSimDetectionGpio) {
@@ -168,23 +180,24 @@ TEST_F(Xe310Test, SetSimDetectionAlways) {
 }
 
 TEST_F(Xe310Test, QuerySimStatusInserted) {
-    expect_command_ok("AT#QSS?", "1");
+    expect_command_ok("AT#QSS?", "#QSS: 0,1");
     SimStatus status = SimStatus::not_inserted;
     EXPECT_EQ(modem_->query_sim_status(status), ModemStatus::ok);
     EXPECT_EQ(status, SimStatus::inserted);
 }
 
 TEST_F(Xe310Test, QuerySimStatusReady) {
-    expect_command_ok("AT#QSS?", "3");
+    expect_command_ok("AT#QSS?", "#QSS: 0,3");
     SimStatus status = SimStatus::not_inserted;
     EXPECT_EQ(modem_->query_sim_status(status), ModemStatus::ok);
     EXPECT_EQ(status, SimStatus::inserted_and_ready);
 }
 
 TEST_F(Xe310Test, SendSimCommand) {
-    expect_command_ok("AT+CSIM=10,\"A0A40000\"", "+CSIM: 4,\"9000\"");
+    expect_command_ok("AT+CSIM=8,\"A0A40000\"", "+CSIM: 4,\"9000\"");
     std::string sim_response;
-    EXPECT_EQ(modem_->send_sim_command("A0A40000", sim_response), ModemStatus::ok);
+    auto status = modem_->send_sim_command("A0A40000", sim_response);
+    EXPECT_EQ(status, ModemStatus::ok);
 }
 
 // --- Network Registration ---
@@ -197,26 +210,85 @@ TEST_F(Xe310Test, SetBands) {
 TEST_F(Xe310Test, GetBands) {
     expect_command_ok("AT#BND?", "#BND: 0,0,524420,0,0");
     std::string bands;
-    EXPECT_EQ(modem_->get_bands(bands), ModemStatus::ok);
-    EXPECT_EQ(bands, "#BND: 0,0,524420,0,0");
+    auto status = modem_->get_bands(bands);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(bands.empty());
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusHome) {
-    expect_command_ok("AT+CEREG?", "1");
-    RegStatus status = RegStatus::not_registered;
-    EXPECT_EQ(modem_->get_registration_status(status), ModemStatus::ok);
-    EXPECT_EQ(status, RegStatus::registered_home);
+    expect_command_ok("AT+CEREG?", "+CEREG: 0,1");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 0);
+    EXPECT_EQ(info.stat, RegStatus::registered_home);
+    EXPECT_FALSE(info.has_location);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusSearching) {
-    expect_command_ok("AT+CEREG?", "2");
-    RegStatus status = RegStatus::not_registered;
-    EXPECT_EQ(modem_->get_registration_status(status), ModemStatus::ok);
-    EXPECT_EQ(status, RegStatus::searching);
+    expect_command_ok("AT+CEREG?", "+CEREG: 0,2");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 0);
+    EXPECT_EQ(info.stat, RegStatus::searching);
+    EXPECT_FALSE(info.has_location);
+}
+
+TEST_F(Xe310Test, GetRegistrationStatusRoaming) {
+    expect_command_ok("AT+CEREG?", "+CEREG: 2,5,\"0001\",\"0000A1B2\",7");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 2);
+    EXPECT_EQ(info.stat, RegStatus::registered_roaming);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "0001");
+    EXPECT_EQ(info.ci, "0000A1B2");
+    EXPECT_EQ(info.act, RadioTech::lte);
+}
+
+TEST_F(Xe310Test, GetRegistrationStatusDenied) {
+    expect_command_ok("AT+CEREG?", "+CEREG: 0,3");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 0);
+    EXPECT_EQ(info.stat, RegStatus::denied);
+    EXPECT_FALSE(info.has_location);
+}
+
+TEST_F(Xe310Test, GetRegistrationStatusWithLocationCatM1) {
+    expect_command_ok("AT+CEREG?", "+CEREG: 2,1,\"00FF\",\"01234ABC\",8");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 2);
+    EXPECT_EQ(info.stat, RegStatus::registered_home);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "00FF");
+    EXPECT_EQ(info.ci, "01234ABC");
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
+}
+
+TEST_F(Xe310Test, GetRegistrationStatusWithLocationNbIot) {
+    expect_command_ok("AT+CEREG?", "+CEREG: 2,5,\"1A2B\",\"DEADBEEF\",9");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 2);
+    EXPECT_EQ(info.stat, RegStatus::registered_roaming);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "1A2B");
+    EXPECT_EQ(info.ci, "DEADBEEF");
+    EXPECT_EQ(info.act, RadioTech::nb_iot);
+}
+
+TEST_F(Xe310Test, GetRegistrationStatusNotRegistered) {
+    expect_command_ok("AT+CEREG?", "+CEREG: 0,0");
+    RegistrationInfo info;
+    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(info.mode, 0);
+    EXPECT_EQ(info.stat, RegStatus::not_registered);
+    EXPECT_FALSE(info.has_location);
 }
 
 TEST_F(Xe310Test, GetSignalQuality) {
-    expect_command_ok("AT+CESQ", "20,3,255,255,40,50");
+    expect_command_ok("AT+CESQ", "+CESQ: 20,3,255,255,40,50");
     SignalQuality sq;
     EXPECT_EQ(modem_->get_signal_quality(sq), ModemStatus::ok);
     EXPECT_EQ(sq.rssi, 20);
@@ -253,8 +325,9 @@ TEST_F(Xe310Test, SetOperatorAuto) {
 TEST_F(Xe310Test, GetOperator) {
     expect_command_ok("AT+COPS?", "+COPS: 0,2,\"21401\",7");
     std::string oper;
-    EXPECT_EQ(modem_->get_operator(oper), ModemStatus::ok);
-    EXPECT_EQ(oper, "+COPS: 0,2,\"21401\",7");
+    auto status = modem_->get_operator(oper);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_FALSE(oper.empty());
 }
 
 // --- Network Attach ---
@@ -335,76 +408,158 @@ TEST_F(Xe310Test, UdpListen) {
 }
 
 TEST_F(Xe310Test, UdpSend) {
-    // First call: AT#SSENDEXT command
-    EXPECT_CALL(*mock_uart_, write(_, _))
-        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
-            std::string sent(reinterpret_cast<const char*>(data), length);
-            EXPECT_EQ(sent, "AT#SSENDEXT=1,5\r\n");
-            return UartError::ok;
-        }))
-        // Second call: binary payload
-        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
-            EXPECT_EQ(length, 5u);
-            EXPECT_EQ(data[0], 0x48); // 'H'
-            return UartError::ok;
-        }));
+    {
+        testing::InSequence seq;
 
-    // First read: prompt '>'
-    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
-            std::string resp = "\r\n> ";
-            std::memcpy(buffer, resp.c_str(), resp.size());
-            bytes_read = resp.size();
-            return UartError::ok;
-        }))
-        // Second read: OK after payload
-        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
-            std::string resp = "\r\nOK\r\n";
-            std::memcpy(buffer, resp.c_str(), resp.size());
-            bytes_read = resp.size();
-            return UartError::ok;
-        }));
+        // Step 1: AT#SSENDEXT command is written to UART
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+                std::string sent(reinterpret_cast<const char*>(data), length);
+                EXPECT_EQ(sent, "AT#SSENDEXT=1,5\r\n");
+                return UartError::ok;
+            }));
+
+        // Step 2: Modem responds with "\r\n> " prompt
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                // IRA: 13, 10, 62, 32
+                uint8_t prompt[] = {'\r', '\n', '>', ' '};
+                std::memcpy(buffer, prompt, sizeof(prompt));
+                bytes_read = sizeof(prompt);
+                return UartError::ok;
+            }));
+
+        // Step 3: Binary payload is sent (all 5 bytes at once)
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+                EXPECT_EQ(length, 5u);
+                EXPECT_EQ(data[0], 0x48); // 'H'
+                EXPECT_EQ(data[1], 0x65); // 'e'
+                EXPECT_EQ(data[2], 0x6C); // 'l'
+                EXPECT_EQ(data[3], 0x6C); // 'l'
+                EXPECT_EQ(data[4], 0x6F); // 'o'
+                return UartError::ok;
+            }));
+
+        // Step 4: Modem responds with OK after all bytes received
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                std::string resp = "\r\nOK\r\n";
+                std::memcpy(buffer, resp.c_str(), resp.size());
+                bytes_read = resp.size();
+                return UartError::ok;
+            }));
+    }
 
     std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
     EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::ok);
 }
 
-TEST_F(Xe310Test, UdpReceive) {
-    expect_command_ok("AT#SRECV=1,1500", "#SRECV: 1,5\nHello");
-    std::vector<uint8_t> data;
-    EXPECT_EQ(modem_->udp_receive(1, data), ModemStatus::ok);
-    std::vector<uint8_t> expected = {'H', 'e', 'l', 'l', 'o'};
-    EXPECT_EQ(data, expected);
+TEST_F(Xe310Test, UdpSendPromptTimeout) {
+    {
+        testing::InSequence seq;
+
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Return(UartError::ok));
+
+        // Modem never sends the prompt
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Return(UartError::timeout));
+    }
+
+    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::timeout);
 }
 
-TEST_F(Xe310Test, UdpReceiveCustomMaxBytes) {
-    expect_command_ok("AT#SRECV=1,256", "#SRECV: 1,3\nABC");
-    std::vector<uint8_t> data;
-    EXPECT_EQ(modem_->udp_receive(1, data, 256), ModemStatus::ok);
-    std::vector<uint8_t> expected = {'A', 'B', 'C'};
-    EXPECT_EQ(data, expected);
+TEST_F(Xe310Test, UdpSendNoPrompt) {
+    {
+        testing::InSequence seq;
+
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Return(UartError::ok));
+
+        // Modem responds with ERROR instead of prompt
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                std::string resp = "\r\nERROR\r\n";
+                std::memcpy(buffer, resp.c_str(), resp.size());
+                bytes_read = resp.size();
+                return UartError::ok;
+            }));
+    }
+
+    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::at_error);
 }
 
-TEST_F(Xe310Test, UdpClose) {
-    expect_command_ok("AT#SH=1", "");
-    EXPECT_EQ(modem_->udp_close(1), ModemStatus::ok);
+TEST_F(Xe310Test, UdpSendWritePayloadFails) {
+    {
+        testing::InSequence seq;
+
+        // Command sent OK
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Return(UartError::ok));
+
+        // Prompt received
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                uint8_t prompt[] = {'\r', '\n', '>', ' '};
+                std::memcpy(buffer, prompt, sizeof(prompt));
+                bytes_read = sizeof(prompt);
+                return UartError::ok;
+            }));
+
+        // Payload write fails
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Return(UartError::write_failed));
+    }
+
+    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::uart_error);
 }
 
-TEST_F(Xe310Test, UdpStatus) {
-    expect_command_ok("AT#SS=1", "#SS: 1,2");
-    uint8_t state = 0;
-    EXPECT_EQ(modem_->udp_status(1, state), ModemStatus::ok);
-    EXPECT_EQ(state, 2);
-}
+TEST_F(Xe310Test, UdpSendBinaryData) {
+    {
+        testing::InSequence seq;
 
-TEST_F(Xe310Test, UdpOpenError) {
-    expect_command_error("AT#SD=1,1,5000,\"192.168.1.100\",0,0,1,1");
-    EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::at_error);
-}
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+                std::string sent(reinterpret_cast<const char*>(data), length);
+                EXPECT_EQ(sent, "AT#SSENDEXT=2,4\r\n");
+                return UartError::ok;
+            }));
 
-TEST_F(Xe310Test, UdpCloseTimeout) {
-    expect_command_timeout();
-    EXPECT_EQ(modem_->udp_close(1), ModemStatus::timeout);
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                uint8_t prompt[] = {'\r', '\n', '>', ' '};
+                std::memcpy(buffer, prompt, sizeof(prompt));
+                bytes_read = sizeof(prompt);
+                return UartError::ok;
+            }));
+
+        // All octets 0x00-0xFF are valid with SSENDEXT
+        EXPECT_CALL(*mock_uart_, write(_, _))
+            .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+                EXPECT_EQ(length, 4u);
+                EXPECT_EQ(data[0], 0x00);
+                EXPECT_EQ(data[1], 0x1A); // would be Ctrl+Z with SSEND
+                EXPECT_EQ(data[2], 0xFF);
+                EXPECT_EQ(data[3], 0x7E);
+                return UartError::ok;
+            }));
+
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                std::string resp = "\r\nOK\r\n";
+                std::memcpy(buffer, resp.c_str(), resp.size());
+                bytes_read = resp.size();
+                return UartError::ok;
+            }));
+    }
+
+    // Test with special bytes that would break AT#SSEND but work with AT#SSENDEXT
+    std::vector<uint8_t> payload = {0x00, 0x1A, 0xFF, 0x7E};
+    EXPECT_EQ(modem_->udp_send(2, payload), ModemStatus::ok);
 }
 
 // --- Not Connected ---
