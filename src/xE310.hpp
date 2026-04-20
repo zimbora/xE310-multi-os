@@ -335,8 +335,8 @@ private:
     Context     _ctx[XE310_MAX_CONTEXTS];
     Socket      _sock[XE310_MAX_SOCKETS];
 
-    void(*_tcpCloseCallback)(uint8_t) = nullptr;
-    void(*_smsHandler)(uint8_t, String, String) = nullptr;
+    void(*_tcpCloseCallback)(uint8_t);
+    void(*_smsHandler)(uint8_t, String, String);
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 

@@ -61,9 +61,10 @@ bool SerialPosix::begin(uint32_t baudrate) {
 
     tty.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN); // Raw input
 
-    // Non-blocking read
+    // Non-blocking read: return immediately if no data,
+    // or wait up to 0.1 s (VTIME=1 decisecond) for the first byte.
     tty.c_cc[VMIN]  = 0;
-    tty.c_cc[VTIME] = 1; // 0.1 s inter-character timeout
+    tty.c_cc[VTIME] = 1;
 
     if (tcsetattr(_fd, TCSANOW, &tty) != 0) {
         fprintf(stderr, "[SerialPosix] tcsetattr failed: %s\n", strerror(errno));

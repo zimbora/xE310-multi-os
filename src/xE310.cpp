@@ -91,7 +91,8 @@ static const size_t NPOS = (size_t)(-1);
 // -- Constructor --------------------------------------------------------------
 
 XE310::XE310(ISerial* serial, int8_t pwkey)
-    : _serial(serial), _pwkey(pwkey)
+    : _serial(serial), _pwkey(pwkey),
+      _tcpCloseCallback(nullptr), _smsHandler(nullptr)
 {
     memset(&_state, 0, sizeof(_state));
     _state.rssi      = 99;
@@ -555,6 +556,8 @@ bool XE310::getNetworkTime(struct tm* t) {
     memset(t, 0, sizeof(struct tm));
     int year = 0, mon = 0, day = 0, hr = 0, min = 0, sec = 0;
     sscanf(resp.c_str(), "%d/%d/%d,%d:%d:%d", &year, &mon, &day, &hr, &min, &sec);
+    // AT+CCLK returns a 2-digit year (e.g. "26" for 2026).
+    // tm_year is years since 1900, so yy + 100 gives the correct value for 2000–2099.
     t->tm_year = year + 100;
     t->tm_mon  = mon - 1;
     t->tm_mday = day;
@@ -773,13 +776,26 @@ void XE310::_parseURC(String line) {
         return;
     }
 
-    // Socket dropped
+    // Socket dropped: Telit xE310 emits "NO CARRIER" followed by the socket
+    // number on the same line (e.g. "3 NO CARRIER" or simply "NO CARRIER").
+    // Try to extract the socket number; fall back to closing the first found
+    // connected socket if no number is present.
     if (_contains(line, "NO CARRIER")) {
-        for (int i = 0; i < XE310_MAX_SOCKETS; i++) {
-            if (_sock[i].connected) {
-                _sock[i].connected = false;
-                if (_tcpCloseCallback)
-                    _tcpCloseCallback((uint8_t)i);
+        // Attempt to parse a leading socket number (e.g. "3 NO CARRIER")
+        int parsedSock = atoi(line.c_str()) - 1;
+        if (parsedSock >= 0 && parsedSock < XE310_MAX_SOCKETS) {
+            _sock[parsedSock].connected = false;
+            if (_tcpCloseCallback)
+                _tcpCloseCallback((uint8_t)parsedSock);
+        } else {
+            // No socket number found – close the first connected socket
+            for (int i = 0; i < XE310_MAX_SOCKETS; i++) {
+                if (_sock[i].connected) {
+                    _sock[i].connected = false;
+                    if (_tcpCloseCallback)
+                        _tcpCloseCallback((uint8_t)i);
+                    break;
+                }
             }
         }
         return;
@@ -842,7 +858,7 @@ void XE310::_updateRSSI() {
     size_t comma = _findStr(resp, ",");
     int raw = atoi(_substr(resp, 0, comma != NPOS ? comma : resp.length()).c_str());
 
-    _state.rssi = (raw == 99 || raw < 0)
+    _state.rssi = (raw == 99 || raw < 0 || raw > 31)
                       ? 99
                       : (int16_t)(-113 + raw * 2);
 }
