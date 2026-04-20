@@ -12,7 +12,7 @@ namespace modem {
 class ZephyrUart : public UartInterface {
 public:
     ZephyrUart() = default;
-    ~ZephyrUart() override { close(); }
+    ~ZephyrUart() override { dev_ = nullptr; }
 
     ZephyrUart(const ZephyrUart&) = delete;
     ZephyrUart& operator=(const ZephyrUart&) = delete;

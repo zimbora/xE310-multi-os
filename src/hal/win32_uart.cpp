@@ -10,7 +10,7 @@ namespace modem {
 class Win32Uart : public UartInterface {
 public:
     Win32Uart() = default;
-    ~Win32Uart() override { close(); }
+    ~Win32Uart() override { do_close(); }
 
     Win32Uart(const Win32Uart&) = delete;
     Win32Uart& operator=(const Win32Uart&) = delete;
@@ -83,10 +83,7 @@ public:
     }
 
     void close() override {
-        if (handle_ != INVALID_HANDLE_VALUE) {
-            CloseHandle(handle_);
-            handle_ = INVALID_HANDLE_VALUE;
-        }
+        do_close();
     }
 
     bool is_open() const override {
@@ -142,6 +139,13 @@ public:
     }
 
 private:
+    void do_close() {
+        if (handle_ != INVALID_HANDLE_VALUE) {
+            CloseHandle(handle_);
+            handle_ = INVALID_HANDLE_VALUE;
+        }
+    }
+
     HANDLE handle_ = INVALID_HANDLE_VALUE;
 };
 
