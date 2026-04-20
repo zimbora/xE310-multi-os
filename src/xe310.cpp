@@ -340,15 +340,10 @@ ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid)
 ModemStatus xE310::udp_send(uint8_t conn_id, const std::vector<uint8_t>& data) {
     AtResponse response;
     // AT#SSENDEXT=<connId>,<bytesToSend>
-    // Followed by raw binary data (no escape needed with SSENDEXT)
+    // Modem returns "\r\n> " prompt, then we send raw bytes.
+    // After <bytesToSend> bytes are received, modem returns OK.
     auto cmd = "AT#SSENDEXT=" + std::to_string(conn_id) + "," + std::to_string(data.size());
-    auto status = controller_.send_raw(cmd, response);
-    if (status != ModemStatus::ok) {
-        return status;
-    }
-
-    // Send binary payload after the '>' prompt
-    return controller_.send_binary(data, response);
+    return controller_.send_with_prompt(cmd, data, response);
 }
 
 ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes) {
