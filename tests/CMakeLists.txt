@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(modem_tests
     test_at_command.cpp
     test_modem_controller.cpp
+    test_xe310.cpp
 )
 
 target_link_libraries(modem_tests PRIVATE
