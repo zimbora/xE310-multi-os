@@ -1,0 +1,28 @@
+# Build directories
+build/
+
+# IDE and editor files
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+*.swp
+*~
+
+# CMake generated files
+CMakeUserPresets.json
+
+# Compiled objects and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# OS files
+Thumbs.db
+.DS_Store

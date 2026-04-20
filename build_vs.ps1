@@ -1,0 +1,33 @@
+#!/usr/bin/env pwsh
+# Build the modem_controller project using Visual Studio 2022
+
+param(
+    [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
+    [string]$Config = "Release",
+    [switch]$Clean,
+    [switch]$Test
+)
+
+$ErrorActionPreference = "Stop"
+$BuildDir = Join-Path $PSScriptRoot "build"
+
+if ($Clean -and (Test-Path $BuildDir)) {
+    Write-Host "Cleaning build directory..."
+    Remove-Item -Recurse -Force $BuildDir
+}
+
+Write-Host "Configuring with Visual Studio 17 2022..."
+cmake -B $BuildDir -G "Visual Studio 17 2022" $PSScriptRoot
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host "Building ($Config)..."
+cmake --build $BuildDir --config $Config
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host "Build succeeded."
+
+if ($Test) {
+    Write-Host "Running tests..."
+    ctest --test-dir $BuildDir --output-on-failure -C $Config
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
