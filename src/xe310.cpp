@@ -1,6 +1,7 @@
 #include "modem/xe310.h"
 
 #include <cstdlib>
+#include <cstring>
 
 namespace modem {
 
@@ -143,55 +144,20 @@ ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
 
 ModemStatus xE310::set_radio_tech(RadioTech tech) {
     AtResponse response;
-    return controller_.send_raw("AT#WS46=" + std::to_string(static_cast<int>(tech)), response);
+    // AT+COPS=0,,,<act> — automatic selection with specific access technology
+    return controller_.send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response);
 }
 
-ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask) {
+ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
     AtResponse response;
-    auto cmd = "AT#BND=" + std::to_string(gsm_mask) + ","
-             + std::to_string(umts_mask) + ","
-             + std::to_string(lte_mask);
+    // AT+COPS=1,2,"<oper>",<act> — manual selection, numeric format
+    auto cmd = "AT+COPS=4,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
     return controller_.send_raw(cmd, response);
 }
 
-ModemStatus xE310::get_bands(std::string& bands) {
+ModemStatus xE310::set_operator_auto() {
     AtResponse response;
-    auto status = controller_.send_raw("AT#BND?", response);
-    if (status == ModemStatus::ok) {
-        bands = response.body;
-    }
-    return status;
-}
-
-ModemStatus xE310::get_registration_status(RegStatus& status) {
-    AtResponse response;
-    auto result = controller_.send_raw("AT+CEREG?", response);
-    if (result == ModemStatus::ok) {
-        // Response: +CEREG: <n>,<stat>
-        auto pos = response.body.find(',');
-        if (pos != std::string::npos && pos + 1 < response.body.size()) {
-            int val = std::atoi(response.body.c_str() + pos + 1);
-            status = static_cast<RegStatus>(val);
-        }
-    }
-    return result;
-}
-
-ModemStatus xE310::get_signal_quality(int& rssi, int& ber) {
-    AtResponse response;
-    auto status = controller_.send_raw("AT+CSQ", response);
-    if (status == ModemStatus::ok) {
-        // Response: +CSQ: <rssi>,<ber>
-        auto pos = response.body.find(':');
-        if (pos != std::string::npos) {
-            rssi = std::atoi(response.body.c_str() + pos + 1);
-            auto comma = response.body.find(',', pos);
-            if (comma != std::string::npos) {
-                ber = std::atoi(response.body.c_str() + comma + 1);
-            }
-        }
-    }
-    return status;
+    return controller_.send_raw("AT+COPS=0", response);
 }
 
 ModemStatus xE310::get_operator(std::string& oper) {
@@ -208,9 +174,67 @@ ModemStatus xE310::get_operator(std::string& oper) {
     return status;
 }
 
-ModemStatus xE310::set_operator_auto() {
+ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
+                              uint64_t tdscdma_mask, uint64_t lte_mask_over_64) {
     AtResponse response;
-    return controller_.send_raw("AT+COPS=0", response);
+    // AT#BND=<band>,<UMTS_band>,<LTE_band>,<TDSCDMA_band>,<LTE_band_over_64>
+    auto cmd = "AT#BND=" + std::to_string(gsm_mask) + ","
+             + std::to_string(umts_mask) + ","
+             + std::to_string(lte_mask) + ","
+             + std::to_string(tdscdma_mask) + ","
+             + std::to_string(lte_mask_over_64);
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::get_bands(std::string& bands) {
+    AtResponse response;
+    // Response: #BND: <band>,<UMTS_band>,<LTE_band>,<TDSCDMA_band>,<LTE_band_over_64>
+    auto status = controller_.send_raw("AT#BND?", response);
+    if (status == ModemStatus::ok) {
+        bands = response.body;
+    }
+    return status;
+}
+
+ModemStatus xE310::get_registration_status(RegStatus& status) {
+    AtResponse response;
+    auto result = controller_.send_raw("AT+CEREG?", response);
+    if (result == ModemStatus::ok) {
+        // Response: +CEREG: <mode>,<stat>[,[<tac>],[<ci>],[<AcT>]]
+        auto pos = response.body.find(',');
+        if (pos != std::string::npos && pos + 1 < response.body.size()) {
+            int val = std::atoi(response.body.c_str() + pos + 1);
+            status = static_cast<RegStatus>(val);
+        }
+    }
+    return result;
+}
+
+ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CESQ", response);
+    if (status == ModemStatus::ok) {
+        // 2G:  +CESQ: <rssi>,<ber>,255,255,255,255
+        // LTE: +CESQ: 99,99,255,255,<rsrq>,<rsrp>
+        auto pos = response.body.find(':');
+        if (pos != std::string::npos) {
+            const char* p = response.body.c_str() + pos + 1;
+            sq.rssi = std::atoi(p);
+
+            const char* c1 = std::strchr(p, ',');
+            if (c1) { sq.ber = std::atoi(c1 + 1); }
+
+            // Skip fields 3 and 4 (always 255)
+            const char* c2 = c1 ? std::strchr(c1 + 1, ',') : nullptr;
+            const char* c3 = c2 ? std::strchr(c2 + 1, ',') : nullptr;
+            const char* c4 = c3 ? std::strchr(c3 + 1, ',') : nullptr;
+            if (c4) { sq.rsrq = std::atoi(c4 + 1); }
+
+            const char* c5 = c4 ? std::strchr(c4 + 1, ',') : nullptr;
+            if (c5) { sq.rsrp = std::atoi(c5 + 1); }
+        }
+    }
+    return status;
 }
 
 } // namespace modem

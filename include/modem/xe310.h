@@ -21,14 +21,15 @@ enum class SimStatus : uint8_t {
     inserted_and_ready = 3,
 };
 
-/// Radio access technology for AT#WS46 / AT+COPS.
+/// Radio access technology for AT+COPS <act> parameter.
 enum class RadioTech : uint8_t {
-    //lte = 7,
+    gsm = 0,
+    lte = 7,
     cat_m1 = 8,
     nb_iot = 9,
 };
 
-/// Network registration status.
+/// Network registration status for AT+CEREG.
 enum class RegStatus : uint8_t {
     not_registered = 0,
     registered_home = 1,
@@ -36,6 +37,14 @@ enum class RegStatus : uint8_t {
     denied = 3,
     unknown = 4,
     registered_roaming = 5,
+};
+
+/// Signal quality from AT+CESQ.
+struct SignalQuality {
+    int rssi = 99;    ///< 0-31 (-113..-51 dBm), 99=unknown (2G)
+    int ber = 99;     ///< 0-7 bit error rate, 99=unknown (2G)
+    int rsrq = 255;   ///< 0-34 ref signal quality, 255=unknown (LTE)
+    int rsrp = 255;   ///< 0-97 ref signal power, 255=unknown (LTE)
 };
 
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
@@ -89,11 +98,21 @@ public:
     /// AT+CGDCONT? — Read current APN for a context.
     ModemStatus get_apn(uint8_t cid, std::string& apn);
 
-    /// AT#WS46 — Set radio access technology.
+    /// AT+COPS — Set radio access technology.
     ModemStatus set_radio_tech(RadioTech tech);
 
-    /// AT#BND — Set LTE band bitmask.
-    ModemStatus set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask);
+    /// AT+COPS — Manual operator selection with access technology and automatic fallback.
+    ModemStatus set_operator_manual(const std::string& oper, RadioTech tech);
+
+    /// AT+COPS=0 — Automatic operator selection.
+    ModemStatus set_operator_auto();
+
+    /// AT+COPS? — Read current operator.
+    ModemStatus get_operator(std::string& oper);
+
+    /// AT#BND — Set band bitmasks.
+    ModemStatus set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
+                          uint64_t tdscdma_mask = 0, uint64_t lte_mask_over_64 = 0);
 
     /// AT#BND? — Read current band configuration.
     ModemStatus get_bands(std::string& bands);
@@ -101,14 +120,8 @@ public:
     /// AT+CEREG? — Query EPS network registration status.
     ModemStatus get_registration_status(RegStatus& status);
 
-    /// AT+CSQ — Query signal quality (RSSI).
-    ModemStatus get_signal_quality(int& rssi, int& ber);
-
-    /// AT+COPS? — Read current operator.
-    ModemStatus get_operator(std::string& oper);
-
-    /// AT+COPS=0 — Automatic operator selection.
-    ModemStatus set_operator_auto();
+    /// AT+CESQ — Query extended signal quality.
+    ModemStatus get_signal_quality(SignalQuality& sq);
 
 private:
     ModemController& controller_;
