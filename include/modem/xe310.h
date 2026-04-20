@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace modem {
 
@@ -140,6 +141,27 @@ public:
     /// AT+CGCONTRDP — Get full PDP context dynamic parameters (IP, gateway, DNS).
     ModemStatus get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
                              std::string& dns_primary, std::string& dns_secondary);
+
+    // --- UDP Connection ---
+
+    /// AT#SD — Open a UDP socket to a remote host.
+    ModemStatus udp_open(uint8_t conn_id, const std::string& host, uint16_t remote_port,
+                         uint16_t local_port = 0, uint8_t cid = 1);
+
+    /// AT#SL — Listen for incoming UDP data on a local port.
+    ModemStatus udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid = 1);
+
+    /// AT#SSEND / AT#SSENDEXT — Send data over an open UDP socket.
+    ModemStatus udp_send(uint8_t conn_id, const std::vector<uint8_t>& data);
+
+    /// AT#SRECV — Receive data from a UDP socket.
+    ModemStatus udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes = 1500);
+
+    /// AT#SH — Close a UDP socket.
+    ModemStatus udp_close(uint8_t conn_id);
+
+    /// AT#SS — Query socket status.
+    ModemStatus udp_status(uint8_t conn_id, uint8_t& state);
 
 private:
     ModemController& controller_;

@@ -72,4 +72,37 @@ ModemStatus ModemController::send_raw(const std::string& command, AtResponse& re
     return send_command(cmd, response);
 }
 
+ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+                                         uint32_t timeout_ms) {
+    if (!is_connected()) {
+        return ModemStatus::not_connected;
+    }
+
+    auto err = uart_->write(data.data(), data.size());
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    // Read response (expect OK or ERROR after binary payload)
+    uint8_t buffer[512];
+    size_t bytes_read = 0;
+    err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, timeout_ms);
+    if (err == UartError::timeout) {
+        return ModemStatus::timeout;
+    }
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    buffer[bytes_read] = '\0';
+    std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
+    response = AtCommand::parse_response(raw);
+
+    if (response.status != AtStatus::ok) {
+        return ModemStatus::at_error;
+    }
+
+    return ModemStatus::ok;
+}
+
 } // namespace modem

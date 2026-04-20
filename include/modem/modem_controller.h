@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace modem {
 
@@ -31,7 +32,11 @@ public:
 
     /// Convenience: send raw AT command string.
     ModemStatus send_raw(const std::string& command, AtResponse& response,
-                         uint32_t timeout_ms = 1000);
+                         uint32_t timeout_ms = 5000);
+
+    /// Send binary data.
+    ModemStatus send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+                            uint32_t timeout_ms = 5000);
 
 private:
     std::unique_ptr<UartInterface> uart_;

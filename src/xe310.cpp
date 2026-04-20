@@ -259,4 +259,80 @@ ModemStatus xE310::get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& 
     return status;
 }
 
+// --- UDP Connection ---
+
+ModemStatus xE310::udp_open(uint8_t conn_id, const std::string& host, uint16_t remote_port,
+                             uint16_t local_port, uint8_t cid) {
+    AtResponse response;
+    // AT#SD=<connId>,1,<remotePort>,"<host>",0,<localPort>,1,<cid>
+    // Protocol 1 = UDP, closure type 0 = local disconnect, data mode 1 = command mode
+    auto cmd = "AT#SD=" + std::to_string(conn_id) + ",1,"
+             + std::to_string(remote_port) + ",\""
+             + host + "\",0,"
+             + std::to_string(local_port) + ",1,"
+             + std::to_string(cid);
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid) {
+    AtResponse response;
+    // AT#SL=<connId>,1,<listenPort>,255,<cid>
+    // State 1 = enable listening, 255 = accept from any IP
+    auto cmd = "AT#SL=" + std::to_string(conn_id) + ",1,"
+             + std::to_string(local_port) + ",255,"
+             + std::to_string(cid);
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::udp_send(uint8_t conn_id, const std::vector<uint8_t>& data) {
+    AtResponse response;
+    // AT#SSENDEXT=<connId>,<bytesToSend>
+    // Followed by raw binary data (no escape needed with SSENDEXT)
+    auto cmd = "AT#SSENDEXT=" + std::to_string(conn_id) + "," + std::to_string(data.size());
+    auto status = controller_.send_raw(cmd, response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // Send binary payload after the '>' prompt
+    return controller_.send_binary(data, response);
+}
+
+ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes) {
+    AtResponse response;
+    // AT#SRECV=<connId>,<maxBytes>
+    auto cmd = "AT#SRECV=" + std::to_string(conn_id) + "," + std::to_string(max_bytes);
+    auto status = controller_.send_raw(cmd, response);
+    if (status == ModemStatus::ok) {
+        // Response: #SRECV: <connId>,<recvDataLen>\r\n<data>
+        // Find the data after the first \n
+        auto nl_pos = response.body.find('\n');
+        if (nl_pos != std::string::npos && nl_pos + 1 < response.body.size()) {
+            auto payload = response.body.substr(nl_pos + 1);
+            data.assign(payload.begin(), payload.end());
+        } else {
+            data.clear();
+        }
+    }
+    return status;
+}
+
+ModemStatus xE310::udp_close(uint8_t conn_id) {
+    AtResponse response;
+    return controller_.send_raw("AT#SH=" + std::to_string(conn_id), response);
+}
+
+ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT#SS=" + std::to_string(conn_id), response);
+    if (status == ModemStatus::ok) {
+        // Response: #SS: <connId>,<state>
+        auto comma_pos = response.body.find(',');
+        if (comma_pos != std::string::npos) {
+            state = static_cast<uint8_t>(std::atoi(response.body.c_str() + comma_pos + 1));
+        }
+    }
+    return status;
+}
+
 } // namespace modem
