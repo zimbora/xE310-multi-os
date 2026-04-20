@@ -47,6 +47,20 @@ All code must compile and run correctly on every target platform.
 - Mock the HAL interface for testability
 - Integration tests run against real hardware or a modem simulator
 
+## Static Analysis
+
+Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
+
+```bash
+cppcheck --project=cppcheck.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
+```
+
+To generate a detailed checkers report:
+
+```bash
+cppcheck --project=cppcheck.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
+```
+
 ## Directory Structure
 
 ```
