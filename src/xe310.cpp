@@ -88,7 +88,11 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
     AtResponse response;
     auto result = controller_.send_raw("AT#QSS?", response);
     if (result == ModemStatus::ok) {
-        status = static_cast<SimStatus>(std::atoi(response.body.c_str()));
+        // Response body: "#QSS: <mode>,<status>"
+        auto comma_pos = response.body.find(',');
+        if (comma_pos != std::string::npos) {
+            status = static_cast<SimStatus>(std::atoi(response.body.c_str() + comma_pos + 1));
+        }
     }
     return result;
 }
