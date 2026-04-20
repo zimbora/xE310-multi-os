@@ -59,6 +59,8 @@ ModemStatus xE310::request_identification(std::string& info) {
     return status;
 }
 
+// --- SIM Card ---
+
 ModemStatus xE310::read_iccid(std::string& iccid) {
     AtResponse response;
     auto status = controller_.send_raw("AT+CCID", response);
@@ -86,12 +88,7 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
     AtResponse response;
     auto result = controller_.send_raw("AT#QSS?", response);
     if (result == ModemStatus::ok) {
-        // Response: #QSS: <mode>,<status>
-        auto pos = response.body.find(',');
-        if (pos != std::string::npos && pos + 1 < response.body.size()) {
-            int val = std::atoi(response.body.c_str() + pos + 1);
-            status = static_cast<SimStatus>(val);
-        }
+        status = static_cast<SimStatus>(std::atoi(response.body.c_str()));
     }
     return result;
 }
@@ -101,78 +98,12 @@ ModemStatus xE310::send_sim_command(const std::string& command, std::string& sim
     auto cmd = "AT+CSIM=" + std::to_string(command.size()) + ",\"" + command + "\"";
     auto status = controller_.send_raw(cmd, response);
     if (status == ModemStatus::ok) {
-        // Response: +CSIM: <length>,"<response>"
-        auto pos = response.body.find('"');
-        auto end = response.body.rfind('"');
-        if (pos != std::string::npos && end != pos) {
-            sim_response = response.body.substr(pos + 1, end - pos - 1);
-        } else {
-            sim_response = response.body;
-        }
+        sim_response = response.body;
     }
     return status;
 }
 
-ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
-    AtResponse response;
-    auto cmd = "AT+CGDCONT=" + std::to_string(cid) + ",\"IP\",\"" + apn + "\"";
-    return controller_.send_raw(cmd, response);
-}
-
-ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
-    AtResponse response;
-    auto status = controller_.send_raw("AT+CGDCONT?", response);
-    if (status == ModemStatus::ok) {
-        // Find the line matching the requested cid
-        auto cid_str = std::to_string(cid);
-        auto pos = response.body.find("+CGDCONT: " + cid_str);
-        if (pos != std::string::npos) {
-            // Format: +CGDCONT: <cid>,"<type>","<apn>",...
-            auto first_q = response.body.find('"', pos);
-            if (first_q != std::string::npos) {
-                auto second_q = response.body.find('"', first_q + 1);
-                auto third_q = response.body.find('"', second_q + 1);
-                auto fourth_q = response.body.find('"', third_q + 1);
-                if (third_q != std::string::npos && fourth_q != std::string::npos) {
-                    apn = response.body.substr(third_q + 1, fourth_q - third_q - 1);
-                }
-            }
-        }
-    }
-    return status;
-}
-
-ModemStatus xE310::set_radio_tech(RadioTech tech) {
-    AtResponse response;
-    // AT+COPS=0,,,<act> — automatic selection with specific access technology
-    return controller_.send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response);
-}
-
-ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
-    AtResponse response;
-    // AT+COPS=1,2,"<oper>",<act> — manual selection, numeric format
-    auto cmd = "AT+COPS=4,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
-    return controller_.send_raw(cmd, response);
-}
-
-ModemStatus xE310::set_operator_auto() {
-    AtResponse response;
-    return controller_.send_raw("AT+COPS=0", response);
-}
-
-ModemStatus xE310::get_operator(std::string& oper) {
-    AtResponse response;
-    auto status = controller_.send_raw("AT+COPS?", response);
-    if (status == ModemStatus::ok) {
-        // Response: +COPS: <mode>,<format>,"<oper>",<act>
-        auto pos = response.body.find('"');
-        auto end = response.body.rfind('"');
-        if (pos != std::string::npos && end != pos) {
-            oper = response.body.substr(pos + 1, end - pos - 1);
-        }
-    }
-    return status;
-}
+// --- Network Registration ---
 
 ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
                               uint64_t tdscdma_mask, uint64_t lte_mask_over_64) {
@@ -200,12 +131,7 @@ ModemStatus xE310::get_registration_status(RegStatus& status) {
     AtResponse response;
     auto result = controller_.send_raw("AT+CEREG?", response);
     if (result == ModemStatus::ok) {
-        // Response: +CEREG: <mode>,<stat>[,[<tac>],[<ci>],[<AcT>]]
-        auto pos = response.body.find(',');
-        if (pos != std::string::npos && pos + 1 < response.body.size()) {
-            int val = std::atoi(response.body.c_str() + pos + 1);
-            status = static_cast<RegStatus>(val);
-        }
+        status = static_cast<RegStatus>(std::atoi(response.body.c_str()));
     }
     return result;
 }
@@ -214,24 +140,120 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
     AtResponse response;
     auto status = controller_.send_raw("AT+CESQ", response);
     if (status == ModemStatus::ok) {
-        // 2G:  +CESQ: <rssi>,<ber>,255,255,255,255
-        // LTE: +CESQ: 99,99,255,255,<rsrq>,<rsrp>
-        auto pos = response.body.find(':');
+        // Parse CESQ response
+        std::sscanf(response.body.c_str(), "%d,%d,%*d,%*d,%d,%d",
+                    &sq.rssi, &sq.ber, &sq.rsrq, &sq.rsrp);
+    }
+    return status;
+}
+
+ModemStatus xE310::set_radio_tech(RadioTech tech) {
+    AtResponse response;
+    // AT+COPS=0,,,<act> — automatic selection with specific access technology
+    return controller_.send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response);
+}
+
+ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
+    AtResponse response;
+    // AT+COPS=4,2,"<oper>",<act> — manual selection, numeric format, automatic fallback
+    auto cmd = "AT+COPS=4,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::set_operator_auto() {
+    AtResponse response;
+    return controller_.send_raw("AT+COPS=0", response);
+}
+
+ModemStatus xE310::get_operator(std::string& oper) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+COPS?", response);
+    if (status == ModemStatus::ok) {
+        oper = response.body;
+    }
+    return status;
+}
+
+// --- Network Attach ---
+
+ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
+    AtResponse response;
+    auto cmd = "AT+CGDCONT=" + std::to_string(cid) + ",\"IP\",\"" + apn + "\"";
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CGDCONT?", response);
+    if (status == ModemStatus::ok) {
+        apn = response.body;
+    }
+    return status;
+}
+
+ModemStatus xE310::activate_pdp(uint8_t cid) {
+    AtResponse response;
+    return controller_.send_raw("AT+CGACT=1," + std::to_string(cid), response);
+}
+
+ModemStatus xE310::deactivate_pdp(uint8_t cid) {
+    AtResponse response;
+    return controller_.send_raw("AT+CGACT=0," + std::to_string(cid), response);
+}
+
+ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CGACT?", response);
+    if (status == ModemStatus::ok) {
+        // Response: +CGACT: <cid>,<state>
+        auto pos = response.body.find(std::to_string(cid) + ",");
         if (pos != std::string::npos) {
-            const char* p = response.body.c_str() + pos + 1;
-            sq.rssi = std::atoi(p);
+            active = (response.body[pos + 2] == '1');
+        } else {
+            active = false;
+        }
+    }
+    return status;
+}
 
-            const char* c1 = std::strchr(p, ',');
-            if (c1) { sq.ber = std::atoi(c1 + 1); }
+ModemStatus xE310::get_ip_address(uint8_t cid, std::string& ip_addr) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CGPADDR=" + std::to_string(cid), response);
+    if (status == ModemStatus::ok) {
+        // Response: +CGPADDR: <cid>,"<ip_addr>"
+        auto start = response.body.find('"');
+        auto end = response.body.rfind('"');
+        if (start != std::string::npos && end != std::string::npos && end > start) {
+            ip_addr = response.body.substr(start + 1, end - start - 1);
+        }
+    }
+    return status;
+}
 
-            // Skip fields 3 and 4 (always 255)
-            const char* c2 = c1 ? std::strchr(c1 + 1, ',') : nullptr;
-            const char* c3 = c2 ? std::strchr(c2 + 1, ',') : nullptr;
-            const char* c4 = c3 ? std::strchr(c3 + 1, ',') : nullptr;
-            if (c4) { sq.rsrq = std::atoi(c4 + 1); }
+ModemStatus xE310::get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
+                                 std::string& dns_primary, std::string& dns_secondary) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CGCONTRDP=" + std::to_string(cid), response);
+    if (status == ModemStatus::ok) {
+        // Response: +CGCONTRDP: <cid>,<bearer_id>,"<apn>","<ip>","<gw>","<dns1>","<dns2>"
+        // Extract quoted fields
+        size_t pos = 0;
+        int field = 0;
+        while (pos < response.body.size()) {
+            auto start = response.body.find('"', pos);
+            if (start == std::string::npos) break;
+            auto end = response.body.find('"', start + 1);
+            if (end == std::string::npos) break;
 
-            const char* c5 = c4 ? std::strchr(c4 + 1, ',') : nullptr;
-            if (c5) { sq.rsrp = std::atoi(c5 + 1); }
+            auto value = response.body.substr(start + 1, end - start - 1);
+            switch (field) {
+                case 1: ip_addr = value; break;
+                case 2: gw_addr = value; break;
+                case 3: dns_primary = value; break;
+                case 4: dns_secondary = value; break;
+            }
+            ++field;
+            pos = end + 1;
         }
     }
     return status;

@@ -90,25 +90,7 @@ public:
     /// AT+CSIM — Send a command to the SIM card.
     ModemStatus send_sim_command(const std::string& command, std::string& sim_response);
 
-    // --- Network ---
-
-    /// AT+CGDCONT — Set PDP context (APN).
-    ModemStatus set_apn(uint8_t cid, const std::string& apn);
-
-    /// AT+CGDCONT? — Read current APN for a context.
-    ModemStatus get_apn(uint8_t cid, std::string& apn);
-
-    /// AT+COPS — Set radio access technology.
-    ModemStatus set_radio_tech(RadioTech tech);
-
-    /// AT+COPS — Manual operator selection with access technology and automatic fallback.
-    ModemStatus set_operator_manual(const std::string& oper, RadioTech tech);
-
-    /// AT+COPS=0 — Automatic operator selection.
-    ModemStatus set_operator_auto();
-
-    /// AT+COPS? — Read current operator.
-    ModemStatus get_operator(std::string& oper);
+    // --- Network Registration ---
 
     /// AT#BND — Set band bitmasks.
     ModemStatus set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
@@ -122,6 +104,42 @@ public:
 
     /// AT+CESQ — Query extended signal quality.
     ModemStatus get_signal_quality(SignalQuality& sq);
+
+    /// AT+COPS — Set radio access technology.
+    ModemStatus set_radio_tech(RadioTech tech);
+
+    /// AT+COPS — Manual operator selection with access technology and automatic fallback.
+    ModemStatus set_operator_manual(const std::string& oper, RadioTech tech);
+
+    /// AT+COPS=0 — Automatic operator selection.
+    ModemStatus set_operator_auto();
+
+    /// AT+COPS? — Read current operator.
+    ModemStatus get_operator(std::string& oper);
+
+    // --- Network Attach ---
+
+    /// AT+CGDCONT — Set PDP context (APN).
+    ModemStatus set_apn(uint8_t cid, const std::string& apn);
+
+    /// AT+CGDCONT? — Read current APN for a context.
+    ModemStatus get_apn(uint8_t cid, std::string& apn);
+
+    /// AT+CGACT=1 — Activate PDP context.
+    ModemStatus activate_pdp(uint8_t cid);
+
+    /// AT+CGACT=0 — Deactivate PDP context.
+    ModemStatus deactivate_pdp(uint8_t cid);
+
+    /// AT+CGACT? — Query PDP context activation state (0=deactivated, 1=activated).
+    ModemStatus get_pdp_state(uint8_t cid, bool& active);
+
+    /// AT+CGPADDR — Get the IP address for a PDP context.
+    ModemStatus get_ip_address(uint8_t cid, std::string& ip_addr);
+
+    /// AT+CGCONTRDP — Get full PDP context dynamic parameters (IP, gateway, DNS).
+    ModemStatus get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
+                             std::string& dns_primary, std::string& dns_secondary);
 
 private:
     ModemController& controller_;
