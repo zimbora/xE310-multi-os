@@ -1,8 +1,11 @@
 #include "modem/modem_controller.h"
 #include "modem/at_command.h"
 #include "modem/uart_factory.h"
-#include <iostream>
+#include "modem/xe310.h"
+#include "modem/log.h"
 #include <memory>
+
+MODEM_LOG_MODULE_REGISTER(modem_app);
 
 int main() {
     auto uart = modem::create_platform_uart();
@@ -10,20 +13,26 @@ int main() {
 
     auto status = controller.connect("COM3");
     if (status != modem::ModemStatus::ok) {
-        std::cerr << "Failed to open modem port" << std::endl;
+        MODEM_LOG_ERR("Failed to open modem port");
         return 1;
     }
 
-    modem::AtResponse response;
-    status = controller.send_raw("AT", response);
+    modem::xE310 modem(controller);
+
+    status = modem.at_ok();
     if (status != modem::ModemStatus::ok) {
-        std::cerr << "Modem not responsive" << std::endl;
+        MODEM_LOG_ERR("Modem not responsive");
         controller.disconnect();
         return 1;
     }
 
-    std::cout << "Modem initialized successfully" << std::endl;
-    std::cout << "Response: " << response.body << std::endl;
+    MODEM_LOG_INF("Modem initialized successfully");
+    status = modem.set_echo(false);
+    if (status != modem::ModemStatus::ok) {
+        MODEM_LOG_ERR("Failed to disable echo");
+    } else {
+        MODEM_LOG_INF("Echo disabled");
+    }
 
     controller.disconnect();
     return 0;
