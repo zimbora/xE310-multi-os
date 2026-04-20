@@ -28,6 +28,20 @@ else()
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
     option(BUILD_TESTS "Build unit tests" ON)
+    option(ENABLE_CPPCHECK "Enable cppcheck static analysis" OFF)
+
+    if(ENABLE_CPPCHECK)
+        find_program(CPPCHECK cppcheck)
+        if(CPPCHECK)
+            set(CMAKE_CXX_CPPCHECK
+                ${CPPCHECK}
+                --enable=warning,style,performance,portability
+                --std=c++17
+                --suppress=missingIncludeSystem
+                --quiet
+            )
+        endif()
+    endif()
 
     add_library(modem_controller
         src/modem_controller.cpp

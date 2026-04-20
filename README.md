@@ -57,8 +57,14 @@ cppcheck --project=cppcheck.cppcheck --std=c++17 --enable=warning,style,performa
 
 To generate a detailed checkers report:
 
+### Desktop (Windows)
 ```bash
-cppcheck --project=cppcheck.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
+cppcheck --project=cppcheck-windos.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
+```
+
+### Embedded (Zephyr)
+```bash
+cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
 ```
 
 ## Directory Structure

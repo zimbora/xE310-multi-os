@@ -1,5 +1,9 @@
 # Build directories
 build/
+build-linux/
+
+# Static analysis
+checkers.txt
 
 # IDE and editor files
 .vs/
