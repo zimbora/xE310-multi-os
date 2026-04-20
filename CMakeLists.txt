@@ -13,6 +13,7 @@ if(Zephyr_FOUND)
         src/main.cpp
         src/modem_controller.cpp
         src/at_command.cpp
+        src/xe310.cpp
         src/hal/zephyr_uart.cpp
     )
     target_include_directories(app PUBLIC
@@ -31,6 +32,7 @@ else()
     add_library(modem_controller
         src/modem_controller.cpp
         src/at_command.cpp
+        src/xe310.cpp
     )
 
     target_include_directories(modem_controller PUBLIC
