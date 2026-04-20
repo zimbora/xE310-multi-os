@@ -40,6 +40,16 @@ enum class RegStatus : uint8_t {
     registered_roaming = 5,
 };
 
+/// Full registration info from AT+CEREG?
+struct RegistrationInfo {
+    uint8_t mode = 0;
+    RegStatus stat = RegStatus::not_registered;
+    std::string lac;
+    std::string ci;
+    RadioTech act = RadioTech::gsm;
+    bool has_location = false;
+};
+
 /// Signal quality from AT+CESQ.
 struct SignalQuality {
     int rssi = 99;    ///< 0-31 (-113..-51 dBm), 99=unknown (2G)
@@ -101,7 +111,7 @@ public:
     ModemStatus get_bands(std::string& bands);
 
     /// AT+CEREG? — Query EPS network registration status.
-    ModemStatus get_registration_status(RegStatus& status);
+    ModemStatus get_registration_status(RegistrationInfo& info);
 
     /// AT+CESQ — Query extended signal quality.
     ModemStatus get_signal_quality(SignalQuality& sq);

@@ -131,22 +131,71 @@ ModemStatus xE310::get_bands(std::string& bands) {
     return status;
 }
 
-ModemStatus xE310::get_registration_status(RegStatus& status) {
+ModemStatus xE310::get_registration_status(RegistrationInfo& info) {
     AtResponse response;
     auto result = controller_.send_raw("AT+CEREG?", response);
-    if (result == ModemStatus::ok) {
-        status = static_cast<RegStatus>(std::atoi(response.body.c_str()));
+    if (result != ModemStatus::ok) {
+        return result;
     }
-    return result;
+
+    // Response body: "+CEREG: <mode>,<stat>[,<lac>,<ci>[,<AcT>]]"
+    auto colon_pos = response.body.find(':');
+    if (colon_pos == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+
+    // Tokenize from after the colon
+    std::string params = response.body.substr(colon_pos + 1);
+
+    // Parse comma-separated fields
+    std::vector<std::string> fields;
+    size_t pos = 0;
+    while (pos < params.size()) {
+        auto comma = params.find(',', pos);
+        if (comma == std::string::npos) {
+            fields.push_back(params.substr(pos));
+            break;
+        }
+        fields.push_back(params.substr(pos, comma - pos));
+        pos = comma + 1;
+    }
+
+    // Trim leading/trailing whitespace and quotes from each field
+    auto trim = [](const std::string& s) -> std::string {
+        auto start = s.find_first_not_of(" \t\"");
+        auto end = s.find_last_not_of(" \t\"");
+        if (start == std::string::npos) return "";
+        return s.substr(start, end - start + 1);
+    };
+
+    if (fields.size() >= 2) {
+        info.mode = static_cast<uint8_t>(std::atoi(trim(fields[0]).c_str()));
+        info.stat = static_cast<RegStatus>(std::atoi(trim(fields[1]).c_str()));
+    }
+
+    if (fields.size() >= 4) {
+        info.lac = trim(fields[2]);
+        info.ci = trim(fields[3]);
+        info.has_location = true;
+    }
+
+    if (fields.size() >= 5) {
+        info.act = static_cast<RadioTech>(std::atoi(trim(fields[4]).c_str()));
+    }
+
+    return ModemStatus::ok;
 }
 
 ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
     AtResponse response;
     auto status = controller_.send_raw("AT+CESQ", response);
     if (status == ModemStatus::ok) {
-        // Parse CESQ response
-        std::sscanf(response.body.c_str(), "%d,%d,%*d,%*d,%d,%d",
-                    &sq.rssi, &sq.ber, &sq.rsrq, &sq.rsrp);
+        // Response body: "+CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>"
+        auto pos = response.body.find(':');
+        if (pos != std::string::npos) {
+            std::sscanf(response.body.c_str() + pos + 1, " %d,%d,%*d,%*d,%d,%d",
+                        &sq.rssi, &sq.ber, &sq.rsrq, &sq.rsrp);
+        }
     }
     return status;
 }
