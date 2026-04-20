@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<project version="2">
+    <root name="."/>
+    <builddir>build</builddir>
+    <platform>native</platform>
+
+    <paths>
+        <dir name="src"/>
+        <dir name="include"/>
+    </paths>
+
+    <includedir>
+        <dir name="include"/>
+    </includedir>
+
+    <defines>
+        <define name="PLATFORM_WINDOWS"/>
+    </defines>
+
+    <exclude>
+        <path name="build/"/>
+        <path name="build-linux/"/>
+    </exclude>
+
+    <suppressions>
+        <suppress>missingIncludeSystem</suppress>
+    </suppressions>
+</project>
