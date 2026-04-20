@@ -105,4 +105,65 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
     return ModemStatus::ok;
 }
 
+ModemStatus ModemController::send_with_prompt(const std::string& command,
+                                               const std::vector<uint8_t>& data,
+                                               AtResponse& response,
+                                               uint32_t timeout_ms) {
+    if (!is_connected()) {
+        return ModemStatus::not_connected;
+    }
+
+    // Step 1: Send the AT command
+    std::string full_cmd = command + "\r\n";
+    auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()),
+                            full_cmd.size());
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    // Step 2: Wait for the prompt "\r\n> "
+    uint8_t buffer[512];
+    size_t bytes_read = 0;
+    err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, timeout_ms);
+    if (err == UartError::timeout) {
+        return ModemStatus::timeout;
+    }
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    // Verify we got the '>' prompt
+    buffer[bytes_read] = '\0';
+    std::string prompt(reinterpret_cast<const char*>(buffer), bytes_read);
+    if (prompt.find('>') == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+
+    // Step 3: Send the binary payload
+    err = uart_->write(data.data(), data.size());
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    // Step 4: Read the final response (OK or ERROR)
+    bytes_read = 0;
+    err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, timeout_ms);
+    if (err == UartError::timeout) {
+        return ModemStatus::timeout;
+    }
+    if (err != UartError::ok) {
+        return ModemStatus::uart_error;
+    }
+
+    buffer[bytes_read] = '\0';
+    std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
+    response = AtCommand::parse_response(raw);
+
+    if (response.status != AtStatus::ok) {
+        return ModemStatus::at_error;
+    }
+
+    return ModemStatus::ok;
+}
+
 } // namespace modem

@@ -38,6 +38,10 @@ public:
     ModemStatus send_binary(const std::vector<uint8_t>& data, AtResponse& response,
                             uint32_t timeout_ms = 5000);
 
+    /// Send a command that expects a '>' prompt, then send binary data, then read final response.
+    ModemStatus send_with_prompt(const std::string& command, const std::vector<uint8_t>& data,
+                                 AtResponse& response, uint32_t timeout_ms = 5000);
+
 private:
     std::unique_ptr<UartInterface> uart_;
 };
