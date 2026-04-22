@@ -52,16 +52,16 @@ cmake --build build
     ```yaml
     manifest:
       projects:
-        - name: modem_controller
+        - name: modem_xe310
           url: <your-repo-url>
-          path: modules/modem_controller
+          path: modules/modem_xe310
           revision: main
     ```
 
 2. Or add it directly in your application's `CMakeLists.txt`:
 
     ```cmake
-    list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/modules/modem_controller)
+    list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/modules/modem_xe310)
     ```
 
 3. Enable in `prj.conf`:
@@ -81,34 +81,33 @@ cmake --build build
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
-    modem_controller
+    modem_xe310
     GIT_REPOSITORY <your-repo-url>
     GIT_TAG        main
 )
-FetchContent_MakeAvailable(modem_controller)
+FetchContent_MakeAvailable(modem_xe310)
 
-target_link_libraries(your_app PRIVATE modem_controller)
+target_link_libraries(your_app PRIVATE modem_xe310)
 ```
 
 ### CMake (add_subdirectory)
 
 ```cmake
 add_subdirectory(path/to/modem)
-target_link_libraries(your_app PRIVATE modem_controller)
+target_link_libraries(your_app PRIVATE modem_xe310)
 ```
 
 ### CMake (find_package — after install)
 
 ```cmake
-find_package(modem_controller REQUIRED)
-target_link_libraries(your_app PRIVATE modem::modem_controller)
+find_package(modem_xe310 REQUIRED)
+target_link_libraries(your_app PRIVATE modem::modem_xe310)
 ```
 
 ### Include headers
 
 ```cpp
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
 ```
 
 ---

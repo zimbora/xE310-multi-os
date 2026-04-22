@@ -3,7 +3,7 @@
 
 if(CONFIG_MODEM_CONTROLLER)
 
-zephyr_library_named(modem_controller)
+zephyr_library_named(modem_xe310)
 
 zephyr_library_sources(
     ../src/at_command.cpp

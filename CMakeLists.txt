@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(modem_controller VERSION 1.0.0 LANGUAGES CXX)
+project(modem_xe310 VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,7 +20,7 @@ else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
-message(STATUS "Modem Controller — platform: ${MODEM_PLATFORM}")
+message(STATUS "Modem xE310 — platform: ${MODEM_PLATFORM}")
 
 # --- Core sources (platform-independent) ---
 set(MODEM_CORE_SOURCES
@@ -40,37 +40,37 @@ endif()
 
 # --- Library target ---
 if(MODEM_BUILD_SHARED)
-    add_library(modem_controller SHARED ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
+    add_library(modem_xe310 SHARED ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
 else()
-    add_library(modem_controller STATIC ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
+    add_library(modem_xe310 STATIC ${MODEM_CORE_SOURCES} ${MODEM_PLATFORM_SOURCES})
 endif()
 
-target_include_directories(modem_controller
+target_include_directories(modem_xe310
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(modem_controller PUBLIC cxx_std_17)
+target_compile_features(modem_xe310 PUBLIC cxx_std_17)
 
 # --- Platform-specific link dependencies ---
 if(MODEM_PLATFORM STREQUAL "windows")
-    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_WINDOWS)
+    target_compile_definitions(modem_xe310 PRIVATE MODEM_PLATFORM_WINDOWS)
 elseif(MODEM_PLATFORM STREQUAL "macos")
-    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_POSIX)
+    target_compile_definitions(modem_xe310 PRIVATE MODEM_PLATFORM_POSIX)
     find_library(IOKIT_FRAMEWORK IOKit)
-    target_link_libraries(modem_controller PRIVATE ${IOKIT_FRAMEWORK})
+    target_link_libraries(modem_xe310 PRIVATE ${IOKIT_FRAMEWORK})
 elseif(MODEM_PLATFORM STREQUAL "linux")
-    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_POSIX)
+    target_compile_definitions(modem_xe310 PRIVATE MODEM_PLATFORM_POSIX)
 elseif(MODEM_PLATFORM STREQUAL "zephyr")
-    target_compile_definitions(modem_controller PRIVATE MODEM_PLATFORM_ZEPHYR)
+    target_compile_definitions(modem_xe310 PRIVATE MODEM_PLATFORM_ZEPHYR)
 endif()
 
 # --- Install rules ---
 include(GNUInstallDirs)
 
-install(TARGETS modem_controller
-    EXPORT modem_controller-targets
+install(TARGETS modem_xe310
+    EXPORT modem_xe310-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -80,10 +80,10 @@ install(DIRECTORY include/modem
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(EXPORT modem_controller-targets
-    FILE modem_controller-config.cmake
+install(EXPORT modem_xe310-targets
+    FILE modem_xe310-config.cmake
     NAMESPACE modem::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modem_controller
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modem_xe310
 )
 
 # --- Tests (desktop only) ---
