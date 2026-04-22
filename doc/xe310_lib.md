@@ -47,30 +47,25 @@ cmake --build build
 
 ### Zephyr OS
 
-1. Add the modem library as a module in your `west.yml`:
+#### Zephyr v4.x (upstream) — prj.conf
 
-    ```yaml
-    manifest:
-      projects:
-        - name: modem_xe310
-          url: <your-repo-url>
-          path: modules/modem_xe310
-          revision: main
-    ```
+```ini
+CONFIG_CPP=y
+CONFIG_STD_CPP17=y
+CONFIG_REQUIRES_FULL_LIBCPP=y
+CONFIG_MODEM_CONTROLLER=y
+```
 
-2. Or add it directly in your application's `CMakeLists.txt`:
+#### NCS v2.8.0 (Zephyr ~3.6.x) — prj.conf
 
-    ```cmake
-    list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/modules/modem_xe310)
-    ```
+```ini
+CONFIG_CPLUSPLUS=y
+CONFIG_STD_CPP17=y
+CONFIG_LIB_CPLUSPLUS=y
+CONFIG_MODEM_CONTROLLER=y
+```
 
-3. Enable in `prj.conf`:
-
-    ```ini
-    CONFIG_MODEM_CONTROLLER=y
-    CONFIG_CPLUSPLUS=y
-    CONFIG_STD_CPP17=y
-    ```
+> **Note:** NCS v2.8.0 bundles Zephyr ~3.6.x. To use Zephyr v4.x, use NCS v3.0+ or plain upstream Zephyr with `west`.
 
 ---
 
