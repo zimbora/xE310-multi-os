@@ -12,7 +12,7 @@ zephyr_library_sources(
     ../src/hal/zephyr_uart.cpp
 )
 
-zephyr_library_include_directories(../include)
+zephyr_include_directories(../include)
 
 zephyr_library_compile_definitions(PLATFORM_ZEPHYR)
 
