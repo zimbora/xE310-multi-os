@@ -291,7 +291,7 @@ All methods return `ModemStatus`:
 #include "modem/modem_controller.h"
 
 // Platform-specific UART (e.g., Win32)
-#include "modem/hal/uart_win32.h"
+#include "modem/hal/win32_uart.h"
 
 int main() {
     auto uart = std::make_unique<modem::UartWin32>();
@@ -320,7 +320,7 @@ int main() {
 ```cpp
 #include "modem/xe310.h"
 #include "modem/modem_controller.h"
-#include "modem/hal/uart_posix.h"
+#include "modem/hal/posix_uart.h"
 
 int main() {
     auto uart = std::make_unique<modem::UartPosix>();
@@ -382,7 +382,7 @@ int main() {
 ```cpp
 #include "modem/xe310.h"
 #include "modem/modem_controller.h"
-#include "modem/hal/uart_zephyr.h"
+#include "modem/hal/zephyr_uart.h"
 
 void main(void) {
     auto uart = std::make_unique<modem::UartZephyr>();
