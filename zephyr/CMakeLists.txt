@@ -1,5 +1,7 @@
+
+cmake_minimum_required(VERSION 3.5)
 # Zephyr module integration
-# Compatible with Zephyr v4.x and NCS v3.x+
+# Compatible with Zephyr v3.3.0 and NCS v2.x+
 
 if(CONFIG_MODEM_CONTROLLER)
 

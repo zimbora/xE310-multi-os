@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.5)
 
 # Zephyr build: find_package(Zephyr) must precede project() to set up the toolchain
 if(DEFINED ZEPHYR_BASE OR DEFINED ENV{ZEPHYR_BASE})
