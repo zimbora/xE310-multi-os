@@ -1,4 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
+
+# Zephyr build: find_package(Zephyr) must precede project() to set up the toolchain
+if(DEFINED ZEPHYR_BASE OR DEFINED ENV{ZEPHYR_BASE})
+    set(CONF_FILE ${CMAKE_CURRENT_SOURCE_DIR}/zephyr/prj.conf)
+    set(EXTRA_ZEPHYR_MODULES ${CMAKE_CURRENT_SOURCE_DIR})
+    find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+    project(modem_xe310 VERSION 1.0.0)
+    target_sources(app PRIVATE src/main.cpp)
+    target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(app PRIVATE modem_xe310)
+    return()
+endif()
+
 project(modem_xe310 VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
