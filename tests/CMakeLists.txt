@@ -15,7 +15,7 @@ add_executable(modem_tests
 )
 
 target_link_libraries(modem_tests PRIVATE
-    modem_controller
+    modem_xe310
     GTest::gtest_main
     GTest::gmock
 )

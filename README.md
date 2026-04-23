@@ -34,18 +34,27 @@ All code must compile and run correctly on every target platform.
 - Zephyr builds integrate via Zephyr's CMake system
 - Desktop builds use standard CMake workflows
 
+### Desktop (Windows)
+```bash
+.\build_vs.ps1
+```
+
+### Linux
+```bash
+.\build_linux.ps1
+```
+
+### Embedded (Zephyr)
+```bash
+.\build_zephyr.ps1
+```
+
 ## Conventions
 
 - AT commands are sent as null-terminated strings over UART
 - All UART operations must support both blocking and non-blocking modes
 - Timeouts must be configurable for every AT command exchange
 - Logging must be abstracted (use Zephyr logging on embedded, stdout/spdlog on desktop)
-
-## Testing
-
-- Unit tests use Google Test (desktop only)
-- Mock the HAL interface for testability
-- Integration tests run against real hardware or a modem simulator
 
 ## Static Analysis
 
@@ -59,12 +68,23 @@ To generate a detailed checkers report:
 
 ### Desktop (Windows)
 ```bash
-cppcheck --project=cppcheck-windos.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
 ```
 
 ### Embedded (Zephyr)
 ```bash
 cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
+```
+
+## Testing
+
+- Unit tests use Google Test (desktop only)
+- Mock the HAL interface for testability
+- Integration tests run against real hardware or a modem simulator
+
+```bash
+cd build
+ctest --output-on-failure
 ```
 
 ## Directory Structure

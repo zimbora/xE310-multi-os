@@ -1,0 +1,16 @@
+config MODEM_CONTROLLER
+    bool "Modem Controller library"
+    default n
+    depends on CPP
+    help
+      Enable the modem controller library for AT command communication
+      with Telit xE310 modems over UART.
+
+config MODEM_CONTROLLER_LOG_LEVEL
+    int "Modem Controller log level"
+    depends on MODEM_CONTROLLER
+    default 3
+    range 0 4
+    help
+      Sets the log level for the modem controller module.
+      0 = OFF, 1 = ERR, 2 = WRN, 3 = INF, 4 = DBG

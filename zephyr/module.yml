@@ -1,0 +1,4 @@
+name: modem_xe310
+build:
+  cmake: zephyr
+  kconfig: zephyr/Kconfig

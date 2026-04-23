@@ -123,7 +123,17 @@ Use `--gtest_filter` to run a subset of tests:
     )
     ```
 
-3. Mock the HAL interface — never depend on real hardware:
+3. The test executable links against `modem_xe310`:
+
+    ```cmake
+    target_link_libraries(modem_tests PRIVATE
+        modem_xe310
+        GTest::gtest_main
+        GTest::gmock
+    )
+    ```
+
+4. Mock the HAL interface — never depend on real hardware:
 
     ```cpp
     class MockUart : public UartInterface {
@@ -138,8 +148,8 @@ Use `--gtest_filter` to run a subset of tests:
     };
     ```
 
-4. Follow naming conventions: `snake_case` for variables/functions, `PascalCase` for test fixtures
-5. Rebuild and run:
+5. Follow naming conventions: `snake_case` for variables/functions, `PascalCase` for test fixtures
+6. Rebuild and run:
 
     ```bash
     cmake --build build
