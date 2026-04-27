@@ -1,4 +1,5 @@
 #include "modem/modem_controller.h"
+#include "modem/log.h"
 
 #include <cstring>
 
@@ -43,6 +44,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
+    MODEM_LOG_DBG(">>: %s", cmd_str.c_str());
 
     // Read response
     uint8_t buffer[512];
@@ -83,6 +85,15 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
         return ModemStatus::uart_error;
     }
 
+    std::string hex;
+    hex.reserve(data.size() * 3);
+    char byte_buf[4];
+    for (uint8_t b : data) {
+        snprintf(byte_buf, sizeof(byte_buf), "%02x ", b);
+        hex += byte_buf;
+    }
+    MODEM_LOG_DBG(">>: [binary %zu bytes]: %s", data.size(), hex.c_str());
+
     // Read response (expect OK or ERROR after binary payload)
     uint8_t buffer[512];
     size_t bytes_read = 0;
@@ -120,6 +131,8 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
+
+    MODEM_LOG_DBG(">>: %s", command.c_str());
 
     // Step 2: Wait for the prompt "\r\n> "
     uint8_t buffer[512];
