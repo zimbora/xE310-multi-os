@@ -180,6 +180,14 @@ public:
     /// AT#PSMURC? — Read PSM URC enable state.
     ModemStatus get_psm_urc(bool& enabled);
 
+    // --- Power ---
+
+    /// AT#SHDN — Software shutdown. Detaches from network and powers off the module.
+    ModemStatus shutdown();
+
+    /// AT#REBOOT — Immediately reboot the module.
+    ModemStatus reboot();
+
     // --- Network Registration ---
 
     /// AT#BND — Set band bitmasks.

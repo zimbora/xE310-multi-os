@@ -322,6 +322,28 @@ TEST_F(Xe310Test, GetPsmUrcDisabled) {
     EXPECT_FALSE(enabled);
 }
 
+// --- Power ---
+
+TEST_F(Xe310Test, Shutdown) {
+    expect_command_ok("AT#SHDN", "");
+    EXPECT_EQ(modem_->shutdown(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, ShutdownError) {
+    expect_command_error("AT#SHDN");
+    EXPECT_EQ(modem_->shutdown(), ModemStatus::at_error);
+}
+
+TEST_F(Xe310Test, Reboot) {
+    expect_command_ok("AT#REBOOT", "");
+    EXPECT_EQ(modem_->reboot(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, RebootError) {
+    expect_command_error("AT#REBOOT");
+    EXPECT_EQ(modem_->reboot(), ModemStatus::at_error);
+}
+
 // --- Network Registration ---
 
 TEST_F(Xe310Test, SetBands) {

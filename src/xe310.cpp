@@ -302,6 +302,18 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
     return status;
 }
 
+// --- Power ---
+
+ModemStatus xE310::shutdown() {
+    AtResponse response;
+    return controller_.send_raw("AT#SHDN", response);
+}
+
+ModemStatus xE310::reboot() {
+    AtResponse response;
+    return controller_.send_raw("AT#REBOOT", response);
+}
+
 // --- Network Registration ---
 
 ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
@@ -577,5 +589,7 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     }
     return status;
 }
+
+// --- Power Options ---
 
 } // namespace modem
