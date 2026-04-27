@@ -99,6 +99,12 @@ install(EXPORT modem_xe310-targets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modem_xe310
 )
 
+# --- Application executable (desktop only) ---
+if(NOT MODEM_PLATFORM STREQUAL "zephyr")
+    add_executable(modem_app src/main.cpp)
+    target_link_libraries(modem_app PRIVATE modem_xe310)
+endif()
+
 # --- Tests (desktop only) ---
 if(MODEM_BUILD_TESTS AND NOT MODEM_PLATFORM STREQUAL "zephyr")
     enable_testing()
