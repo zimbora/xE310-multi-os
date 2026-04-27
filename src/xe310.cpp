@@ -1,7 +1,11 @@
 #include "modem/xe310.h"
+#include "modem/at_command.h"
+#include "modem/log.h"
 
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
+#include <vector>
 
 namespace modem {
 
@@ -36,9 +40,39 @@ ModemStatus xE310::request_model_id(std::string& model) {
     AtResponse response;
     auto status = controller_.send_raw("AT#CGMM", response);
     if (status == ModemStatus::ok) {
-        model = response.body;
+        constexpr std::string_view prefix = "#CGMM: ";
+        if (response.body.rfind(prefix, 0) == 0) {
+            model = response.body.substr(prefix.size());
+        } else {
+            model = response.body;
+        }
     }
     return status;
+}
+
+ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT#SWPKGV", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // Body contains 4 lines joined by AT_TERMINATOR
+    std::string_view body = response.body;
+    std::string_view terminator = AT_TERMINATOR;
+    std::string* fields[] = { &ver.package_version, &ver.modem_version,
+                               &ver.prod_params_version, &ver.app_version };
+    std::string_view::size_type start = 0;
+    for (auto* field : fields) {
+        auto end = body.find(terminator, start);
+        *field = (end == std::string_view::npos)
+                 ? std::string(body.substr(start))
+                 : std::string(body.substr(start, end - start));
+        if (end == std::string_view::npos) break;
+        start = end + terminator.size();
+    }
+
+    return ModemStatus::ok;
 }
 
 ModemStatus xE310::request_telit_id(std::string& tid) {

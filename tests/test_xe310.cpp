@@ -144,6 +144,24 @@ TEST_F(Xe310Test, RequestIdentification) {
     EXPECT_FALSE(info.empty());
 }
 
+TEST_F(Xe310Test, RequestSwPackageVersion) {
+    expect_command_ok("AT#SWPKGV",
+                      "17.00.xx4-B006\r\n17.00.xx4\r\nB006\r\nSW_V001");
+    SoftwarePackageVersion ver;
+    auto status = modem_->request_sw_package_version(ver);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_EQ(ver.package_version, "17.00.xx4-B006");
+    EXPECT_EQ(ver.modem_version, "17.00.xx4");
+    EXPECT_EQ(ver.prod_params_version, "B006");
+    EXPECT_EQ(ver.app_version, "SW_V001");
+}
+
+TEST_F(Xe310Test, RequestSwPackageVersionError) {
+    expect_command_error("AT#SWPKGV");
+    SoftwarePackageVersion ver;
+    EXPECT_EQ(modem_->request_sw_package_version(ver), ModemStatus::at_error);
+}
+
 TEST_F(Xe310Test, RequestImeiSvError) {
     expect_command_error("AT+IMEISV");
     std::string imei_sv;
