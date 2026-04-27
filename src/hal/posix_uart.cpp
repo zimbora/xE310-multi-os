@@ -1,6 +1,6 @@
 #include "modem/uart_interface.h"
 
-#ifdef PLATFORM_POSIX
+#ifdef MODEM_PLATFORM_POSIX
 
 #include <fcntl.h>
 #include <unistd.h>

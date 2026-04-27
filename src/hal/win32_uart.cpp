@@ -1,6 +1,6 @@
 #include "modem/uart_interface.h"
 
-#ifdef PLATFORM_WINDOWS
+#ifdef MODEM_PLATFORM_WINDOWS
 
 #include <windows.h>
 #include <string>

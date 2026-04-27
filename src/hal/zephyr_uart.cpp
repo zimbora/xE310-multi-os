@@ -1,6 +1,6 @@
 #include "modem/uart_interface.h"
 
-#ifdef PLATFORM_ZEPHYR
+#ifdef MODEM_PLATFORM_ZEPHYR
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
