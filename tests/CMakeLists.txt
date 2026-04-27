@@ -6,6 +6,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/google/googletest.git
     GIT_TAG v1.14.0
 )
+# Force Google Test to use the dynamic CRT (/MD) to match the rest of the project on MSVC
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(modem_tests
