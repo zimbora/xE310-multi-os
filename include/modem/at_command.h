@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#define   AT_TERMINATOR     		"\r\n"
+
 namespace modem {
 
 enum class AtStatus {

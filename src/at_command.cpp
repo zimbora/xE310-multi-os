@@ -1,6 +1,8 @@
 #include "modem/at_command.h"
+#include "modem/log.h"
 
 #include <algorithm>
+#include <string_view>
 
 namespace modem {
 
@@ -23,18 +25,36 @@ AtResponse AtCommand::parse_response(const std::string& raw) {
         return response;
     }
 
-    // Check for standard AT result codes
-    if (raw.find("OK") != std::string::npos) {
-        response.status = AtStatus::ok;
-    } else if (raw.find("ERROR") != std::string::npos) {
-        response.status = AtStatus::error;
-    } else if (raw.find("BUSY") != std::string::npos) {
-        response.status = AtStatus::busy;
-    } else {
-        response.status = AtStatus::error;
+    MODEM_LOG_DBG("<<: %s", raw.c_str());
+
+    // Split raw response into lines on AT_TERMINATOR ("\r\n")
+    constexpr std::string_view terminator = AT_TERMINATOR;
+    std::string::size_type start = 0;
+    while (start < raw.size()) {
+        auto end = raw.find(AT_TERMINATOR, start);
+        std::string line = (end == std::string::npos)
+                           ? raw.substr(start)
+                           : raw.substr(start, end - start);
+        start = (end == std::string::npos) ? raw.size() : end + terminator.size();
+
+        if (line.empty()) {
+            continue;
+        }
+
+        if (line == "OK") {
+            response.status = AtStatus::ok;
+        } else if (line == "ERROR" || line.rfind("+CME ERROR:", 0) == 0 || line.rfind("+CMS ERROR:", 0) == 0) {
+            response.status = AtStatus::error;
+        } else if (line == "BUSY") {
+            response.status = AtStatus::busy;
+        } else {
+            if (!response.body.empty()) {
+                response.body += AT_TERMINATOR;
+            }
+            response.body += line;
+        }
     }
 
-    response.body = raw;
     return response;
 }
 
