@@ -146,6 +146,162 @@ ModemStatus xE310::send_sim_command(const std::string& command, std::string& sim
     return status;
 }
 
+// --- PSM ---
+
+ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
+    AtResponse response;
+    // AT+CPSMS=<mode>[,<ReqPeriodicRAU>[,<ReqGPRSreadyTimer>[,<ReqPeriodicTAU>[,<ReqActiveTime>]]]]
+    // Empty optional fields are left blank between commas, timer values are quoted binary strings.
+    std::string cmd = "AT+CPSMS=" + std::to_string(static_cast<int>(cfg.mode));
+    if (!cfg.req_periodic_rau.empty() || !cfg.req_gprs_ready_timer.empty() ||
+        !cfg.req_periodic_tau.empty() || !cfg.req_active_time.empty()) {
+        cmd += ",";
+        if (!cfg.req_periodic_rau.empty())      cmd += "\"" + cfg.req_periodic_rau + "\"";
+        cmd += ",";
+        if (!cfg.req_gprs_ready_timer.empty())  cmd += "\"" + cfg.req_gprs_ready_timer + "\"";
+        cmd += ",";
+        if (!cfg.req_periodic_tau.empty())      cmd += "\"" + cfg.req_periodic_tau + "\"";
+        cmd += ",";
+        if (!cfg.req_active_time.empty())       cmd += "\"" + cfg.req_active_time + "\"";
+    }
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CPSMS?", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+    // Response body: "+CPSMS: <mode>,[<RAU>],[<GPRSTimer>],[<TAU>],[<ActiveTime>]"
+    auto colon = response.body.find(':');
+    if (colon == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+    std::string params = response.body.substr(colon + 1);
+
+    auto strip_quotes = [](std::string s) -> std::string {
+        if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
+            s = s.substr(1, s.size() - 2);
+        }
+        return s;
+    };
+
+    // Tokenize on commas
+    std::vector<std::string> fields;
+    std::string_view sv = params;
+    while (!sv.empty()) {
+        auto comma = sv.find(',');
+        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
+        // trim leading space
+        auto start = token.find_first_not_of(' ');
+        fields.push_back(start == std::string_view::npos ? "" : std::string(token.substr(start)));
+        if (comma == std::string_view::npos) break;
+        sv = sv.substr(comma + 1);
+    }
+
+    if (fields.size() >= 1) cfg.mode = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
+    if (fields.size() >= 2) cfg.req_periodic_rau         = strip_quotes(fields[1]);
+    if (fields.size() >= 3) cfg.req_gprs_ready_timer      = strip_quotes(fields[2]);
+    if (fields.size() >= 4) cfg.req_periodic_tau          = strip_quotes(fields[3]);
+    if (fields.size() >= 5) cfg.req_active_time           = strip_quotes(fields[4]);
+
+    return ModemStatus::ok;
+}
+
+ModemStatus xE310::disable_psm() {
+    AtResponse response;
+    return controller_.send_raw("AT+CPSMS=0", response);
+}
+
+ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
+    AtResponse response;
+    // AT#CPSMS=<mode>[,<RAU>[,<GPRSTimer>[,<TAU>[,<ActiveTime>[,<psmVersion>[,<psmThreshold>]]]]]]
+    std::string cmd = "AT#CPSMS=" + std::to_string(static_cast<int>(cfg.mode));
+
+    // Determine last field that has a value so we know how far to extend the command
+    int last = 0;
+    if (cfg.has_periodic_rau)    last = 1;
+    if (cfg.has_gprs_ready_timer) last = 2;
+    if (cfg.has_periodic_tau)    last = 3;
+    if (cfg.has_active_time)     last = 4;
+    if (cfg.has_psm_version)     last = 5;
+    if (cfg.has_psm_threshold)   last = 6;
+
+    auto append_opt = [&](int field, bool has, uint32_t val) {
+        if (field <= last) {
+            cmd += ",";
+            if (has) cmd += std::to_string(val);
+        }
+    };
+
+    append_opt(1, cfg.has_periodic_rau,    cfg.req_periodic_rau);
+    append_opt(2, cfg.has_gprs_ready_timer, cfg.req_gprs_ready_timer);
+    append_opt(3, cfg.has_periodic_tau,    cfg.req_periodic_tau);
+    append_opt(4, cfg.has_active_time,     cfg.req_active_time);
+    append_opt(5, cfg.has_psm_version,     cfg.psm_version);
+    append_opt(6, cfg.has_psm_threshold,   cfg.psm_threshold);
+
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
+    AtResponse response;
+    auto result = controller_.send_raw("AT#CPSMS?", response);
+    if (result != ModemStatus::ok) {
+        return result;
+    }
+    // Response body: "#CPSMS: <status>,[<T3324>],[<T3412>],<psmVersion>,<psmThreshold>,<mode>"
+    auto colon = response.body.find(':');
+    if (colon == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+    std::string params = response.body.substr(colon + 1);
+
+    std::vector<std::string> fields;
+    std::string_view sv = params;
+    while (!sv.empty()) {
+        auto comma = sv.find(',');
+        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
+        auto start = token.find_first_not_of(' ');
+        fields.push_back(start == std::string_view::npos ? "" : std::string(token.substr(start)));
+        if (comma == std::string_view::npos) break;
+        sv = sv.substr(comma + 1);
+    }
+
+    if (fields.size() >= 1) st.status        = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
+    if (fields.size() >= 2 && !fields[1].empty()) st.t3324 = static_cast<uint32_t>(std::atol(fields[1].c_str()));
+    if (fields.size() >= 3 && !fields[2].empty()) st.t3412 = static_cast<uint32_t>(std::atol(fields[2].c_str()));
+    if (fields.size() >= 4) st.psm_version   = static_cast<uint8_t>(std::atoi(fields[3].c_str()));
+    if (fields.size() >= 5) st.psm_threshold  = static_cast<uint32_t>(std::atol(fields[4].c_str()));
+    if (fields.size() >= 6) st.mode           = static_cast<PsmMode>(std::atoi(fields[5].c_str()));
+
+    return ModemStatus::ok;
+}
+
+ModemStatus xE310::disable_telit_psm() {
+    AtResponse response;
+    return controller_.send_raw("AT#CPSMS=", response);
+}
+
+ModemStatus xE310::set_psm_urc(bool enable) {
+    AtResponse response;
+    return controller_.send_raw(std::string("AT#PSMURC=") + (enable ? "1" : "0"), response);
+}
+
+ModemStatus xE310::get_psm_urc(bool& enabled) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT#PSMURC?", response);
+    if (status == ModemStatus::ok) {
+        // Response body: "#PSMURC: <en>"
+        auto colon = response.body.find(':');
+        if (colon != std::string::npos) {
+            enabled = std::atoi(response.body.c_str() + colon + 1) != 0;
+        }
+    }
+    return status;
+}
+
 // --- Network Registration ---
 
 ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,

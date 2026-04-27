@@ -218,6 +218,110 @@ TEST_F(Xe310Test, SendSimCommand) {
     EXPECT_EQ(status, ModemStatus::ok);
 }
 
+// --- PSM ---
+
+TEST_F(Xe310Test, SetPsmEnable) {
+    // AT+CPSMS=1,,,"10101100","00100010"
+    expect_command_ok("AT+CPSMS=1,,,\"10101100\",\"00100010\"", "");
+    CpsmsConfig cfg;
+    cfg.mode             = PsmMode::enable;
+    cfg.req_periodic_tau = "10101100";
+    cfg.req_active_time  = "00100010";
+    EXPECT_EQ(modem_->set_psm(cfg), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetPsmDisable) {
+    expect_command_ok("AT+CPSMS=0", "");
+    CpsmsConfig cfg;
+    cfg.mode = PsmMode::disable;
+    EXPECT_EQ(modem_->set_psm(cfg), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, DisablePsm) {
+    expect_command_ok("AT+CPSMS=0", "");
+    EXPECT_EQ(modem_->disable_psm(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, GetPsm) {
+    expect_command_ok("AT+CPSMS?", "+CPSMS: 1,,,\"10101100\",\"00100010\"");
+    CpsmsConfig cfg;
+    EXPECT_EQ(modem_->get_psm(cfg), ModemStatus::ok);
+    EXPECT_EQ(cfg.mode, PsmMode::enable);
+    EXPECT_TRUE(cfg.req_periodic_rau.empty());
+    EXPECT_TRUE(cfg.req_gprs_ready_timer.empty());
+    EXPECT_EQ(cfg.req_periodic_tau, "10101100");
+    EXPECT_EQ(cfg.req_active_time, "00100010");
+}
+
+TEST_F(Xe310Test, SetTelitPsm) {
+    // AT#CPSMS=1,,,720,120
+    expect_command_ok("AT#CPSMS=1,,,720,120", "");
+    TelitCpsmsConfig cfg;
+    cfg.mode             = PsmMode::enable;
+    cfg.has_periodic_tau = true;
+    cfg.req_periodic_tau = 720;
+    cfg.has_active_time  = true;
+    cfg.req_active_time  = 120;
+    EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetTelitPsmWithVersion) {
+    // AT#CPSMS=1,,,720,120,4,60
+    expect_command_ok("AT#CPSMS=1,,,720,120,4,60", "");
+    TelitCpsmsConfig cfg;
+    cfg.mode              = PsmMode::enable;
+    cfg.has_periodic_tau  = true;
+    cfg.req_periodic_tau  = 720;
+    cfg.has_active_time   = true;
+    cfg.req_active_time   = 120;
+    cfg.has_psm_version   = true;
+    cfg.psm_version       = 4;
+    cfg.has_psm_threshold = true;
+    cfg.psm_threshold     = 60;
+    EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, DisableTelitPsm) {
+    expect_command_ok("AT#CPSMS=", "");
+    EXPECT_EQ(modem_->disable_telit_psm(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, GetTelitPsm) {
+    expect_command_ok("AT#CPSMS?", "#CPSMS: 0,120,720,4,60,1");
+    TelitCpsmsStatus st;
+    EXPECT_EQ(modem_->get_telit_psm(st), ModemStatus::ok);
+    EXPECT_EQ(st.status,        0);
+    EXPECT_EQ(st.t3324,         120u);
+    EXPECT_EQ(st.t3412,         720u);
+    EXPECT_EQ(st.psm_version,   4);
+    EXPECT_EQ(st.psm_threshold, 60u);
+    EXPECT_EQ(st.mode,          PsmMode::enable);
+}
+
+TEST_F(Xe310Test, SetPsmUrcEnable) {
+    expect_command_ok("AT#PSMURC=1", "");
+    EXPECT_EQ(modem_->set_psm_urc(true), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetPsmUrcDisable) {
+    expect_command_ok("AT#PSMURC=0", "");
+    EXPECT_EQ(modem_->set_psm_urc(false), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, GetPsmUrcEnabled) {
+    expect_command_ok("AT#PSMURC?", "#PSMURC: 1");
+    bool enabled = false;
+    EXPECT_EQ(modem_->get_psm_urc(enabled), ModemStatus::ok);
+    EXPECT_TRUE(enabled);
+}
+
+TEST_F(Xe310Test, GetPsmUrcDisabled) {
+    expect_command_ok("AT#PSMURC?", "#PSMURC: 0");
+    bool enabled = true;
+    EXPECT_EQ(modem_->get_psm_urc(enabled), ModemStatus::ok);
+    EXPECT_FALSE(enabled);
+}
+
 // --- Network Registration ---
 
 TEST_F(Xe310Test, SetBands) {

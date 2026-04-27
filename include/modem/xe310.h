@@ -58,6 +58,56 @@ struct SignalQuality {
     int rsrp = 255;   ///< 0-97 ref signal power, 255=unknown (LTE)
 };
 
+/// PSM mode for AT+CPSMS and AT#CPSMS.
+enum class PsmMode : uint8_t {
+    disable = 0,
+    enable  = 1,
+};
+
+/// AT+CPSMS configuration (3GPP standard — timer values as 8-bit binary octet strings).
+struct CpsmsConfig {
+    PsmMode     mode                  = PsmMode::disable;
+    std::string req_periodic_rau;      ///< T3312 octet string, e.g. "01000111" (GERAN)
+    std::string req_gprs_ready_timer;  ///< T3314 octet string (GERAN)
+    std::string req_periodic_tau;      ///< T3412 octet string, e.g. "10101100"
+    std::string req_active_time;       ///< T3324 octet string, e.g. "00100010"
+};
+
+/// AT#CPSMS set configuration (Telit-specific — timer values in seconds as integers).
+struct TelitCpsmsConfig {
+    PsmMode  mode               = PsmMode::disable;
+    bool     has_periodic_rau   = false;
+    uint32_t req_periodic_rau   = 0;    ///< T3312 in seconds (GERAN)
+    bool     has_gprs_ready_timer = false;
+    uint32_t req_gprs_ready_timer = 0;  ///< T3314 in seconds (GERAN)
+    bool     has_periodic_tau   = false;
+    uint32_t req_periodic_tau   = 0;    ///< T3412 in seconds
+    bool     has_active_time    = false;
+    uint32_t req_active_time    = 0;    ///< T3324 in seconds
+    bool     has_psm_version    = false;
+    uint8_t  psm_version        = 4;    ///< bitmask: 1=no-coord, 2=Rel12 no-retain, 4=Rel12 retain, 8=eDRX
+    bool     has_psm_threshold  = false;
+    uint32_t psm_threshold      = 60;   ///< min duration threshold to enter PSM, seconds (min 60)
+};
+
+/// AT#CPSMS? read response.
+struct TelitCpsmsStatus {
+    uint8_t  status         = 1;               ///< 0=PSM active in network, 1=PSM not active
+    uint32_t t3324          = 0;               ///< active time granted by network, seconds
+    uint32_t t3412          = 0;               ///< TAU timer granted by network, seconds
+    uint8_t  psm_version    = 4;
+    uint32_t psm_threshold  = 60;
+    PsmMode  mode           = PsmMode::disable;
+};
+
+/// Software package version from AT#SWPKGV.
+struct SoftwarePackageVersion {
+    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
+    std::string modem_version;       ///< <Modem Package Version>
+    std::string prod_params_version; ///< <Production Parameters Version>
+    std::string app_version;         ///< <Application Software Version>
+};
+
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -78,6 +128,9 @@ public:
     /// AT#CGMM — Request Model Identification.
     ModemStatus request_model_id(std::string& model);
 
+    /// AT#SWPKGV — Request Software Package Version.
+    ModemStatus request_sw_package_version(SoftwarePackageVersion& ver);
+
     /// AT#TID — Request Telit ID.
     ModemStatus request_telit_id(std::string& tid);
 
@@ -86,7 +139,7 @@ public:
 
     // --- SIM Card ---
 
-    /// AT+CCID — Read SIM ICCID.
+    /// AT#CCID — Read SIM ICCID.
     ModemStatus read_iccid(std::string& iccid);
 
     /// AT+CIMI — Read SIM IMSI.
@@ -100,6 +153,32 @@ public:
 
     /// AT+CSIM — Send a command to the SIM card.
     ModemStatus send_sim_command(const std::string& command, std::string& sim_response);
+
+    // --- PSM ---
+
+    /// AT+CPSMS — Set PSM parameters (3GPP standard, timer values as binary octet strings).
+    ModemStatus set_psm(const CpsmsConfig& cfg);
+
+    /// AT+CPSMS? — Read current PSM configuration.
+    ModemStatus get_psm(CpsmsConfig& cfg);
+
+    /// AT+CPSMS= — Disable PSM and reset all parameters to defaults.
+    ModemStatus disable_psm();
+
+    /// AT#CPSMS — Set PSM parameters (Telit-specific, timer values in seconds).
+    ModemStatus set_telit_psm(const TelitCpsmsConfig& cfg);
+
+    /// AT#CPSMS? — Read current PSM status as reported by the network.
+    ModemStatus get_telit_psm(TelitCpsmsStatus& status);
+
+    /// AT#CPSMS= — Disable Telit PSM and reset all parameters to defaults.
+    ModemStatus disable_telit_psm();
+
+    /// AT#PSMURC — Enable/disable the PSM entry URC (#PSMURC=<ActiveTime>,<PSMTime>).
+    ModemStatus set_psm_urc(bool enable);
+
+    /// AT#PSMURC? — Read PSM URC enable state.
+    ModemStatus get_psm_urc(bool& enabled);
 
     // --- Network Registration ---
 
