@@ -63,9 +63,14 @@ ModemStatus xE310::request_identification(std::string& info) {
 
 ModemStatus xE310::read_iccid(std::string& iccid) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CCID", response);
+    auto status = controller_.send_raw("AT#CCID", response);
     if (status == ModemStatus::ok) {
-        iccid = response.body;
+        constexpr std::string_view prefix = "#CCID: ";
+        if (response.body.rfind(prefix, 0) == 0) {
+            iccid = response.body.substr(prefix.size());
+        } else {
+            iccid = response.body;
+        }
     }
     return status;
 }

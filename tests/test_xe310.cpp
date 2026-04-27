@@ -121,11 +121,11 @@ TEST_F(Xe310Test, RequestImeiSv) {
 }
 
 TEST_F(Xe310Test, RequestModelId) {
-    expect_command_ok("AT#CGMM", "ME310G1-W1");
+    expect_command_ok("AT#CGMM", "#CGMM: ME310G1-W1");
     std::string model;
     auto status = modem_->request_model_id(model);
     EXPECT_EQ(status, ModemStatus::ok);
-    EXPECT_FALSE(model.empty());
+    EXPECT_EQ(model, "ME310G1-W1");
 }
 
 TEST_F(Xe310Test, RequestTelitId) {
@@ -154,11 +154,11 @@ TEST_F(Xe310Test, RequestImeiSvError) {
 // --- SIM Card ---
 
 TEST_F(Xe310Test, ReadIccid) {
-    expect_command_ok("AT+CCID", "+CCID: 8935101234567890123");
+    expect_command_ok("AT#CCID", "#CCID: 89861109091740011006");
     std::string iccid;
     auto status = modem_->read_iccid(iccid);
     EXPECT_EQ(status, ModemStatus::ok);
-    EXPECT_FALSE(iccid.empty());
+    EXPECT_EQ(iccid, "89861109091740011006");
 }
 
 TEST_F(Xe310Test, ReadImsi) {
