@@ -144,6 +144,21 @@ TEST_F(Xe310Test, RequestIdentification) {
     EXPECT_FALSE(info.empty());
 }
 
+TEST_F(Xe310Test, GetImei) {
+    expect_command_ok("AT+CGSN", "353546090123456");
+    std::string imei;
+    auto status = modem_->get_imei(imei);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_EQ(imei, "353546090123456");
+}
+
+TEST_F(Xe310Test, GetImeiError) {
+    expect_command_error("AT+CGSN");
+    std::string imei;
+    EXPECT_EQ(modem_->get_imei(imei), ModemStatus::at_error);
+    EXPECT_TRUE(imei.empty());
+}
+
 TEST_F(Xe310Test, RequestSwPackageVersion) {
     expect_command_ok("AT#SWPKGV",
                       "17.00.xx4-B006\r\n17.00.xx4\r\nB006\r\nSW_V001");
@@ -345,6 +360,109 @@ TEST_F(Xe310Test, RebootError) {
 }
 
 // --- Network Registration ---
+
+TEST_F(Xe310Test, NetworkSurvey2gBcch) {
+    const std::string body =
+        "Network survey started ...\r\n"
+        "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
+        "1023,50,-78,0,222,01,54717,14886,CELL_SUITABLE,0\r\n"
+        "Network survey ended";
+    expect_command_ok("AT#CSURVC", body);
+
+    NetworkSurveyResult result;
+    EXPECT_EQ(modem_->network_survey(result), ModemStatus::ok);
+    ASSERT_EQ(result.cells.size(), 2u);
+
+    const auto& c0 = result.cells[0];
+    EXPECT_EQ(c0.type,      SurvCellType::cell_2g_bcch);
+    EXPECT_EQ(c0.arfcn,     1018);
+    EXPECT_EQ(c0.bsic,      21);
+    EXPECT_EQ(c0.rx_lev,    -73);
+    EXPECT_EQ(c0.mcc,       0x222);
+    EXPECT_EQ(c0.mnc,       0x01);
+    EXPECT_EQ(c0.lac,       54717u);
+    EXPECT_EQ(c0.cell_id,   14887u);
+    EXPECT_EQ(c0.cell_stat, "CELL_SUITABLE");
+
+    EXPECT_FALSE(result.has_summary);
+}
+
+TEST_F(Xe310Test, NetworkSurvey4g) {
+    const std::string body =
+        "Network survey started ...\r\n"
+        "5110,-95,136,19A,10D,2700,BBA7211,0.00,0.00\r\n"
+        "675,-98,136,104,1BE,7B71,1F4A90E,0.00,0.00\r\n"
+        "Network survey ended";
+    expect_command_ok("AT#CSURVC", body);
+
+    NetworkSurveyResult result;
+    EXPECT_EQ(modem_->network_survey(result), ModemStatus::ok);
+    ASSERT_EQ(result.cells.size(), 2u);
+
+    const auto& c0 = result.cells[0];
+    EXPECT_EQ(c0.type,          SurvCellType::cell_4g);
+    EXPECT_EQ(c0.earfcn,        5110);
+    EXPECT_EQ(c0.rx_lev,        -95);
+    EXPECT_EQ(c0.mcc,           0x136);
+    EXPECT_EQ(c0.mnc,           0x19A);
+    EXPECT_EQ(c0.phys_cell_id,  0x10Du);
+    EXPECT_EQ(c0.tac,           0x2700u);
+    EXPECT_EQ(c0.cell_identity, 0xBBA7211u);
+}
+
+TEST_F(Xe310Test, NetworkSurveyWithChannelRange) {
+    expect_command_ok("AT#CSURVC=1000,1023", "");
+    NetworkSurveyResult result;
+    EXPECT_EQ(modem_->network_survey(result, 1000, 1023), ModemStatus::ok);
+    EXPECT_TRUE(result.cells.empty());
+}
+
+TEST_F(Xe310Test, NetworkSurveyWithSummary) {
+    const std::string body =
+        "Network survey started ...\r\n"
+        "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
+        "Network survey ended (Carrier: 10 BCCh: 3)";
+    expect_command_ok("AT#CSURVC", body);
+
+    NetworkSurveyResult result;
+    EXPECT_EQ(modem_->network_survey(result), ModemStatus::ok);
+    ASSERT_EQ(result.cells.size(), 1u);
+    EXPECT_TRUE(result.has_summary);
+    EXPECT_EQ(result.no_arfcn, 10);
+    EXPECT_EQ(result.no_bcch,  3);
+}
+
+TEST_F(Xe310Test, NetworkSurveyError) {
+    expect_command_error("AT#CSURVC");
+    NetworkSurveyResult result;
+    EXPECT_EQ(modem_->network_survey(result), ModemStatus::at_error);
+}
+
+TEST_F(Xe310Test, SetIotTechCatM1) {
+    expect_command_ok("AT#WS46=0,0", "");
+    EXPECT_EQ(modem_->set_iot_tech(0, 0), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetIotTechNbIotGsmPriority) {
+    expect_command_ok("AT#WS46=1,1", "");
+    EXPECT_EQ(modem_->set_iot_tech(1, 1), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, GetIotTech) {
+    expect_command_ok("AT#WS46?", "#WS46: 2,0");
+    uint8_t n = 0xff, gsm_p = 0xff;
+    EXPECT_EQ(modem_->get_iot_tech(n, gsm_p), ModemStatus::ok);
+    EXPECT_EQ(n,     2);
+    EXPECT_EQ(gsm_p, 0);
+}
+
+TEST_F(Xe310Test, GetIotTechGsmPriority) {
+    expect_command_ok("AT#WS46?", "#WS46: 1,1");
+    uint8_t n = 0, gsm_p = 0;
+    EXPECT_EQ(modem_->get_iot_tech(n, gsm_p), ModemStatus::ok);
+    EXPECT_EQ(n,     1);
+    EXPECT_EQ(gsm_p, 1);
+}
 
 TEST_F(Xe310Test, SetBands) {
     expect_command_ok("AT#BND=0,0,524420,0,0", "");

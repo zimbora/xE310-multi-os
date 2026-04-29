@@ -100,6 +100,46 @@ struct TelitCpsmsStatus {
     PsmMode  mode           = PsmMode::disable;
 };
 
+/// Technology type of a network survey cell entry.
+enum class SurvCellType : uint8_t {
+    cell_2g_bcch,      ///< 2G BCCH carrier (full info)
+    cell_2g_non_bcch,  ///< 2G non-BCCH carrier (arfcn + rxLev only)
+    cell_4g,           ///< 4G/LTE cell
+};
+
+/// A single cell entry from AT#CSURVC.
+struct SurvCell {
+    SurvCellType type = SurvCellType::cell_4g;
+
+    // --- 2G BCCH ---
+    int      arfcn       = 0;
+    int      bsic        = 0;
+    int      rx_lev      = 0;   ///< dBm
+    int      ber         = 0;
+    uint16_t mcc         = 0;
+    uint16_t mnc         = 0;
+    uint32_t lac         = 0;
+    uint32_t cell_id     = 0;
+    std::string cell_stat;      ///< CELL_SUITABLE, CELL_BARRED, etc.
+    int      num_arfcn   = 0;
+
+    // --- 4G ---
+    int      earfcn      = 0;
+    uint32_t tac         = 0;
+    uint32_t phys_cell_id = 0;
+    uint64_t cell_identity = 0;
+    float    rsrp        = 0.0f;
+    float    rsrq        = 0.0f;
+};
+
+/// Result of AT#CSURVC.
+struct NetworkSurveyResult {
+    std::vector<SurvCell> cells;
+    bool    has_summary   = false;
+    int     no_arfcn      = 0;   ///< total scanned frequencies (if #CSURVF=2)
+    int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
+};
+
 /// Software package version from AT#SWPKGV.
 struct SoftwarePackageVersion {
     std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
@@ -136,6 +176,9 @@ public:
 
     /// ATI — Request Identification Information.
     ModemStatus request_identification(std::string& info);
+
+    /// AT+CGSN — Request IMEI (Product Serial Number).
+    ModemStatus get_imei(std::string& imei);
 
     // --- SIM Card ---
 
@@ -190,12 +233,25 @@ public:
 
     // --- Network Registration ---
 
+    /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
+    /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.
+    ModemStatus network_survey(NetworkSurveyResult& result,
+                               uint32_t start_ch = 0, uint32_t end_ch = 0);
+
     /// AT#BND — Set band bitmasks.
     ModemStatus set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
                           uint64_t tdscdma_mask = 0, uint64_t lte_mask_over_64 = 0);
 
     /// AT#BND? — Read current band configuration.
     ModemStatus get_bands(std::string& bands);
+
+    /// AT#WS46 — Select IoT technology (takes effect after reboot).
+    /// <n>: 0=CAT-M1, 1=NB-IoT, 2=CAT-M1 preferred+NB-IoT, 3=CAT-M1+NB-IoT preferred.
+    /// <gsm_priority>: 0=LTE priority, 1=GSM priority.
+    ModemStatus set_iot_tech(uint8_t n, uint8_t gsm_priority = 0);
+
+    /// AT#WS46? — Read currently selected IoT technology and priority.
+    ModemStatus get_iot_tech(uint8_t& n, uint8_t& gsm_priority);
 
     /// AT+CEREG? — Query EPS network registration status.
     ModemStatus get_registration_status(RegistrationInfo& info);
