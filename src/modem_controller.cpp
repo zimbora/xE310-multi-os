@@ -49,23 +49,31 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     // Read response
     uint8_t buffer[512];
     size_t bytes_read = 0;
-    err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, cmd.timeout_ms());
-    if (err == UartError::timeout) {
-        return ModemStatus::timeout;
-    }
-    if (err != UartError::ok) {
-        return ModemStatus::uart_error;
+    while(err == UartError::ok) {
+        memset(buffer, 0, sizeof(buffer));
+        err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, cmd.timeout_ms());
+        if(err != modem::UartError::ok) {
+            switch(err) {
+                case UartError::timeout:
+                    return ModemStatus::timeout;
+                default:
+                    return ModemStatus::uart_error;
+            }
+        }
+
+        if(bytes_read > 0) {
+            buffer[bytes_read] = '\0';
+            std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
+            response = AtCommand::parse_response(raw);
+            
+        }
+        
+        if (response.status == AtStatus::ok) {
+            return ModemStatus::ok;
+        }
     }
 
-    buffer[bytes_read] = '\0';
-    std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
-    response = AtCommand::parse_response(raw);
-
-    if (response.status != AtStatus::ok) {
-        return ModemStatus::at_error;
-    }
-
-    return ModemStatus::ok;
+    return ModemStatus::at_error;
 }
 
 ModemStatus ModemController::send_raw(const std::string& command, AtResponse& response,
