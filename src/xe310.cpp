@@ -2,6 +2,7 @@
 #include "modem/at_command.h"
 #include "modem/log.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
@@ -89,6 +90,15 @@ ModemStatus xE310::request_identification(std::string& info) {
     auto status = controller_.send_raw("ATI", response);
     if (status == ModemStatus::ok) {
         info = response.body;
+    }
+    return status;
+}
+
+ModemStatus xE310::get_imei(std::string& imei) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT+CGSN", response);
+    if (status == ModemStatus::ok) {
+        imei = response.body;
     }
     return status;
 }
@@ -315,6 +325,127 @@ ModemStatus xE310::reboot() {
 }
 
 // --- Network Registration ---
+
+static SurvCell parse_surv_line(const std::string& line) {
+    // Try to determine type by field count.
+    // 4G: 9 comma-separated fields
+    // 2G BCCH: 10 fields
+    // 2G non-BCCH: 2 fields
+    SurvCell cell;
+    std::vector<std::string> fields;
+    std::string_view sv = line;
+    while (!sv.empty()) {
+        auto comma = sv.find(',');
+        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
+        fields.push_back(std::string(token));
+        if (comma == std::string_view::npos) break;
+        sv = sv.substr(comma + 1);
+    }
+
+    if (fields.size() == 2) {
+        // 2G non-BCCH: <arfcn>,<rxLev>
+        cell.type   = SurvCellType::cell_2g_non_bcch;
+        cell.arfcn  = std::atoi(fields[0].c_str());
+        cell.rx_lev = std::atoi(fields[1].c_str());
+    } else if (fields.size() >= 10) {
+        // 2G BCCH: <arfcn>,<bsic>,<rxLev>,<ber>,<mcc>,<mnc>,<lac>,<cellId>,<cellStat>,<numArfcn>
+        cell.type     = SurvCellType::cell_2g_bcch;
+        cell.arfcn    = std::atoi(fields[0].c_str());
+        cell.bsic     = std::atoi(fields[1].c_str());
+        cell.rx_lev   = std::atoi(fields[2].c_str());
+        cell.ber      = std::atoi(fields[3].c_str());
+        cell.mcc      = static_cast<uint16_t>(std::strtoul(fields[4].c_str(), nullptr, 16));
+        cell.mnc      = static_cast<uint16_t>(std::strtoul(fields[5].c_str(), nullptr, 16));
+        cell.lac      = static_cast<uint32_t>(std::strtoul(fields[6].c_str(), nullptr, 0));
+        cell.cell_id  = static_cast<uint32_t>(std::strtoul(fields[7].c_str(), nullptr, 0));
+        cell.cell_stat = fields[8];
+        cell.num_arfcn = std::atoi(fields[9].c_str());
+    } else if (fields.size() >= 9) {
+        // 4G: <earfcn>,<rxLev>,<mcc>,<mnc>,<cellId>,<tac>,<cellIdentity>,<rsrp>,<rsrq>
+        cell.type         = SurvCellType::cell_4g;
+        cell.earfcn       = std::atoi(fields[0].c_str());
+        cell.rx_lev       = std::atoi(fields[1].c_str());
+        cell.mcc          = static_cast<uint16_t>(std::strtoul(fields[2].c_str(), nullptr, 16));
+        cell.mnc          = static_cast<uint16_t>(std::strtoul(fields[3].c_str(), nullptr, 16));
+        cell.phys_cell_id = static_cast<uint32_t>(std::strtoul(fields[4].c_str(), nullptr, 16));
+        cell.tac          = static_cast<uint32_t>(std::strtoul(fields[5].c_str(), nullptr, 16));
+        cell.cell_identity = static_cast<uint64_t>(std::strtoull(fields[6].c_str(), nullptr, 16));
+        cell.rsrp         = std::strtof(fields[7].c_str(), nullptr);
+        cell.rsrq         = std::strtof(fields[8].c_str(), nullptr);
+    }
+    return cell;
+}
+
+ModemStatus xE310::network_survey(NetworkSurveyResult& result,
+                                   uint32_t start_ch, uint32_t end_ch) {
+    AtResponse response;
+    std::string cmd;
+    if (start_ch == 0 && end_ch == 0) {
+        cmd = "AT#CSURVC";
+    } else {
+        cmd = "AT#CSURVC=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
+    }
+    auto status = controller_.send_raw(cmd, response,120000); // network survey can take a long time, allow up to 60s
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    result = {};
+
+    // Split body on AT_TERMINATOR and parse each line
+    std::string_view body     = response.body;
+    std::string_view terminator = AT_TERMINATOR;
+    std::string_view::size_type start = 0;
+
+    while (start < body.size()) {
+        auto end  = body.find(terminator, start);
+        auto line = (end == std::string_view::npos)
+                    ? std::string(body.substr(start))
+                    : std::string(body.substr(start, end - start));
+        start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
+
+        if (line.empty() ||
+            line.rfind("Network survey started", 0) == 0 ||
+            line.rfind("Network survey ended (", 0) == std::string::npos &&
+            line.rfind("Network survey ended", 0) == 0) {
+            continue;
+        }
+
+        // Summary line: "Network survey ended (Carrier: <N> BCCh: <M>)"
+        if (line.rfind("Network survey ended (", 0) == 0) {
+            result.has_summary = true;
+            std::sscanf(line.c_str(), "Network survey ended (Carrier: %d BCCh: %d)",
+                        &result.no_arfcn, &result.no_bcch);
+            continue;
+        }
+
+        result.cells.push_back(parse_surv_line(line));
+    }
+
+    return ModemStatus::ok;
+}
+
+ModemStatus xE310::set_iot_tech(uint8_t n, uint8_t gsm_priority) {
+    AtResponse response;
+    auto cmd = "AT#WS46=" + std::to_string(n) + "," + std::to_string(gsm_priority);
+    return controller_.send_raw(cmd, response);
+}
+
+ModemStatus xE310::get_iot_tech(uint8_t& n, uint8_t& gsm_priority) {
+    AtResponse response;
+    auto status = controller_.send_raw("AT#WS46?", response);
+    if (status == ModemStatus::ok) {
+        // Response body: "#WS46: <n>,<GSM_P>"
+        auto colon = response.body.find(':');
+        if (colon != std::string::npos) {
+            unsigned int nv = 0, gp = 0;
+            std::sscanf(response.body.c_str() + colon + 1, " %u,%u", &nv, &gp);
+            n            = static_cast<uint8_t>(nv);
+            gsm_priority = static_cast<uint8_t>(gp);
+        }
+    }
+    return status;
+}
 
 ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
                               uint64_t tdscdma_mask, uint64_t lte_mask_over_64) {
