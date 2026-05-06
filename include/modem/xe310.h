@@ -250,6 +250,12 @@ public:
 
     // --- Power ---
 
+    /// Power on the module (hardware power-up sequence).
+    void power_on();
+
+    /// Power off the module (hardware power-down sequence).
+    void power_off();
+
     /// AT#SHDN — Software shutdown. Detaches from network and powers off the module.
     ModemStatus shutdown();
 

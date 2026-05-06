@@ -314,6 +314,14 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
 
 // --- Power ---
 
+void xE310::power_on() {
+    // TODO: assert power-enable GPIO
+}
+
+void xE310::power_off() {
+    // TODO: de-assert power-enable GPIO
+}
+
 ModemStatus xE310::shutdown() {
     AtResponse response;
     return controller_.send_raw("AT#SHDN", response);
