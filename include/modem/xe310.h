@@ -8,6 +8,25 @@
 
 namespace modem {
 
+/// Software package version from AT#SWPKGV.
+struct SoftwarePackageVersion {
+    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
+    std::string modem_version;       ///< <Modem Package Version>
+    std::string prod_params_version; ///< <Production Parameters Version>
+    std::string app_version;         ///< <Application Software Version>
+};
+
+struct ModemInfo {
+    std::string imei_sv;   ///< IMEI Software Version from AT+IMEISV
+    std::string iccid;     ///< ICCID from AT+CCID
+    std::string imsi;      ///< IMSI from AT+CIMI
+    std::string model_id;
+    SoftwarePackageVersion sw_package_version;
+    std::string telit_id;
+    std::string identification;
+    std::string imei;
+};
+
 /// SIM detection mode for AT#SIMDET.
 enum class SimDetMode : uint8_t {
     gpio = 0,     ///< SIM detection via GPIO
@@ -48,6 +67,11 @@ struct RegistrationInfo {
     std::string ci;
     RadioTech act = RadioTech::gsm;
     bool has_location = false;
+    std::string ip_address;
+};
+
+struct NetworkInfo {
+    std::string ip_address;
 };
 
 /// Signal quality from AT+CESQ.
@@ -140,12 +164,13 @@ struct NetworkSurveyResult {
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
 };
 
-/// Software package version from AT#SWPKGV.
-struct SoftwarePackageVersion {
-    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
-    std::string modem_version;       ///< <Modem Package Version>
-    std::string prod_params_version; ///< <Production Parameters Version>
-    std::string app_version;         ///< <Application Software Version>
+enum class ServerState : uint8_t {
+    SERVER_DISCONNECTED     = 0,
+    SERVER_CONNECTED        = 1,
+};
+
+struct ServerInfo {
+    ServerState state         = ServerState::SERVER_DISCONNECTED;
 };
 
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
