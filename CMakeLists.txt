@@ -40,6 +40,7 @@ set(MODEM_CORE_SOURCES
     src/at_command.cpp
     src/modem_controller.cpp
     src/xe310.cpp
+    src/network_lte.cpp
 )
 
 # --- HAL sources (platform-specific) ---
