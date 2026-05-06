@@ -264,6 +264,9 @@ public:
 
     // --- Network Registration ---
 
+    // AT+CEREG=2 — Enable network registration URC with location info and IP address.
+    ModemStatus set_registration_urc();
+
     /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
     /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.
     ModemStatus network_survey(NetworkSurveyResult& result,

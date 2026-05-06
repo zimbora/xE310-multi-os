@@ -477,6 +477,16 @@ ModemStatus xE310::get_bands(std::string& bands) {
     return status;
 }
 
+ModemStatus xE310::set_registration_urc() {
+    AtResponse response;
+    auto result = controller_.send_raw("AT+CEREG=2", response);
+    if (result != ModemStatus::ok) {
+        return result;
+    }
+
+    return ModemStatus::ok;
+}
+
 ModemStatus xE310::get_registration_status(RegistrationInfo& info) {
     AtResponse response;
     auto result = controller_.send_raw("AT+CEREG?", response);
