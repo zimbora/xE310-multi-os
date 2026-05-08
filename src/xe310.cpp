@@ -477,9 +477,9 @@ ModemStatus xE310::get_bands(std::string& bands) {
     return status;
 }
 
-ModemStatus xE310::set_registration_urc() {
+ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
-    auto result = controller_.send_raw("AT+CEREG=2", response);
+    auto result = controller_.send_raw(std::string("AT+CEREG=") + (enable ? "2" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -564,9 +564,13 @@ ModemStatus xE310::set_radio_tech(RadioTech tech) {
 
 ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
     AtResponse response;
-    // AT+COPS=4,2,"<oper>",<act> — manual selection, numeric format, automatic fallback
-    auto cmd = "AT+COPS=4,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
-    return controller_.send_raw(cmd, response);
+    // AT+COPS=4,2,"oper",<act> — manual selection, numeric format, automatic fallback
+    if(oper.empty()) {
+        return set_operator_auto();
+    } else {
+        auto cmd = "AT+COPS=4,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
+        return controller_.send_raw(cmd, response);
+    }
 }
 
 ModemStatus xE310::set_operator_auto() {
@@ -598,6 +602,20 @@ ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
         apn = response.body;
     }
     return status;
+}
+
+ModemStatus xE310::set_pdp_urc(bool enable) {
+    /* discard unsolicited result codes when TA-TE link is
+    reserved (e.g. in on-line data mode); otherwise forward
+    them directly to the TE.
+    */
+    AtResponse response;
+    auto result = controller_.send_raw(std::string("AT+CGEREP=") + (enable ? "1" : "0"), response);
+    if (result != ModemStatus::ok) {
+        return result;
+    }
+
+    return ModemStatus::ok;
 }
 
 ModemStatus xE310::activate_pdp(uint8_t cid) {
@@ -739,6 +757,93 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     return status;
 }
 
+ModemStatus xE310::send_at_command(const std::string& command, std::string& response, uint16_t timeout_ms) {
+    AtResponse at_response;
+    auto status = controller_.send_raw(command, at_response, timeout_ms);
+    if (status == ModemStatus::ok) {
+        response = at_response.body;
+    }
+    return status;
+}
+
 // --- Power Options ---
+
+// --- Event Handlers ---
+ModemStatus xE310::parse_urc_handler(std::string urc) {
+    
+    if(urc.rfind("+CEREG:", 0) == 0) {
+        // Network registration status changed
+        // Response body: "+CEREG: <stat>[,<lac>,<ci>[,<AcT>]]"
+        auto colon_pos = urc.find(':');
+        if (colon_pos == std::string::npos) {
+            return ModemStatus::at_error;
+        }
+
+        // Tokenize from after the colon
+        std::string params = urc.substr(colon_pos + 1);
+
+        // Parse comma-separated fields
+        std::vector<std::string> fields;
+        size_t pos = 0;
+        while (pos < params.size()) {
+            auto comma = params.find(',', pos);
+            if (comma == std::string::npos) {
+                fields.push_back(params.substr(pos));
+                break;
+            }
+            fields.push_back(params.substr(pos, comma - pos));
+            pos = comma + 1;
+        }
+
+        // Trim leading/trailing whitespace and quotes from each field
+        auto trim = [](const std::string& s) -> std::string {
+            auto start = s.find_first_not_of(" \t\"");
+            auto end = s.find_last_not_of(" \t\"");
+            if (start == std::string::npos) return "";
+            return s.substr(start, end - start + 1);
+        };
+
+        if (fields.size() == 1) {
+            info.stat = static_cast<RegStatus>(std::atoi(trim(fields[0]).c_str()));
+        }
+
+        if (fields.size() >= 3) {
+            info.lac = trim(fields[1]);
+            info.ci = trim(fields[2]);
+            info.has_location = true;
+        }
+
+        if (fields.size() >= 4) {
+            info.act = static_cast<RadioTech>(std::atoi(trim(fields[3]).c_str()));
+        }
+
+        return ModemStatus::ok;
+    }
+
+    // #PSMURC: <ActiveTime>,<PSMTime>  — modem has entered PSM
+    // ActiveTime = T3324 (active window granted by network, seconds)
+    // PSMTime    = T3412 (periodic TAU timer, seconds)
+    if (urc.rfind("#PSMURC", 0) == 0) {
+        // skip past ':' or '=' separator
+        auto sep = urc.find_first_of(":=");
+        if (sep != std::string::npos) {
+            std::string params = urc.substr(sep + 1);
+            auto comma = params.find(',');
+            if (comma != std::string::npos) {
+                psm_status.t3324 = static_cast<uint32_t>(std::atol(params.c_str()));
+                psm_status.t3412 = static_cast<uint32_t>(std::atol(params.c_str() + comma + 1));
+                MODEM_LOG_DBG("PSM entered: ActiveTime(T3324)=%us PSMTime(T3412)=%us",
+                              psm_status.t3324, psm_status.t3412);
+            }
+        }
+        return ModemStatus::ok;
+    }
+
+    return ModemStatus::ok;
+}
+
+std::vector<std::string> xE310::poll_urc(uint32_t timeout_ms) {
+    return controller_.poll_urc(timeout_ms);
+}
 
 } // namespace modem

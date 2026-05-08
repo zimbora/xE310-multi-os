@@ -65,11 +65,13 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             buffer[bytes_read] = '\0';
             std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
             response = AtCommand::parse_response(raw);
-            
-        }
-        
-        if (response.status == AtStatus::ok) {
-            return ModemStatus::ok;
+
+            if (response.status == AtStatus::ok) {
+                return ModemStatus::ok;
+            }
+            if (response.status == AtStatus::error || response.status == AtStatus::busy) {
+                return ModemStatus::at_error;
+            }
         }
     }
 
@@ -185,6 +187,53 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
     }
 
     return ModemStatus::ok;
+}
+
+std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
+    std::vector<std::string> urcs;
+    if (!is_connected()) {
+        return urcs;
+    }
+
+    // Known URC prefixes to recognise
+    static const char* const kPrefixes[] = {
+        "+CREG:",  "+CGREG:", "+CEREG:",  // registration
+        "+CGEV:",                           // PDP context events
+        "#PSMURC:",                         // PSM entry
+        "+CME ERROR:", "+CMS ERROR:",       // async errors
+        "#CSURV:",                          // survey URC
+        "SRING:",                           // socket data available
+        nullptr
+    };
+
+    uint8_t buffer[512];
+    size_t bytes_read = 0;
+    auto err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, timeout_ms);
+    if (err != UartError::ok || bytes_read == 0) {
+        return urcs;
+    }
+
+    buffer[bytes_read] = '\0';
+    std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
+
+    // Split on \r\n and collect lines matching a known prefix
+    size_t pos = 0;
+    while (pos < raw.size()) {
+        size_t end = raw.find("\r\n", pos);
+        if (end == std::string::npos) end = raw.size();
+        std::string line = raw.substr(pos, end - pos);
+        pos = (end == raw.size()) ? end : end + 2;
+
+        if (line.empty()) continue;
+        for (const char* const* p = kPrefixes; *p; ++p) {
+            if (line.rfind(*p, 0) == 0) {
+                MODEM_LOG_DBG("URC: %s", line.c_str());
+                urcs.push_back(line);
+                break;
+            }
+        }
+    }
+    return urcs;
 }
 
 } // namespace modem

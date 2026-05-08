@@ -42,6 +42,11 @@ public:
     ModemStatus send_with_prompt(const std::string& command, const std::vector<uint8_t>& data,
                                  AtResponse& response, uint32_t timeout_ms = 5000);
 
+    /// Non-blocking read of any unsolicited data from the modem.
+    /// Returns lines that begin with a known URC prefix (e.g. "+CREG:", "+CGEV:").
+    /// Reads for at most timeout_ms; pass 0 for a best-effort non-blocking poll.
+    std::vector<std::string> poll_urc(uint32_t timeout_ms = 50);
+
 private:
     std::unique_ptr<UartInterface> uart_;
 };

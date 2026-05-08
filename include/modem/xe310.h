@@ -164,15 +164,6 @@ struct NetworkSurveyResult {
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
 };
 
-enum class ServerState : uint8_t {
-    SERVER_DISCONNECTED     = 0,
-    SERVER_CONNECTED        = 1,
-};
-
-struct ServerInfo {
-    ServerState state         = ServerState::SERVER_DISCONNECTED;
-};
-
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -265,7 +256,7 @@ public:
     // --- Network Registration ---
 
     // AT+CEREG=2 — Enable network registration URC with location info and IP address.
-    ModemStatus set_registration_urc();
+    ModemStatus set_registration_urc(bool);
 
     /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
     /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.
@@ -312,6 +303,10 @@ public:
 
     /// AT+CGDCONT? — Read current APN for a context.
     ModemStatus get_apn(uint8_t cid, std::string& apn);
+    
+    /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
+    /// occurring in the module or in the network.
+    ModemStatus set_pdp_urc(bool);
 
     /// AT+CGACT=1 — Activate PDP context.
     ModemStatus activate_pdp(uint8_t cid);
@@ -350,8 +345,21 @@ public:
     /// AT#SS — Query socket status.
     ModemStatus udp_status(uint8_t conn_id, uint8_t& state);
 
+    /// Send a raw AT command string and return the response body.
+    ModemStatus send_at_command(const std::string& command, std::string& response, uint16_t timeout_ms = 5000);
+
+    // --- Event Handlers ---
+
+    /// Handler for unsolicited result codes (URCs) from the modem. Should be called by ModemController when a URC is received.
+    ModemStatus parse_urc_handler(std::string urc);
+
+    /// Poll the UART for any pending URC lines (non-blocking, max timeout_ms wait).
+    std::vector<std::string> poll_urc(uint32_t timeout_ms = 10);
 private:
     ModemController& controller_;
+
+    RegistrationInfo     info;
+    TelitCpsmsStatus     psm_status;
 };
 
 } // namespace modem

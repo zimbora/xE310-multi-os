@@ -31,15 +31,17 @@ int main() {
     modem::NetworkLteConfig lteConfig;
     modem::NetworkLte network(modem, lteConfig);
 
-    while(true){
-        network.log_state();
-        auto state = network.st_machine();
-        MODEM_LOG_INF("try count: %d", network.try_count());
-        if(state == modem::NetworkLteState::done){
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        //delay_ms(1000); // Add a delay to avoid busy looping, adjust as needed
+    bool res = network.server_connect(1, "UDP", "example.com", 1234);
+    if(res){
+        MODEM_LOG_INF("Connected to server successfully");
+        uint8_t data[] = "Hello, World!";
+        network.send_data(1, data, sizeof(data));
+        MODEM_LOG_INF("Data sent successfully");
+        std::this_thread::sleep_for(std::chrono::seconds(5)); // wait for a bit before disconnecting to allow any responses to be received and printed
+        network.server_disconnect(1);
+        MODEM_LOG_INF("Disconnected from server successfully");
+    }else{
+        MODEM_LOG_ERR("Failed to connect to server");
     }
     return 0;
 }

@@ -37,6 +37,9 @@ All code must compile and run correctly on every target platform.
 ### Desktop (Windows)
 ```bash
 .\build_vs.ps1
+.\build_vs.ps1 -Clean
+.\build_vs.ps1 -Clean -Config Debug -Test
+.\build_vs.ps1 -NoTests -Clean
 ```
 
 ### Linux
