@@ -24,3 +24,15 @@ target_link_libraries(modem_tests PRIVATE
 
 include(GoogleTest)
 gtest_discover_tests(modem_tests)
+
+add_executable(test_network_lte
+    test_network_lte.cpp
+)
+
+target_link_libraries(test_network_lte PRIVATE
+    modem_xe310
+    GTest::gtest_main
+    GTest::gmock
+)
+
+gtest_discover_tests(test_network_lte)

@@ -37,6 +37,9 @@ All code must compile and run correctly on every target platform.
 ### Desktop (Windows)
 ```bash
 .\build_vs.ps1
+.\build_vs.ps1 -Clean
+.\build_vs.ps1 -Clean -Config Debug -Test
+.\build_vs.ps1 -NoTests -Clean
 ```
 
 ### Linux
@@ -86,6 +89,11 @@ cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,p
 cd build
 ctest --output-on-failure
 ```
+
+```bash
+.\build\tests\Release\test_network_lte.exe
+```
+
 
 ## Directory Structure
 

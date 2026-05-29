@@ -1,6 +1,7 @@
 #pragma once
 
 #include "modem/at_command.h"
+#include "modem/timer_interface.h"
 #include "modem/uart_interface.h"
 
 #include <memory>
@@ -21,7 +22,9 @@ enum class ModemStatus {
 class ModemController {
 public:
     /// Takes ownership of a platform-specific UART implementation.
-    explicit ModemController(std::unique_ptr<UartInterface> uart);
+    /// Optionally accepts a timer; if nullptr, a platform timer is created internally.
+    explicit ModemController(std::unique_ptr<UartInterface> uart,
+                             std::unique_ptr<TimerInterface> timer = nullptr);
 
     ModemStatus connect(const char* port, const UartConfig& config = {});
     void disconnect();
@@ -42,8 +45,14 @@ public:
     ModemStatus send_with_prompt(const std::string& command, const std::vector<uint8_t>& data,
                                  AtResponse& response, uint32_t timeout_ms = 5000);
 
+    /// Non-blocking read of any unsolicited data from the modem.
+    /// Returns lines that begin with a known URC prefix (e.g. "+CREG:", "+CGEV:").
+    /// Reads for at most timeout_ms; pass 0 for a best-effort non-blocking poll.
+    std::vector<std::string> poll_urc(uint32_t timeout_ms = 50);
+
 private:
     std::unique_ptr<UartInterface> uart_;
+    std::unique_ptr<TimerInterface> cmd_timer_;
 };
 
 } // namespace modem

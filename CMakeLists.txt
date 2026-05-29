@@ -40,15 +40,16 @@ set(MODEM_CORE_SOURCES
     src/at_command.cpp
     src/modem_controller.cpp
     src/xe310.cpp
+    src/network_lte.cpp
 )
 
 # --- HAL sources (platform-specific) ---
 if(MODEM_PLATFORM STREQUAL "zephyr")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp src/hal/zephyr_timer.cpp)
 elseif(MODEM_PLATFORM STREQUAL "windows")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp src/hal/win32_timer.cpp)
 else()
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp src/hal/posix_timer.cpp)
 endif()
 
 # --- Library target ---
@@ -103,6 +104,9 @@ install(EXPORT modem_xe310-targets
 if(NOT MODEM_PLATFORM STREQUAL "zephyr")
     add_executable(modem_app src/main.cpp)
     target_link_libraries(modem_app PRIVATE modem_xe310)
+
+    add_executable(test_xe310 src/test_xe310.cpp)
+    target_link_libraries(test_xe310 PRIVATE modem_xe310)
 endif()
 
 # --- Tests (desktop only) ---

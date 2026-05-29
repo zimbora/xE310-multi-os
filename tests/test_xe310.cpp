@@ -549,6 +549,31 @@ TEST_F(Xe310Test, GetRegistrationStatusNotRegistered) {
     EXPECT_FALSE(info.has_location);
 }
 
+TEST_F(Xe310Test, NetworkAttach) {
+    expect_command_ok("AT+CGATT=1", "");
+    EXPECT_EQ(modem_->network_attach(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, NetworkAttachError) {
+    expect_command_error("AT+CGATT=1");
+    EXPECT_EQ(modem_->network_attach(), ModemStatus::at_error);
+}
+
+TEST_F(Xe310Test, NetworkDetach) {
+    expect_command_ok("AT+CGATT=0", "");
+    EXPECT_EQ(modem_->network_detach(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, PowerRadio) {
+    expect_command_ok("AT+CFUN=1", "");
+    EXPECT_EQ(modem_->power_radio(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, PowerOffRadio) {
+    expect_command_ok("AT+CFUN=0", "");
+    EXPECT_EQ(modem_->power_off_radio(), ModemStatus::ok);
+}
+
 TEST_F(Xe310Test, GetSignalQuality) {
     expect_command_ok("AT+CESQ", "+CESQ: 20,3,255,255,40,50");
     SignalQuality sq;
@@ -575,8 +600,8 @@ TEST_F(Xe310Test, SetRadioTechNbIot) {
 }
 
 TEST_F(Xe310Test, SetOperatorManual) {
-    expect_command_ok("AT+COPS=4,2,\"21401\",7", "");
-    EXPECT_EQ(modem_->set_operator_manual("21401", RadioTech::lte), ModemStatus::ok);
+    expect_command_ok("AT+COPS=1,2,\"21401\",8", "");
+    EXPECT_EQ(modem_->set_operator_manual("21401", RadioTech::cat_m1), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, SetOperatorAuto) {
@@ -655,12 +680,12 @@ TEST_F(Xe310Test, ActivatePdpError) {
 // --- UDP Connection ---
 
 TEST_F(Xe310Test, UdpOpen) {
-    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,4000,1,1", "");
-    EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000, 4000, 1), ModemStatus::ok);
+    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,4000,1", "");
+    EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000, 4000), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, UdpOpenDefaultParams) {
-    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,0,1,1", "");
+    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,0,1", "");
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::ok);
 }
 
@@ -834,4 +859,77 @@ TEST_F(Xe310Test, CommandWhenNotConnected) {
 TEST_F(Xe310Test, UdpOpenWhenNotConnected) {
     EXPECT_CALL(*mock_uart_, is_open()).WillOnce(Return(false));
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::not_connected);
+}
+
+// --- parse_urc_handler: +CEREG ---
+
+// Short format: +CEREG: <stat>
+TEST_F(Xe310Test, ParseUrcCeregShort) {
+    EXPECT_EQ(modem_->parse_urc_handler("+CEREG: 1"), ModemStatus::ok);
+    const auto& info = modem_->registration_info();
+    EXPECT_EQ(info.stat, RegStatus::registered_home);
+    EXPECT_FALSE(info.has_location);
+    EXPECT_FALSE(info.has_reject);
+    EXPECT_FALSE(info.has_psm);
+}
+
+// Long format: +CEREG: <stat>,<tac>,<ci>,<AcT>
+TEST_F(Xe310Test, ParseUrcCeregLong) {
+    EXPECT_EQ(modem_->parse_urc_handler("+CEREG: 5,\"AABB\",\"01234ABC\",8"), ModemStatus::ok);
+    const auto& info = modem_->registration_info();
+    EXPECT_EQ(info.stat, RegStatus::registered_roaming);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "AABB");
+    EXPECT_EQ(info.ci, "01234ABC");
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
+    EXPECT_FALSE(info.has_reject);
+    EXPECT_FALSE(info.has_psm);
+}
+
+// Extended format: +CEREG: <stat>,<tac>,<ci>,<AcT>,<cause_type>,<reject_cause>
+TEST_F(Xe310Test, ParseUrcCeregExtended) {
+    EXPECT_EQ(modem_->parse_urc_handler("+CEREG: 3,\"AABB\",\"01234ABC\",8,11,13"), ModemStatus::ok);
+    const auto& info = modem_->registration_info();
+    EXPECT_EQ(info.stat, RegStatus::denied);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "AABB");
+    EXPECT_EQ(info.ci, "01234ABC");
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
+    EXPECT_TRUE(info.has_reject);
+    EXPECT_EQ(info.cause_type, 11);
+    EXPECT_EQ(info.reject_cause, 13);
+    EXPECT_FALSE(info.has_psm);
+}
+
+// PSM format: +CEREG: <stat>,<tac>,<ci>,<AcT>,,<Active-Time>,<Periodic-TAU>
+// (cause_type and reject_cause fields are absent — two consecutive commas before Active-Time)
+TEST_F(Xe310Test, ParseUrcCeregPsm) {
+    EXPECT_EQ(modem_->parse_urc_handler("+CEREG: 1,\"AABB\",\"01234ABC\",8,,\"01100000\",\"01000011\""), ModemStatus::ok);
+    const auto& info = modem_->registration_info();
+    EXPECT_EQ(info.stat, RegStatus::registered_home);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "AABB");
+    EXPECT_EQ(info.ci, "01234ABC");
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
+    EXPECT_FALSE(info.has_reject);
+    EXPECT_TRUE(info.has_psm);
+    EXPECT_EQ(info.active_time, "01100000");
+    EXPECT_EQ(info.periodic_tau, "01000011");
+}
+
+// Extended PSM format: +CEREG: <stat>,<tac>,<ci>,<AcT>,<cause_type>,<reject_cause>,<Active-Time>,<Periodic-TAU>
+TEST_F(Xe310Test, ParseUrcCeregExtendedPsm) {
+    EXPECT_EQ(modem_->parse_urc_handler("+CEREG: 1,\"AABB\",\"01234ABC\",8,11,13,\"01100000\",\"01000011\""), ModemStatus::ok);
+    const auto& info = modem_->registration_info();
+    EXPECT_EQ(info.stat, RegStatus::registered_home);
+    EXPECT_TRUE(info.has_location);
+    EXPECT_EQ(info.lac, "AABB");
+    EXPECT_EQ(info.ci, "01234ABC");
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
+    EXPECT_TRUE(info.has_reject);
+    EXPECT_EQ(info.cause_type, 11);
+    EXPECT_EQ(info.reject_cause, 13);
+    EXPECT_TRUE(info.has_psm);
+    EXPECT_EQ(info.active_time, "01100000");
+    EXPECT_EQ(info.periodic_tau, "01000011");
 }

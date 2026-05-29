@@ -5,7 +5,8 @@ param(
     [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
     [string]$Config = "Release",
     [switch]$Clean,
-    [switch]$Test
+    [switch]$Test,
+    [switch]$NoTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +18,12 @@ if ($Clean -and (Test-Path $BuildDir)) {
 }
 
 Write-Host "Configuring with Visual Studio 17 2022..."
-cmake -B $BuildDir -G "Visual Studio 17 2022" $PSScriptRoot
+$cmakeArgs = @("-B", $BuildDir, "-G", "Visual Studio 17 2022")
+if ($NoTests) {
+    $cmakeArgs += "-DMODEM_BUILD_TESTS=OFF"
+}
+$cmakeArgs += $PSScriptRoot
+cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Building ($Config)..."

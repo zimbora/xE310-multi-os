@@ -8,6 +8,25 @@
 
 namespace modem {
 
+/// Software package version from AT#SWPKGV.
+struct SoftwarePackageVersion {
+    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
+    std::string modem_version;       ///< <Modem Package Version>
+    std::string prod_params_version; ///< <Production Parameters Version>
+    std::string app_version;         ///< <Application Software Version>
+};
+
+struct ModemInfo {
+    std::string imei_sv;   ///< IMEI Software Version from AT+IMEISV
+    std::string iccid;     ///< ICCID from AT+CCID
+    std::string imsi;      ///< IMSI from AT+CIMI
+    std::string model_id;
+    SoftwarePackageVersion sw_package_version;
+    std::string telit_id;
+    std::string identification;
+    std::string imei;
+};
+
 /// SIM detection mode for AT#SIMDET.
 enum class SimDetMode : uint8_t {
     gpio = 0,     ///< SIM detection via GPIO
@@ -38,24 +57,53 @@ enum class RegStatus : uint8_t {
     denied = 3,
     unknown = 4,
     registered_roaming = 5,
+    sms_only = 6,
+    sms_only_roaming = 7,
+    emergency = 8,
+    csfb_home = 9,
+    csfb_roaming = 10,
 };
 
 /// Full registration info from AT+CEREG?
 struct RegistrationInfo {
     uint8_t mode = 0;
     RegStatus stat = RegStatus::not_registered;
-    std::string lac;
-    std::string ci;
+    std::string lac;          ///< TAC (tracking area code) for LTE / LAC for 2G
+    std::string ci;           ///< Cell identity
     RadioTech act = RadioTech::gsm;
     bool has_location = false;
+    std::string ip_address;
+    // Extended / reject fields (extended format)
+    uint8_t cause_type   = 0; ///< Cause type for registration rejection
+    uint8_t reject_cause = 0; ///< Reject cause value
+    bool has_reject      = false;
+    // PSM timer fields (PSM / extended PSM format)
+    std::string active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
+    std::string periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
+    bool has_psm         = false;
+};
+
+enum class ContextState : uint8_t {
+    inactive = 0,
+    active = 1,
+};
+
+struct NetworkInfo {
+    ContextState context_state = ContextState::inactive;
+    std::string ip_address;
 };
 
 /// Signal quality from AT+CESQ.
 struct SignalQuality {
-    int rssi = 99;    ///< 0-31 (-113..-51 dBm), 99=unknown (2G)
-    int ber = 99;     ///< 0-7 bit error rate, 99=unknown (2G)
-    int rsrq = 255;   ///< 0-34 ref signal quality, 255=unknown (LTE)
-    int rsrp = 255;   ///< 0-97 ref signal power, 255=unknown (LTE)
+    int rssi = 99;    ///< AT+CESQ rxlev: 0-63 (-110..-47 dBm step 1), 99=unknown (2G/GERAN)
+    int ber  = 99;    ///< AT+CESQ ber:   0-7 bit error rate class, 99=unknown (2G)
+    int rsrq = 255;   ///< AT+CESQ rsrq:  0-34, 255=unknown. dBm = -19.5 + val*0.5  (LTE)
+    int rsrp = 255;   ///< AT+CESQ rsrp:  0-97, 255=unknown. dBm = -140  + val       (LTE)
+
+    /// Convert raw rsrp to dBm. Returns INT_MIN if unknown (255).
+    int rsrp_dbm() const { return rsrp == 255 ? -999 : -140 + rsrp; }
+    /// Convert raw rsrq to tenths of dB (e.g. -175 = -17.5 dB). Returns INT_MIN if unknown.
+    int rsrq_tenth_db() const { return rsrq == 255 ? -9999 : -195 + rsrq * 5; }
 };
 
 /// PSM mode for AT+CPSMS and AT#CPSMS.
@@ -140,14 +188,6 @@ struct NetworkSurveyResult {
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
 };
 
-/// Software package version from AT#SWPKGV.
-struct SoftwarePackageVersion {
-    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
-    std::string modem_version;       ///< <Modem Package Version>
-    std::string prod_params_version; ///< <Production Parameters Version>
-    std::string app_version;         ///< <Application Software Version>
-};
-
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -225,6 +265,18 @@ public:
 
     // --- Power ---
 
+    /// Power on the module (hardware power-up sequence).
+    void power_on();
+
+    /// Power off the module (hardware power-down sequence).
+    void power_off();
+
+    /// AT+CFUN=1 — Power on the radio (full functionality).
+    ModemStatus power_radio();
+
+    /// AT+CFUN=0 — Power off the radio (minimum functionality).
+    ModemStatus power_off_radio();
+
     /// AT#SHDN — Software shutdown. Detaches from network and powers off the module.
     ModemStatus shutdown();
 
@@ -233,10 +285,18 @@ public:
 
     // --- Network Registration ---
 
+    // AT+CEREG=2 — Enable network registration URC with location info and IP address.
+    ModemStatus set_registration_urc(bool);
+
     /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
     /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.
     ModemStatus network_survey(NetworkSurveyResult& result,
                                uint32_t start_ch = 0, uint32_t end_ch = 0);
+    
+    /// call set bands
+    ModemStatus set_lte_bands(uint64_t lte_mask){
+        return set_bands(0, 0, lte_mask);
+    }
 
     /// AT#BND — Set band bitmasks.
     ModemStatus set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
@@ -248,13 +308,19 @@ public:
     /// AT#WS46 — Select IoT technology (takes effect after reboot).
     /// <n>: 0=CAT-M1, 1=NB-IoT, 2=CAT-M1 preferred+NB-IoT, 3=CAT-M1+NB-IoT preferred.
     /// <gsm_priority>: 0=LTE priority, 1=GSM priority.
-    ModemStatus set_iot_tech(uint8_t n, uint8_t gsm_priority = 0);
+    ModemStatus set_iot_tech(RadioTech tech, uint8_t gsm_priority = 0);
 
     /// AT#WS46? — Read currently selected IoT technology and priority.
-    ModemStatus get_iot_tech(uint8_t& n, uint8_t& gsm_priority);
+    ModemStatus get_iot_tech(RadioTech& tech, uint8_t& gsm_priority);
 
     /// AT+CEREG? — Query EPS network registration status.
-    ModemStatus get_registration_status(RegistrationInfo& info);
+    ModemStatus get_registration_status(RegistrationInfo& info, RadioTech tech = RadioTech::gsm);
+
+    /// AT+CGATT=1 — Attach to packet domain network.
+    ModemStatus network_attach();
+
+    /// AT+CGATT=0 — Detach from packet domain network.
+    ModemStatus network_detach();
 
     /// AT+CESQ — Query extended signal quality.
     ModemStatus get_signal_quality(SignalQuality& sq);
@@ -278,6 +344,10 @@ public:
 
     /// AT+CGDCONT? — Read current APN for a context.
     ModemStatus get_apn(uint8_t cid, std::string& apn);
+    
+    /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
+    /// occurring in the module or in the network.
+    ModemStatus set_pdp_urc(bool);
 
     /// AT+CGACT=1 — Activate PDP context.
     ModemStatus activate_pdp(uint8_t cid);
@@ -298,8 +368,9 @@ public:
     // --- UDP Connection ---
 
     /// AT#SD — Open a UDP socket to a remote host.
+    /// AT#SD=<connId>,1,<rPort>,"<host>",0,<lPort>,1
     ModemStatus udp_open(uint8_t conn_id, const std::string& host, uint16_t remote_port,
-                         uint16_t local_port = 0, uint8_t cid = 1);
+                         uint16_t local_port = 0);
 
     /// AT#SL — Listen for incoming UDP data on a local port.
     ModemStatus udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid = 1);
@@ -316,8 +387,26 @@ public:
     /// AT#SS — Query socket status.
     ModemStatus udp_status(uint8_t conn_id, uint8_t& state);
 
+    /// Send a raw AT command string and return the response body.
+    ModemStatus send_at_command(const std::string& command, std::string& response, uint16_t timeout_ms = 5000);
+
+    // --- Event Handlers ---
+
+    /// Handler for unsolicited result codes (URCs) from the modem. Should be called by ModemController when a URC is received.
+    ModemStatus parse_urc_handler(std::string urc);
+
+    /// Returns the last registration info populated by parse_urc_handler or get_registration_status.
+    const RegistrationInfo& registration_info() const;
+
+    /// Poll the UART for any pending URC lines (non-blocking, max timeout_ms wait).
+    std::vector<std::string> poll_urc(uint32_t timeout_ms = 10);
 private:
     ModemController& controller_;
+
+    RegistrationInfo     info;
+    TelitCpsmsStatus     psm_status;
+
+    std::unique_ptr<TimerInterface> cmd_timer_;   ///< Timer for at commands responses
 };
 
 } // namespace modem

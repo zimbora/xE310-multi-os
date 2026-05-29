@@ -203,19 +203,19 @@ int main() {
         MODEM_LOG_INF("IP Address for PDP Context %d: %s", cid, ip_addr.c_str());
     }
     
-    uint8_t nTech = 0;
+    modem::RadioTech tech = modem::RadioTech::cat_m1;
     uint8_t gsmPriority = 0;
-    status = modem.get_iot_tech(nTech, gsmPriority);
+    status = modem.get_iot_tech(tech, gsmPriority);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve IoT technology");
         log_status(status);
     } else {
-        switch(nTech){
+        switch(static_cast<int>(tech)){
             case 0: MODEM_LOG_INF("IoT Technology: CAT-M1"); break;
             case 1: MODEM_LOG_INF("IoT Technology: NB-IoT"); break;
             case 2: MODEM_LOG_INF("IoT Technology: CAT-M1 preferred + NB-IoT"); break;
             case 3: MODEM_LOG_INF("IoT Technology: CAT-M1 + NB-IoT preferred"); break;
-            default: MODEM_LOG_INF("IoT Technology: Unknown (%d)", nTech); break;
+            default: MODEM_LOG_INF("IoT Technology: Unknown (%d)", static_cast<int>(tech)); break;
         }
     }
    
