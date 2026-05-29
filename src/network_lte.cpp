@@ -1,10 +1,14 @@
 #include "modem/network_lte.h"
 #include "modem/log.h"
+#include "modem/timer_factory.h"
 
 namespace modem {
 
-NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received)
-    : modem_(modem), lteConfig(config), on_data_received_(std::move(on_data_received)) {
+NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
+                       std::unique_ptr<TimerInterface> timer)
+    : modem_(modem), lteConfig(config), on_data_received_(std::move(on_data_received)),
+      timer_(std::move(timer)) {
+        st_timer = modem::create_platform_timer();
     }
 
 // --- Accessors ---
@@ -25,6 +29,58 @@ uint8_t NetworkLte::get_pdp_retries() const { return nPdpRetries; }
 void NetworkLte::set_attach_retries(uint8_t n) { nAttachRetries = n; }
 void NetworkLte::set_pdp_retries(uint8_t n) { nPdpRetries = n; }
 
+// --- Timer ---
+
+TimerError NetworkLte::start_timer(uint32_t timeout_ms) {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->start(timeout_ms, [this]() { on_timer_expired(); });
+}
+
+TimerError NetworkLte::stop_timer() {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->stop();
+}
+
+TimerError NetworkLte::reset_timer(uint32_t timeout_ms) {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->reset(timeout_ms);
+}
+
+bool NetworkLte::is_timer_running() const {
+    return timer_ && timer_->is_running();
+}
+
+uint32_t NetworkLte::timer_elapsed_seconds() const {
+    if (!timer_) {
+        return 0;
+    }
+    return timer_->elapsed_ms() / 1000u;
+}
+
+void NetworkLte::on_timer_expired() {
+    on_modem_event(NetworkLteEvent::timeout);
+}
+
+bool NetworkLte::network_connect() {
+    if(state_ == NetworkLteState::data_ready){
+        MODEM_LOG_INF("Already connected to network");
+        return true; // already connected to network
+    }
+    go_to_state(NetworkLteState::data_ready); // trigger attach flow in idle mode
+    if(state_ == NetworkLteState::data_ready){
+        MODEM_LOG_INF("Successfully connected to network");
+        return true;
+    } else {
+        MODEM_LOG_ERR("Failed to connect to network");
+        return false;
+    }
+}
 void NetworkLte::new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port){
     serverInfo[conn_id-1].state = ServerState::disconnected;
     serverInfo[conn_id-1].protocol = protocol;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "modem/at_command.h"
+#include "modem/timer_interface.h"
 #include "modem/uart_interface.h"
 
 #include <memory>
@@ -21,7 +22,9 @@ enum class ModemStatus {
 class ModemController {
 public:
     /// Takes ownership of a platform-specific UART implementation.
-    explicit ModemController(std::unique_ptr<UartInterface> uart);
+    /// Optionally accepts a timer; if nullptr, a platform timer is created internally.
+    explicit ModemController(std::unique_ptr<UartInterface> uart,
+                             std::unique_ptr<TimerInterface> timer = nullptr);
 
     ModemStatus connect(const char* port, const UartConfig& config = {});
     void disconnect();
@@ -49,6 +52,7 @@ public:
 
 private:
     std::unique_ptr<UartInterface> uart_;
+    std::unique_ptr<TimerInterface> cmd_timer_;
 };
 
 } // namespace modem

@@ -1,12 +1,15 @@
 #include "modem/modem_controller.h"
 #include "modem/log.h"
+#include "modem/timer_factory.h"
 
 #include <cstring>
 
 namespace modem {
 
-ModemController::ModemController(std::unique_ptr<UartInterface> uart)
-    : uart_(std::move(uart)) {}
+ModemController::ModemController(std::unique_ptr<UartInterface> uart,
+                                 std::unique_ptr<TimerInterface> timer)
+    : uart_(std::move(uart)),
+      cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
     if (!uart_) {
@@ -46,25 +49,36 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     }
     MODEM_LOG_DBG(">>: %s", cmd_str.c_str());
 
-    // Read response
+    // Read response — enforce an overall deadline across all reads.
+    // elapsed_ms() is queried each iteration; remaining time is passed to read()
+    // so the UART layer also honours the shrinking budget.
+    const uint32_t total_ms = cmd.timeout_ms();
+    cmd_timer_->stop();
+    cmd_timer_->start(total_ms, nullptr);
+
     uint8_t buffer[512];
     size_t bytes_read = 0;
-    while(err == UartError::ok) {
+    std::string accumulated;
+
+    while (true) {
+        const uint32_t elapsed = cmd_timer_->elapsed_ms();
+        if (elapsed >= total_ms) {
+            return ModemStatus::timeout;
+        }
+        const uint32_t remaining_ms = total_ms - elapsed;
+
         memset(buffer, 0, sizeof(buffer));
-        err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, cmd.timeout_ms());
-        if(err != modem::UartError::ok) {
-            switch(err) {
-                case UartError::timeout:
-                    return ModemStatus::timeout;
-                default:
-                    return ModemStatus::uart_error;
-            }
+        auto err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, remaining_ms);
+        if (err == UartError::timeout) {
+            return ModemStatus::timeout;
+        }
+        if (err != UartError::ok) {
+            return ModemStatus::uart_error;
         }
 
-        if(bytes_read > 0) {
-            buffer[bytes_read] = '\0';
-            std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
-            response = AtCommand::parse_response(raw);
+        if (bytes_read > 0) {
+            accumulated.append(reinterpret_cast<const char*>(buffer), bytes_read);
+            response = AtCommand::parse_response(accumulated);
 
             if (response.status == AtStatus::ok) {
                 return ModemStatus::ok;
@@ -74,8 +88,6 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             }
         }
     }
-
-    return ModemStatus::at_error;
 }
 
 ModemStatus ModemController::send_raw(const std::string& command, AtResponse& response,
@@ -162,6 +174,10 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
         return ModemStatus::at_error;
     }
 
+    std::vector<char> buf(data.begin(), data.end());
+    buf.push_back('\0');
+    MODEM_LOG_DBG(">>: %s", buf.data());
+
     // Step 3: Send the binary payload
     err = uart_->write(data.data(), data.size());
     if (err != UartError::ok) {
@@ -216,6 +232,8 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     buffer[bytes_read] = '\0';
     std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
 
+    MODEM_LOG_DBG("<< (URC poll): %s", raw.c_str());
+    
     // Split on \r\n and collect lines matching a known prefix
     size_t pos = 0;
     while (pos < raw.size()) {

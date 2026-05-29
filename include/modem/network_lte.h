@@ -1,6 +1,7 @@
 #pragma once
 
 #include "modem/xe310.h"
+#include "modem/timer_interface.h"
 
 #include <cstdint>
 #include <functional>
@@ -117,7 +118,8 @@ public:
     using DataReceivedCallback = std::function<void(uint8_t cid, std::string& data, uint16_t n_bytes)>;
 
     explicit NetworkLte(xE310& modem, const NetworkLteConfig& config = {},
-                        DataReceivedCallback on_data_received = nullptr);
+                        DataReceivedCallback on_data_received = nullptr,
+                        std::unique_ptr<TimerInterface> timer = nullptr);
 
     NetworkLteState state() const;
     NetworkLteEvent event() const;
@@ -128,6 +130,24 @@ public:
     void set_attach_retries(uint8_t n); // sets nAttachRetries (for testing)
     void set_pdp_retries(uint8_t n);   // sets nPdpRetries (for testing)
 
+    /// Start the internal timer. Fires on_timer_expired() (-> timeout event) after timeout_ms.
+    /// Returns TimerError::already_running if the timer is already active.
+    TimerError start_timer(uint32_t timeout_ms);
+
+    /// Stop the internal timer. The timeout event will not fire after this returns.
+    /// Returns TimerError::not_running if the timer was not active.
+    TimerError stop_timer();
+
+    /// Restart the internal timer with a new timeout, keeping the same callback.
+    /// Works whether or not the timer is currently running.
+    TimerError reset_timer(uint32_t timeout_ms);
+
+    /// Returns true if the internal timer is currently counting down.
+    bool is_timer_running() const;
+
+    /// Returns the number of whole seconds elapsed since the timer was last started or reset.
+    /// Returns 0 if the timer has never been started.
+    uint32_t timer_elapsed_seconds() const;
     /// Execute one step of the state machine: processes the current event
     /// and performs the modem action for the current state.
     NetworkLteState loop(NetworkLteState target_state = NetworkLteState::none);
