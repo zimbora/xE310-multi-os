@@ -31,17 +31,50 @@ int main() {
     modem::NetworkLteConfig lteConfig;
     modem::NetworkLte network(modem, lteConfig);
 
-    bool res = network.server_connect(1, "UDP", "example.com", 1234);
+    bool net_res = network.network_connect();
+    if(!net_res){
+        MODEM_LOG_ERR("Failed to connect to network");
+        modemController.disconnect();
+        return 1;
+    }
+        
+    bool res = network.server_connect(1, "UDP", "185.205.209.91", 10000);
     if(res){
         MODEM_LOG_INF("Connected to server successfully");
         uint8_t data[] = "Hello, World!";
         network.send_data(1, data, sizeof(data));
         MODEM_LOG_INF("Data sent successfully");
-        std::this_thread::sleep_for(std::chrono::seconds(5)); // wait for a bit before disconnecting to allow any responses to be received and printed
-        network.server_disconnect(1);
-        MODEM_LOG_INF("Disconnected from server successfully");
+        
     }else{
         MODEM_LOG_ERR("Failed to connect to server");
+        return 1;
+    }
+
+    uint32_t count = 0;
+    while(true){
+        network.loop();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        count++;
+        if(count%5==0){
+            std::string msg = "msg : " + std::to_string(count/5);
+            network.send_data(1, (uint8_t*)msg.c_str(), msg.size());
+        }
+        if(count%30==0){
+            
+            if(network.server_disconnect(1))
+                MODEM_LOG_INF("Disconnected from server successfully");
+            else
+                MODEM_LOG_ERR("Failed to disconnect from server");
+            MODEM_LOG_INF("Attempting to enter sleep mode...");
+            return 0;
+            /*
+            if(network.enter_sleep()){
+                MODEM_LOG_INF("Successfully entered sleep mode");
+            }else{
+                MODEM_LOG_ERR("Failed to enter sleep mode");
+            }
+            */
+        }
     }
     return 0;
 }

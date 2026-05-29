@@ -90,6 +90,11 @@ cd build
 ctest --output-on-failure
 ```
 
+```bash
+.\build\tests\Release\test_network_lte.exe
+```
+
+
 ## Directory Structure
 
 ```
