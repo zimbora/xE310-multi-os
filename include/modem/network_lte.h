@@ -112,7 +112,7 @@ enum class ModemAction : uint8_t {
     setup_radio,            // setup modem radio
     // internal actions to get current state
     query_network_status,   // triggered in idle mode to check if we are already registered to network or not, and decide whether to start attach flow or not
-    query_network_context,  // triggered in idle mode after network attach to check if we already have an active PDP context or not, and decide whether to start PDP activation flow or not
+    query_pdp_context,  // triggered in idle mode after network attach to check if we already have an active PDP context or not, and decide whether to start PDP activation flow or not
     // internal actions to drive state machine forward based on events
     attach_network,        // triggered in network detached state to start attach flow
     open_pdp_context,       // triggered in network attached state to start PDP activation flow

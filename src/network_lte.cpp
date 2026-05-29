@@ -515,6 +515,18 @@ void NetworkLte::execute_actions() {
                     MODEM_LOG_INF("Re-applying modem configuration after boot");
                     fWarmBoot = false;
                     fColdBoot = false;
+                    TelitCpsmsConfig cfg = {
+                        PsmMode::enable, 
+                        false,
+                        0,
+                        false,
+                        0,
+                        true,
+                        lteConfig.psm_t3412,
+                        true,
+                        lteConfig.psm_t3324
+                    };
+                    modem_.set_telit_psm(cfg);
                     modem_.set_psm_urc(true); // enable PSM URCs in normal mode
                     modem_.set_registration_urc(true); // enable registration URCs in normal mode
                     modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
@@ -534,7 +546,7 @@ void NetworkLte::execute_actions() {
                     change_state(NetworkLteState::network_detached); // start attach with fallback config
                 }
                 else if(regInfo.stat == RegStatus::registered_home || regInfo.stat == RegStatus::registered_roaming){
-                    call_action(ModemAction::query_network_context); // trigger PDP activation flow in context closed state
+                    call_action(ModemAction::query_pdp_context); // trigger PDP activation flow in context closed state
                 }
                 else if( regInfo.stat == RegStatus::unknown ){
                     // How to deal with it ?
@@ -601,7 +613,7 @@ void NetworkLte::execute_actions() {
             }
             nAttachRetries++;
             break;
-        case ModemAction::query_network_context:
+        case ModemAction::query_pdp_context:
             {
                 bool pdp_active = false;
                 auto status = modem_.get_pdp_state(lteConfig.cid, pdp_active);
@@ -619,6 +631,7 @@ void NetworkLte::execute_actions() {
                     }
                 }
             }
+            break;
         case ModemAction::open_pdp_context:
             {
                 auto status = modem_.activate_pdp(lteConfig.cid);
@@ -704,6 +717,10 @@ void NetworkLte::handle_urc(const std::string& urc) {
         if (stat == 1 || stat == 5) {          // registered home / roaming
             on_event(NetworkLteEvent::network_attached);
         } else if (stat == 0 || stat == 3) {   // not registered / denied
+            TelitCpsmsStatus status;
+            modem_.get_telit_psm(status); // update PSM config in info struct after applying it to modem
+            MODEM_LOG_INF("PSM status: %d", status.mode);
+            MODEM_LOG_INF("PSM status: %d", status.mode);
             on_event(NetworkLteEvent::network_detached);
         }
         return;
@@ -866,7 +883,28 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             st_timer->start(lteConfig.pdp_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
             break;
         case NetworkLteState::data_ready:
-            st_timer->start(lteConfig.data_ready_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+            {
+                TelitCpsmsStatus state;
+                auto status = modem_.get_telit_psm(state); // update PSM config in info struct after applying it to modem
+                if(status == ModemStatus::ok){
+                    /*
+                    networkInfo.psm_mode = state.mode;
+                    networkInfo.psm_t3324 = state.t3324;
+                    networkInfo.psm_t3412 = state.t3412;
+                    networkInfo.psm_version = state.psm_version;
+                    networkInfo.psm_threshold = state.psm_threshold;
+                    */
+                    MODEM_LOG_INF("PSM state: %d", state.mode);
+                    MODEM_LOG_INF("PSM t3324: %d", state.t3324);
+                    MODEM_LOG_INF("PSM t3412: %d", state.t3412);
+                    MODEM_LOG_INF("PSM psm_version: %d", state.psm_version);
+                    MODEM_LOG_INF("PSM psm_threshold: %d", state.psm_threshold);
+                    MODEM_LOG_INF("PSM mode: %d", state.mode);
+                } else {
+                    MODEM_LOG_ERR("Failed to get PSM status");
+                }
+                st_timer->start(lteConfig.data_ready_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+            }
             break;
         case NetworkLteState::transparent_mode:
             st_timer->start(lteConfig.transparent_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
@@ -987,7 +1025,7 @@ static const char* action_to_str(ModemAction a) {
         case ModemAction::setup_radio:                    return "setup_radio";
         // internal actions to get current state
         case ModemAction::query_network_status:           return "query_network_status";
-        case ModemAction::query_network_context:          return "query_network_context";
+        case ModemAction::query_pdp_context:              return "query_pdp_context";
         // internal actions to drive state machine forwared
         case ModemAction::attach_network:                 return "attach_network";
         case ModemAction::open_pdp_context:               return "open_pdp_context";
