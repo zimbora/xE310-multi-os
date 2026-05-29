@@ -4,6 +4,9 @@
 
 namespace modem {
 
+// Forward declarations of static helpers defined at bottom of file
+static const char* action_to_str(ModemAction a);
+
 NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
                        std::unique_ptr<TimerInterface> timer)
     : modem_(modem), lteConfig(config), on_data_received_(std::move(on_data_received)),
@@ -64,7 +67,7 @@ uint32_t NetworkLte::timer_elapsed_seconds() const {
 }
 
 void NetworkLte::on_timer_expired() {
-    on_modem_event(NetworkLteEvent::timeout);
+    on_event(NetworkLteEvent::timeout);
 }
 
 bool NetworkLte::network_connect() {
@@ -261,7 +264,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
 
     // !! only last event is processed for now!!
     // modem events change state without further action, actions are forbidden here for now!!
-    switch(modem_event_){
+    switch(get_event()){
         case NetworkLteEvent::psm_enter:
             MODEM_LOG_INF("Entered PSM mode");
             change_state(NetworkLteState::sleep_mode);
@@ -302,14 +305,17 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             MODEM_LOG_INF("Network PDP context opened, IP address assigned: %s", networkInfo.ip_address.c_str());
             change_state(NetworkLteState::data_ready);
             break;
-        case NetworkLteEvent::data_available:
+        case NetworkLteEvent::data_available: {
             MODEM_LOG_INF("Data available event received");
             std::vector<uint8_t> buf;
             if (modem_.udp_receive(lteConfig.conn_id, buf) == ModemStatus::ok && !buf.empty()) {
                 std::string payload(buf.begin(), buf.end());
-                on_data_received_(lteConfig.conn_id, payload, static_cast<uint16_t>(buf.size()));
+                if (on_data_received_) {
+                    on_data_received_(lteConfig.conn_id, payload, static_cast<uint16_t>(buf.size()));
+                }
             }
             break;
+        }
         default:
             break; // other events are handled in the state switch below
     }
@@ -317,11 +323,12 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
     if(state_ == target_state && target_state != NetworkLteState::none){
         return state_; // already in target state, no need to process further
     }
-
+    /*
     // user desires takes precence over modem events, so we can trigger state transitions based on the target state even if we haven't received the corresponding modem events yet (e.g. we can trigger transparent mode entry before receiving the URC that confirms we are in transparent mode, and then when we receive that URC in the next loop cycle, we will already be in the correct state and can just continue with normal processing)
     switch(target_state){
         case NetworkLteState::data_ready:
             switch(state_){
+                // stationary states that we can trigger actions from to go to data ready state
                 case NetworkLteState::switched_off:
                     call_action(ModemAction::power_on); // trigger PDP activation flow in context closed state
                     break;
@@ -330,9 +337,6 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                     break;
                 case NetworkLteState::sleep_mode:
                     call_action(ModemAction::wake_up); // trigger attach flow in detached state
-                    break;
-                case NetworkLteState::idle_mode:
-                    call_action(ModemAction::attatch_network); // trigger attach flow in idle mode
                     break;
                 case NetworkLteState::transparent_mode:
                     call_action(ModemAction::leave_transparent_mode); // trigger exit transparent mode flow to go back to idle mode and restart normal flow
@@ -361,17 +365,17 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
         default:
             break; // otherwise, just process events and update state as they come
     }
-    
+    */
     execute_actions();
 
     return state_;
 }
 
-}
 // perform actions
 void NetworkLte::execute_actions() {
     ModemAction action = get_action();
-    MODEM_LOG_DEBUG("action: %s", action_to_str(action));
+    if(action != ModemAction::none)
+        MODEM_LOG_DBG("Executing action: %s", action_to_str(action));
     switch(action){
         case ModemAction::reboot:
             {
@@ -396,10 +400,12 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::factory_reset:
             {
+                /*
                 auto status = modem_.factory_reset();
                 if(status == ModemStatus::ok){
                     change_state(NetworkLteState::rebooting); // after factory reset, the modem will reboot, so we can consider it in rebooting state and wait for it to be responsive again before continuing with the flow
                 }
+                */
             }
             break;
         case ModemAction::power_on:
@@ -418,7 +424,7 @@ void NetworkLte::execute_actions() {
                 MODEM_LOG_INF("Modem powered on and responsive");
                 change_state(NetworkLteState::idle_mode);
                 call_action(ModemAction::setup_radio); // trigger radio setup to start attach flow
-                coldBoot = true; 
+                fColdBoot = true; 
                 nNetworkAttempts = 0;
             }
             break;
@@ -449,7 +455,7 @@ void NetworkLte::execute_actions() {
                 call_action(ModemAction::query_network_status);
             } else {
                 MODEM_LOG_INF("Waking up from sleep mode, previous state was not data ready, going to idle mode to restart attach flow");
-                warmBoot = true;
+                fWarmBoot = true;
                 change_state(NetworkLteState::idle_mode); // after waking up, we can go back to idle mode and check network status to continue with the flow
                 call_action(ModemAction::setup_radio); // trigger attach flow in idle mode
             }
@@ -496,7 +502,7 @@ void NetworkLte::execute_actions() {
                 }
                 if(fChangeRAT){
                     fChangeRAT = false;
-                    status = modem_.set_iot_tech(lteConfig.default_iot_tech);
+                    auto status = modem_.set_iot_tech(lteConfig.default_iot_tech);
                     if (status != ModemStatus::ok) {
                         MODEM_LOG_ERR("Failed to set IoT technology");
                         // flag error
@@ -505,6 +511,15 @@ void NetworkLte::execute_actions() {
                 // reboot modem to apply new bands configuration
                 call_action(ModemAction::reboot);
             } else {
+                if(fWarmBoot || fColdBoot){
+                    MODEM_LOG_INF("Re-applying modem configuration after boot");
+                    fWarmBoot = false;
+                    fColdBoot = false;
+                    modem_.set_psm_urc(true); // enable PSM URCs in normal mode
+                    modem_.set_registration_urc(true); // enable registration URCs in normal mode
+                    modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
+
+                }
                 change_state(NetworkLteState::idle_mode);
                 call_action(ModemAction::query_network_status); // check network status
             }
@@ -517,11 +532,9 @@ void NetworkLte::execute_actions() {
                     regInfo.stat == RegStatus::not_registered || 
                     regInfo.stat == RegStatus::searching ){
                     change_state(NetworkLteState::network_detached); // start attach with fallback config
-                    //on_event(NetworkLteEvent::attach_started); // trigger attach flow
                 }
                 else if(regInfo.stat == RegStatus::registered_home || regInfo.stat == RegStatus::registered_roaming){
-                    change_state(NetworkLteState::pdp_context_closed); // after network attach, we can assume any previous PDP context is now deactivated, so we can go to context deactivated state and trigger PDP activation flow from there
-                    call_action(ModemAction::attatch_network); // trigger attach flow to ensure we are attached before activating PDP
+                    call_action(ModemAction::query_network_context); // trigger PDP activation flow in context closed state
                 }
                 else if( regInfo.stat == RegStatus::unknown ){
                     // How to deal with it ?
@@ -531,12 +544,39 @@ void NetworkLte::execute_actions() {
             }
             break;
         
-        case ModemAction::attatch_network:
+        case ModemAction::attach_network:
             //modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
             //modem_.network_attach();
             if(nAttachRetries == 0){
+                // check default iot_tech
+                RadioTech current_tech;
+                uint8_t gsm_priority;
+                auto status = modem_.get_iot_tech(current_tech,gsm_priority);
+                if(status == ModemStatus::ok){
+                    if(current_tech != lteConfig.default_iot_tech){
+                        MODEM_LOG_WRN("Current IoT technology %d is different from default config %d, changing it to default config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.default_iot_tech));
+                        fChangeRAT = true;
+                    }
+                }
+                // check default bands
+                std::string bands;
+                status = modem_.get_bands(bands);
+                /*
+                if(status == ModemStatus::ok){
+                    if(bands != lteConfig.default_lte_bands){
+                        MODEM_LOG_WRN("Current LTE bands %s are different from default config %s, changing it to default config and rebooting to apply", networkInfo.lte_bands.c_str(), lteConfig.default_lte_bands.c_str());
+                        fChangeBands = true;
+                    }
+                }
+                */
+                // if any diferent set it to default config and reboot to apply, then start attach flow in idle mode
+                if(fChangeRAT || fChangeBands){
+                    call_action(ModemAction::reboot); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
+                    break;
+                }
+
                 MODEM_LOG_INF("Starting network attach with default configuration");
-                auto status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
+                status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
                 if(status == ModemStatus::ok){
                     change_state(NetworkLteState::network_attaching);
                 }else{
@@ -545,8 +585,7 @@ void NetworkLte::execute_actions() {
                 }
             } else if(nAttachRetries == 1){
                 MODEM_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
-                ModemStatus status = modem_.set_operator_auto();
-                auto status = modem_.set_operator_auto();
+                status = modem_.set_operator_auto();
                 if(status == ModemStatus::ok){
                     change_state(NetworkLteState::network_attaching);
                 }else{
@@ -564,8 +603,9 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::query_network_context:
             {
-                auto status = modem_.get_pdp_context();
-                if(networkInfo.context_state == ContextState::inactive){
+                bool pdp_active = false;
+                auto status = modem_.get_pdp_state(lteConfig.cid, pdp_active);
+                if(!pdp_active){
                     change_state(NetworkLteState::pdp_context_closed); // if context is inactive, we can consider it closed and trigger PDP activation flow
                     call_action(ModemAction::open_pdp_context); // trigger PDP activation flow
                 } else {
@@ -583,7 +623,8 @@ void NetworkLte::execute_actions() {
             {
                 auto status = modem_.activate_pdp(lteConfig.cid);
                 if(status == ModemStatus::ok){
-                    change_state(NetworkLteState::pdp_context_opening);
+                    //change_state(NetworkLteState::pdp_context_opening);
+                    change_state(NetworkLteState::data_ready);
                 } else {
                     MODEM_LOG_ERR("Failed to activate PDP context");
                     // flag error and stay in the same state to retry later
@@ -648,6 +689,7 @@ void NetworkLte::execute_actions() {
 
 void NetworkLte::handle_urc(const std::string& urc) {
     // +CREG / +CEREG: <n>,<stat>  or  <stat>
+    MODEM_LOG_DBG("Handle URC: %s", urc.c_str());
     if (urc.rfind("+CREG:", 0) == 0 || urc.rfind("+CEREG:", 0) == 0) {
         // stat field is the last token (after optional <n>,)
         int stat = -1;
@@ -692,13 +734,15 @@ void NetworkLte::handle_urc(const std::string& urc) {
     }
     // SRING: <conn_id>  →  new data available on socket
     if (urc.rfind("SRING: 1", 0) == 0) {
+        MODEM_LOG_DBG("Data available URC received");
         std::string body = urc.substr(6);
         auto s = body.find_first_not_of(' ');
         if (s != std::string::npos) {
             int id = std::stoi(body.substr(s));
-            if (id == lteConfig.conn_id) {
+            MODEM_LOG_DBG("Data available on id: %d", id);
+            //if (id == lteConfig.conn_id) {
                 on_event(NetworkLteEvent::data_available);
-            }
+            //}
         }
         return;
     }
@@ -709,6 +753,12 @@ void NetworkLte::on_event(NetworkLteEvent event) {
     event_ = event;
     log_event();
     // record uptime and event history for debugging/analytics
+}
+
+NetworkLteEvent NetworkLte::get_event() {
+    NetworkLteEvent event = event_;
+    event_ = NetworkLteEvent::none; // reset event after reading it to avoid processing the same event multiple times, if we want to keep a history of events, we can store them in a vector instead of resetting it
+    return event;
 }
 
 bool NetworkLte::go_to_state(NetworkLteState target_state) {
@@ -726,13 +776,11 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
                 target_state == NetworkLteState::transparent_mode || 
                 target_state == NetworkLteState::network_detached){
                 call_action(ModemAction::power_on);
-                //on_event(NetworkLteEvent::power_on); // trigger power on to start setup/attach flow             
             }
             break;
         case NetworkLteState::off_mode:
             if(target_state == NetworkLteState::idle_mode || target_state == NetworkLteState::setup_mode || target_state == NetworkLteState::network_detached){
                 call_action(ModemAction::turn_on_radio);
-                //on_event(NetworkLteEvent::turn_on_radio); // trigger turn on radio to start attach flow
             }
             break;
         case NetworkLteState::sleep_mode:
@@ -826,7 +874,42 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         default:
             break; // no special handling needed for other states when entering
     }
- 
+    
+    switch(state_){
+        case NetworkLteState::network_detached:
+            MODEM_LOG_INF("State changed to network_detached, resetting network info and server states");
+            networkInfo = {}; // reset network info
+            {
+                uint8_t i = 0;
+                while(i < MAX_SERVER_CONNECTIONS){
+                    serverInfo[i++].state = ServerState::disconnected; // reset server states
+                }
+            }
+            call_action(ModemAction::attach_network); // trigger attach flow to try to re-attach to network
+            break;
+        case NetworkLteState::pdp_context_closed:
+            MODEM_LOG_INF("State changed to pdp_context_closed, resetting IP address and server states");
+            networkInfo.ip_address = ""; // reset IP address
+            {
+                uint8_t i = 0;
+                while(i < MAX_SERVER_CONNECTIONS){
+                    serverInfo[i++].state = ServerState::disconnected; // reset server states
+                }
+            }
+            call_action(ModemAction::open_pdp_context); // trigger PDP activation flow to try to open PDP context and get an IP address
+            break;
+    }
+}
+
+void NetworkLte::call_action(ModemAction action){
+    modem_action_ = action;
+    log_action();
+}
+
+ModemAction NetworkLte::get_action() {
+    ModemAction action = modem_action_;
+    modem_action_ = ModemAction::none; // reset action after reading it, since actions are one-time triggers that should be executed once and then cleared until the next time they are triggered
+    return action;
 }
 
 static const char* state_to_str(NetworkLteState s) {
@@ -889,26 +972,32 @@ static const char* modem_event_to_str(NetworkLteEvent e) {
 
 static const char* action_to_str(ModemAction a) {
     switch (a) {
-        case ModemAction::none:                          return "none";
+        case ModemAction::none:                           return "none";
         // recovering actions
-        case ModemAction::reboot:                        return "reboot";
-        case ModemAction::factory_reset:                 return "factory_reset";
-        case ModemAction::check_responsiveness:          return "check_responsiveness";
+        case ModemAction::reboot:                         return "reboot";
+        case ModemAction::factory_reset:                  return "factory_reset";
+        case ModemAction::check_responsiveness:           return "check_responsiveness";
         // power events
         case ModemAction::power_on:                       return "power_on";
         case ModemAction::power_off:                      return "power_off";
         case ModemAction::turn_on_radio:                  return "turn_on_radio";
         case ModemAction::switch_off_radio:               return "switch_off_radio";
         case ModemAction::enter_sleep:                    return "enter_sleep";
+        case ModemAction::wake_up:                        return "wake_up";
         case ModemAction::setup_radio:                    return "setup_radio";
         // internal actions to get current state
-        case ModemAction::query_network_status:      return "query_network_status";
-        case ModemAction::query_network_context:     return "query_network_context";
-        // External / user events
-        case ModemAction::wake_up:                       return "wake_up";
-        case ModemAction::send_data:                     return "send_data";
-        case ModemAction::transparent_mode:              return "transparent_mode";
-        case ModemAction::data_complete:                 return "data_complete";
+        case ModemAction::query_network_status:           return "query_network_status";
+        case ModemAction::query_network_context:          return "query_network_context";
+        // internal actions to drive state machine forwared
+        case ModemAction::attach_network:                 return "attach_network";
+        case ModemAction::open_pdp_context:               return "open_pdp_context";
+        // data actions
+        case ModemAction::send_data:                      return "send_data";
+        case ModemAction::read_data:                      return "read_data";
+        case ModemAction::data_complete:                  return "data_complete";
+        // sepecial modes
+        case ModemAction::enter_transparent_mode:         return "enter_transparent_mode";
+        case ModemAction::leave_transparent_mode:         return "leave_transparent_mode";
         default:                                          return "unknown_action";
     }
 }
@@ -922,7 +1011,8 @@ void NetworkLte::log_event() const {
 }
 
 void NetworkLte::log_action() const {
-    MODEM_LOG_DBG("new action: %s", action_to_str(modem_action_));
+    if(modem_action_ != ModemAction::none)
+        MODEM_LOG_DBG("new action: %s", action_to_str(modem_action_));
 }
 
 } // namespace modem

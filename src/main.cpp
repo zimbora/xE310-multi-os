@@ -10,6 +10,10 @@
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
+void on_data_received(uint8_t cid, std::string& data, uint16_t n_bytes) {
+    MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
+}
+
 int main() {
     
     
@@ -29,7 +33,7 @@ int main() {
     MODEM_LOG_INF("Modem initialized successfully");
 
     modem::NetworkLteConfig lteConfig;
-    modem::NetworkLte network(modem, lteConfig);
+    modem::NetworkLte network(modem, lteConfig, on_data_received);
 
     bool net_res = network.network_connect();
     if(!net_res){
@@ -38,11 +42,11 @@ int main() {
         return 1;
     }
         
-    bool res = network.server_connect(1, "UDP", "185.205.209.91", 10000);
+    bool res = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
     if(res){
         MODEM_LOG_INF("Connected to server successfully");
         uint8_t data[] = "Hello, World!";
-        network.send_data(1, data, sizeof(data));
+        network.send_data(lteConfig.conn_id, data, sizeof(data));
         MODEM_LOG_INF("Data sent successfully");
         
     }else{
@@ -57,7 +61,7 @@ int main() {
         count++;
         if(count%5==0){
             std::string msg = "msg : " + std::to_string(count/5);
-            network.send_data(1, (uint8_t*)msg.c_str(), msg.size());
+            network.send_data(lteConfig.conn_id, (uint8_t*)msg.c_str(), msg.size());
         }
         if(count%30==0){
             

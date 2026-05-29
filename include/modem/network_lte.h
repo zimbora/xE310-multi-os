@@ -38,7 +38,7 @@
 //Vodafone CATM1 BANDS: 8, 20
 //NOS CATM1 BANDS: 3, 20 
 
-#ifdef COUNTRY_CODE == 268
+#if defined(COUNTRY_CODE) && COUNTRY_CODE == 268
     #define DEFAULT_LTE_BANDS B8_20_BAND_MASK
     #define FALLBACK_LTE_BANDS B3_8_20_BAND_MASK
 #else
@@ -107,14 +107,14 @@ enum class ModemAction : uint8_t {
     power_off,              // power off modem completely (e.g. by cutting power or shutting down)
     turn_on_radio,          // turn on modem radio
     switch_off_radio,       // switch off modem radio
-    setup_radio,            // setup modem radio
-    wake_up,                // drive GPIO0 + CFUN=1, Warm boot
     enter_sleep,            // call cfun=4 + cfun=11, monitor POWERMON
+    wake_up,                // drive GPIO0 + CFUN=1, Warm boot
+    setup_radio,            // setup modem radio
     // internal actions to get current state
     query_network_status,   // triggered in idle mode to check if we are already registered to network or not, and decide whether to start attach flow or not
     query_network_context,  // triggered in idle mode after network attach to check if we already have an active PDP context or not, and decide whether to start PDP activation flow or not
     // internal actions to drive state machine forward based on events
-    attatch_network,        // triggered in network detached state to start attach flow
+    attach_network,        // triggered in network detached state to start attach flow
     open_pdp_context,       // triggered in network attached state to start PDP activation flow
     // data actions
     send_data,              // trigger data send flow (if in data ready state) or buffer data to send when we get to data ready state
@@ -149,7 +149,7 @@ struct NetworkLteConfig {
     uint32_t    psm_t3412                = 3600; ///< Sleep time in PSM mode, in seconds
     uint32_t    psm_t3324                = 300; ///< Active time in PSM mode, in seconds
 
-    uint8_t     conn_id                  = 0; ///< Connection ID to query for server connection status (e.g. for UDP sockets)
+    uint8_t     conn_id                  = 1; ///< Connection ID to query for server connection status (e.g. for UDP sockets)
 };
 
 enum class ServerState : uint8_t {
@@ -262,19 +262,17 @@ public:
     // Set the current event to trigger a state transition on the next step() call.
     void on_event(NetworkLteEvent event);
 
+    // Dequeue the current event and return it. The event is reset to none after being read to avoid processing the same event multiple times.
+    NetworkLteEvent get_event();
+
     // Change to a new state immediately, bypassing the normal event-driven flow (for testing).
     void change_state(NetworkLteState new_state);
     
-    void call_action(ModemAction action){
-        modem_action_ = action;
-        log_action();
-    }
-
-    ModemAction get_action() const{
-        ModemAction action = modem_action_
-        modem_action_ = ModemAction::none; // reset action after reading it, since actions are one-time triggers that should be executed once and then cleared until the next time they are triggered
-        return action;
-    }
+    // Set the current action to be executed in the next step() call based on the current state and event.
+    void call_action(ModemAction action);
+    
+    // Get the current action and reset it to none. The action is reset after being read to avoid executing the same action multiple times.
+    ModemAction get_action();
 
     void execute_actions();
 
