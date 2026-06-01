@@ -71,6 +71,48 @@ int main() {
         MODEM_LOG_INF("CoAP IPC server listening on localhost:9001 (framed binary)");
     }
 
+    // AT command passthrough server on port 9002 (line mode, nc compatible).
+    // On connect  → modem enters transparent mode (raw AT).
+    // On message  → forward as AT command, reply with response.
+    // On disconnect → modem leaves transparent mode.
+    IpcServer at_ipc(9002, nullptr, IpcServer::Mode::line);
+    at_ipc.set_connect_callback([&]() {
+        MODEM_LOG_INF("AT IPC: client connected, entering transparent mode");
+        // Use call_action + execute_actions instead of the blocking enter_transparent_mode()
+        // to avoid stalling the IPC thread before client_loop starts receiving data.
+        network.enter_transparent_mode(); // this will internally call the modem action to enter transparent mode, but we need to call execute_actions here to actually perform the action and change the modem state before we start receiving AT commands from the client
+    });
+    at_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
+        std::string cmd(reinterpret_cast<const char*>(data), len);
+        std::string response;
+        MODEM_LOG_INF("AT IPC >> %s", cmd.c_str());
+        if (network.send_at_command(cmd, response, 5000)) {
+            // parse_response() strips the status line into AtResponse::status,
+            // so response.body is empty for simple commands (e.g. AT → OK).
+            // Re-append the status line so the nc client sees a complete reply.
+            if (!response.empty()) response += "\r\n";
+            response += "OK\r\n";
+            MODEM_LOG_INF("AT IPC << %s", response.c_str());
+            at_ipc.send(reinterpret_cast<const uint8_t*>(response.data()),
+                        static_cast<uint16_t>(response.size()));
+        } else {
+            const std::string err = "ERROR\r\n";
+            MODEM_LOG_ERR("AT IPC: command failed");
+            at_ipc.send(reinterpret_cast<const uint8_t*>(err.data()),
+                        static_cast<uint16_t>(err.size()));
+        }
+    });
+    at_ipc.set_disconnect_callback([&]() {
+        MODEM_LOG_INF("AT IPC: client disconnected, leaving transparent mode");
+        network.call_action(modem::ModemAction::leave_transparent_mode);
+        network.execute_actions();
+    });
+    if (!at_ipc.start()) {
+        MODEM_LOG_WRN("AT IPC server failed to start on port 9002 (continuing without it)");
+    } else {
+        MODEM_LOG_INF("AT IPC server listening on localhost:9002 (AT command passthrough)");
+    }
+
     bool net_res = network.network_connect();
     if(!net_res){
         MODEM_LOG_ERR("Failed to connect to network");
