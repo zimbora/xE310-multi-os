@@ -11,8 +11,8 @@
 #include <vector>
 #include <cstring>
 
-IpcServer::IpcServer(uint16_t port, MessageCallback on_message)
-    : port_(port), on_message_(std::move(on_message)) {}
+IpcServer::IpcServer(uint16_t port, MessageCallback on_message, Mode mode)
+    : port_(port), mode_(mode), on_message_(std::move(on_message)) {}
 
 IpcServer::~IpcServer() { stop(); }
 
@@ -47,6 +47,13 @@ void IpcServer::stop() {
 
 bool IpcServer::send(const uint8_t* data, uint16_t length) {
     if (client_fd_ == -1) return false;
+    if (mode_ == Mode::framed) {
+        uint8_t hdr[2] = { static_cast<uint8_t>(length & 0xFF),
+                           static_cast<uint8_t>((length >> 8) & 0xFF) };
+        if (::send(client_fd_, hdr, 2, 0) != 2) return false;
+        return ::send(client_fd_, data, length, 0) == static_cast<ssize_t>(length);
+    }
+    // Mode::line
     if (::send(client_fd_, data, length, 0) != static_cast<ssize_t>(length)) return false;
     return ::send(client_fd_, "\n", 1, 0) == 1;
 }
@@ -62,13 +69,17 @@ void IpcServer::accept_loop() {
 }
 
 void IpcServer::client_loop(int fd) {
+    if (mode_ == Mode::framed) client_loop_framed(fd);
+    else                       client_loop_line(fd);
+}
+
+void IpcServer::client_loop_line(int fd) {
     std::string line;
     char ch;
     while (running_) {
         ssize_t r = recv(fd, &ch, 1, 0);
         if (r <= 0) break;
         if (ch == '\n') {
-            // Strip trailing \r if present (e.g. from Windows nc)
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (!line.empty() && on_message_) {
                 on_message_(reinterpret_cast<const uint8_t*>(line.data()),
@@ -78,6 +89,26 @@ void IpcServer::client_loop(int fd) {
         } else {
             line += ch;
         }
+    }
+}
+
+void IpcServer::client_loop_framed(int fd) {
+    while (running_) {
+        uint8_t hdr[2];
+        ssize_t r = recv(fd, hdr, 2, MSG_WAITALL);
+        if (r != 2) break;
+        uint16_t len = static_cast<uint16_t>(hdr[0]) |
+                       (static_cast<uint16_t>(hdr[1]) << 8);
+        if (len == 0) continue;
+
+        std::vector<uint8_t> buf(len);
+        ssize_t total = 0;
+        while (total < static_cast<ssize_t>(len)) {
+            ssize_t n = recv(fd, buf.data() + total, len - total, 0);
+            if (n <= 0) return;
+            total += n;
+        }
+        if (on_message_) on_message_(buf.data(), len);
     }
 }
 

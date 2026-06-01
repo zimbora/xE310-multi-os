@@ -35,7 +35,11 @@ int main() {
     // IPC server: messages from external process (e.g. LwM2M agent) are
     // queued for TX. Wire format: newline-delimited text — compatible with nc.
     // Usage: nc localhost 9000   then type messages and press Enter.
-    IpcServer ipc(9000, nullptr); // callback set after network is constructed
+    IpcServer ipc(9000, nullptr, IpcServer::Mode::line); // callback set after network is constructed
+
+    // CoAP IPC server on port 9001: binary framed [uint16_t len LE][payload].
+    // Usage: send CoAP binary frames from a LwM2M agent or test tool.
+    IpcServer coap_ipc(9001, nullptr, IpcServer::Mode::framed);
 
     // on_data_received is a lambda so it can capture ipc and forward replies.
     auto on_data_received = [&](uint8_t cid, std::string& data, uint16_t n_bytes) {
@@ -54,6 +58,17 @@ int main() {
         MODEM_LOG_WRN("IPC server failed to start on port 9000 (continuing without it)");
     } else {
         MODEM_LOG_INF("IPC server listening on localhost:9000");
+    }
+
+    coap_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
+        network.tx_write(lteConfig.conn_id, data, len);
+        network.call_action(modem::ModemAction::send_data);
+        MODEM_LOG_INF("CoAP IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+    });
+    if (!coap_ipc.start()) {
+        MODEM_LOG_WRN("CoAP IPC server failed to start on port 9001 (continuing without it)");
+    } else {
+        MODEM_LOG_INF("CoAP IPC server listening on localhost:9001 (framed binary)");
     }
 
     bool net_res = network.network_connect();
