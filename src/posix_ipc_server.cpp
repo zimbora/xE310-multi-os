@@ -63,7 +63,9 @@ void IpcServer::accept_loop() {
         int client = accept(server_fd_, nullptr, nullptr);
         if (client < 0) break;
         client_fd_ = client;
+        if (on_connect_) on_connect_();
         client_loop(client_fd_);
+        if (on_disconnect_) on_disconnect_();
         close(client); client_fd_ = -1;
     }
 }

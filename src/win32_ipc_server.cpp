@@ -83,7 +83,9 @@ void IpcServer::accept_loop() {
         SOCKET client = accept(to_sock(server_fd_), nullptr, nullptr);
         if (client == INVALID_SOCKET) break;
         client_fd_ = to_fd(client);
+        if (on_connect_) on_connect_();
         client_loop(client_fd_);
+        if (on_disconnect_) on_disconnect_();
         closesocket(client); client_fd_ = -1;
     }
 }
