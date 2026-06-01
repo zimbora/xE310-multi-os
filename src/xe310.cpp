@@ -498,7 +498,7 @@ ModemStatus xE310::get_bands(std::string& bands) {
 
 ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
-    auto result = controller_.send_raw(std::string("AT+CREG=") + (enable ? "4" : "0"), response);
+    auto result = controller_.send_raw(std::string("AT+CEREG=") + (enable ? "4" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -608,13 +608,13 @@ ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) 
     } else {
         auto cmd = "AT+COPS=1,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
 
-        return controller_.send_raw(cmd, response, 45000); // manual registration can take a long time, allow up to 30s
+        return controller_.send_raw(cmd, response, 210000); // manual registration can take a long time, allow up to 30s
     }
 }
 
 ModemStatus xE310::set_operator_auto() {
     AtResponse response;
-    return controller_.send_raw("AT+COPS=0", response,45000); // registration can take a long time, allow up to 30s 
+    return controller_.send_raw("AT+COPS=0", response,210000); // registration can take a long time, allow up to 30s 
 }
 
 ModemStatus xE310::get_operator(std::string& oper) {

@@ -230,6 +230,8 @@ public:
     bool enter_transparent_mode();
     /// Exit transparent mode (go to idle state).
     bool exit_transparent_mode();
+    /// Alias for exit_transparent_mode — re-enables URCs and returns to idle.
+    bool leave_transparent_mode();
     /// @brief Send an AT command to the modem and receive the response.
     /// @param command The AT command to send.
     /// @param response The response from the modem.
@@ -253,6 +255,39 @@ public:
 
     /// SIM IMSI read at power-on.
     const std::string& imsi() const;
+
+    /// Full modem identification info read at power-on.
+    const ModemInfo& modem_info() const;
+
+    /// Last known SIM status.
+    SimStatus sim_status() const;
+
+    /// Last known radio access technology.
+    RadioTech radio_tech() const;
+
+    /// Last known registration status (from URC or query).
+    RegStatus reg_status() const;
+
+    /// Last known network/PDP context info.
+    const NetworkInfo& network_info() const;
+
+    /// Last known PSM mode.
+    PsmMode psm_mode() const;
+
+    /// Last known 3GPP PSM configuration.
+    const CpsmsConfig& cpsms_config() const;
+
+    /// Last known Telit PSM configuration.
+    const TelitCpsmsConfig& telit_cpsms_config() const;
+
+    /// Last known Telit PSM network status.
+    const TelitCpsmsStatus& telit_cpsms_status() const;
+
+    /// Last network survey result (populated after a survey action).
+    const NetworkSurveyResult& network_survey_result() const;
+
+    /// Pointer to the internal server info array (MAX_SERVER_CONNECTIONS entries, 0-based).
+    const ServerInfo* server_info_array() const;
 
     /// Active configuration.
     const NetworkLteConfig& config() const;
