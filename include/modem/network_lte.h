@@ -218,8 +218,6 @@ public:
     bool server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
     bool server_disconnect(uint8_t conn_id);
-    /// Send data to the server. Data is buffered if not currently connected.
-    bool send_data(uint8_t cid, uint8_t* data, size_t length);
 
     /// Write data into the TX queue for the given connection ID (1-based).
     QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length);

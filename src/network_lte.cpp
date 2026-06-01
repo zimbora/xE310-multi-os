@@ -163,27 +163,6 @@ bool NetworkLte::server_disconnect(uint8_t conn_id) {
     }
 }
 
-bool NetworkLte::send_data(uint8_t conn_id, uint8_t* data, size_t length) { 
-     if(state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode) {
-        MODEM_LOG_INF("Not currently in data ready or sleep mode, attempting to go to data ready mode before sending data");
-        go_to_state(NetworkLteState::data_ready);
-    }
-    if( state_ != NetworkLteState::data_ready) {
-        MODEM_LOG_ERR("Not currently connected to network, cannot send data");
-        return false;
-    }
-    if( serverInfo[conn_id-1].state != ServerState::connected){
-        MODEM_LOG_ERR("Not currently connected to a server, cannot send data");
-        return false; // not connected to server, cannot send data
-    }
-    auto status = modem_.udp_send(conn_id, std::vector<uint8_t>(data, data + length));
-    if(status != ModemStatus::ok){
-        MODEM_LOG_ERR("Failed to send data to UDP server for CID %d", conn_id);
-        return false;
-    }
-    return true;
-}
-
 QueueError NetworkLte::tx_write(uint8_t conn_id, const uint8_t* data, size_t length) {
     if (!message_queue_) return QueueError::invalid_id;
     return message_queue_->tx_push(conn_id, data, length);
