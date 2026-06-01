@@ -45,11 +45,11 @@ set(MODEM_CORE_SOURCES
 
 # --- HAL sources (platform-specific) ---
 if(MODEM_PLATFORM STREQUAL "zephyr")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp src/hal/zephyr_timer.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp src/hal/zephyr_timer.cpp src/hal/zephyr_message_queue.cpp)
 elseif(MODEM_PLATFORM STREQUAL "windows")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp src/hal/win32_timer.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp src/hal/win32_timer.cpp src/hal/win32_message_queue.cpp)
 else()
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp src/hal/posix_timer.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp src/hal/posix_timer.cpp src/hal/posix_message_queue.cpp)
 endif()
 
 # --- Library target ---
