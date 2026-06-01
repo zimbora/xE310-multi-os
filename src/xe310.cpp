@@ -498,7 +498,7 @@ ModemStatus xE310::get_bands(std::string& bands) {
 
 ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
-    auto result = controller_.send_raw(std::string("AT+CREG=") + (enable ? "4" : "0"), response);
+    auto result = controller_.send_raw(std::string("AT+CEREG=") + (enable ? "4" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
