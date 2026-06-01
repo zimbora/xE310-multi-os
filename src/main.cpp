@@ -4,16 +4,13 @@
 #include "modem/uart_factory.h"
 #include "modem/message_queue_interface.h"
 #include "modem/log.h"
+#include "ipc_server.h"
 #include <memory>
 
 #include <thread>
 #include <chrono>
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
-
-void on_data_received(uint8_t cid, std::string& data, uint16_t n_bytes) {
-    MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
-}
 
 int main() {
     
@@ -34,7 +31,30 @@ int main() {
     MODEM_LOG_INF("Modem initialized successfully");
 
     modem::NetworkLteConfig lteConfig;
+
+    // IPC server: messages from external process (e.g. LwM2M agent) are
+    // queued for TX. Wire format: newline-delimited text — compatible with nc.
+    // Usage: nc localhost 9000   then type messages and press Enter.
+    IpcServer ipc(9000, nullptr); // callback set after network is constructed
+
+    // on_data_received is a lambda so it can capture ipc and forward replies.
+    auto on_data_received = [&](uint8_t cid, std::string& data, uint16_t n_bytes) {
+        MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
+        //ipc.send(reinterpret_cast<const uint8_t*>(data.data()),static_cast<uint16_t>(n_bytes));
+    };
+
     modem::NetworkLte network(modem, lteConfig, on_data_received);
+
+    ipc.set_callback([&](const uint8_t* data, uint16_t len) {
+        network.tx_write(lteConfig.conn_id, data, len);
+        network.call_action(modem::ModemAction::send_data);
+        MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+    });
+    if (!ipc.start()) {
+        MODEM_LOG_WRN("IPC server failed to start on port 9000 (continuing without it)");
+    } else {
+        MODEM_LOG_INF("IPC server listening on localhost:9000");
+    }
 
     bool net_res = network.network_connect();
     if(!net_res){
@@ -59,16 +79,18 @@ int main() {
     while(true){
         network.loop();
 
-        // Drain RX queue for our connection
+        // Drain RX queue and forward to IPC client
         modem::QueueMessage rx_msg;
         while (network.rx_read(lteConfig.conn_id, rx_msg) == modem::QueueError::ok) {
             std::string payload(rx_msg.data.begin(), rx_msg.data.end());
             MODEM_LOG_INF("RX queue [conn %d]: %s (%zu bytes)", lteConfig.conn_id, payload.c_str(), rx_msg.data.size());
+            ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
         }
-
+        
+        /*
         std::this_thread::sleep_for(std::chrono::seconds(1));
         count++;
-
+        
         // Queue a TX message every 5 seconds
         if(count%5==0){
             std::string msg = "msg : " + std::to_string(count/5);
@@ -86,14 +108,15 @@ int main() {
                 MODEM_LOG_ERR("Failed to disconnect from server");
             MODEM_LOG_INF("Attempting to enter sleep mode...");
             return 0;
-            /*
+            
             if(network.enter_sleep()){
                 MODEM_LOG_INF("Successfully entered sleep mode");
             }else{
                 MODEM_LOG_ERR("Failed to enter sleep mode");
             }
-            */
+            
         }
+        */
     }
     return 0;
 }
