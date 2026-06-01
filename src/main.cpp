@@ -5,6 +5,7 @@
 #include "modem/message_queue_interface.h"
 #include "modem/log.h"
 #include "ipc_server.h"
+#include "rpc_helpers.h"
 #include <memory>
 
 #include <thread>
@@ -104,13 +105,124 @@ int main() {
     });
     at_ipc.set_disconnect_callback([&]() {
         MODEM_LOG_INF("AT IPC: client disconnected, leaving transparent mode");
-        network.call_action(modem::ModemAction::leave_transparent_mode);
-        network.execute_actions();
+        network.leave_transparent_mode(); // this will internally call the modem action to leave transparent mode, but we need to call execute_actions here to actually perform the action and change the modem state before we can send AT commands in normal mode again
+        //network.call_action(modem::ModemAction::leave_transparent_mode);
+        //network.execute_actions();
     });
     if (!at_ipc.start()) {
         MODEM_LOG_WRN("AT IPC server failed to start on port 9002 (continuing without it)");
     } else {
         MODEM_LOG_INF("AT IPC server listening on localhost:9002 (AT command passthrough)");
+    }
+
+    // RPC server on port 9003 (line mode, nc compatible).
+    // GET <RESOURCE>         → JSON response.
+    // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
+    // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
+    //            SIGNALQUALITY, PSMMODE, CPSMSCONFIG, TELITCPSMSCONFIG, TELITCPSMSSTATUS,
+    //            SURVEYRESULT, SERVERINFO [n], STATE, ALL
+    IpcServer rpc_ipc(9003, nullptr, IpcServer::Mode::line);
+
+    auto handle_rpc = [&](const std::string& req) -> std::string {
+        auto to_upper = [](std::string s) {
+            for (auto& c : s) c = (char)toupper((unsigned char)c);
+            return s;
+        };
+        auto sp   = req.find(' ');
+        std::string cmd      = to_upper(sp == std::string::npos ? req : req.substr(0, sp));
+        std::string sub_orig = sp == std::string::npos ? "" : req.substr(sp + 1);
+        std::string sub      = to_upper(sub_orig);
+
+        if (cmd == "GET") {
+            if (sub == "CONFIG")             return rpc::config_to_json(network.config());
+            if (sub == "MODEMINFO")          return rpc::to_json(network.modem_info());
+            if (sub == "SIMSTATUS")          return "\"" + std::string(rpc::to_str(network.sim_status()))  + "\"";
+            if (sub == "RADIOTECH")          return "\"" + std::string(rpc::to_str(network.radio_tech()))  + "\"";
+            if (sub == "REGSTATUS")          return "\"" + std::string(rpc::to_str(network.reg_status()))  + "\"";
+            if (sub == "REGINFO")            return rpc::to_json(network.registration_info());
+            if (sub == "NETWORKINFO")        return rpc::to_json(network.network_info());
+            if (sub == "SIGNALQUALITY")      return rpc::to_json(network.signal_quality());
+            if (sub == "PSMMODE")            return "\"" + std::string(rpc::to_str(network.psm_mode()))    + "\"";
+            if (sub == "CPSMSCONFIG")        return rpc::to_json(network.cpsms_config());
+            if (sub == "TELITCPSMSCONFIG")   return rpc::to_json(network.telit_cpsms_config());
+            if (sub == "TELITCPSMSSTATUS")   return rpc::to_json(network.telit_cpsms_status());
+            if (sub == "SURVEYRESULT")       return rpc::to_json(network.network_survey_result());
+            if (sub == "STATE")              return "\"" + std::string(rpc::to_str(network.state()))       + "\"";
+            if (sub.rfind("SERVERINFO", 0) == 0) {
+                std::string arg = sub.size() > 10 ? sub.substr(11) : "";
+                const auto* arr = network.server_info_array();
+                if (!arg.empty()) {
+                    try {
+                        int n = std::stoi(arg);
+                        if (n >= 1 && n <= MAX_SERVER_CONNECTIONS)
+                            return rpc::to_json(arr[n - 1]);
+                        return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
+                    } catch (...) { return "ERROR: invalid conn_id"; }
+                }
+                std::string r = "[";
+                for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
+                    if (i > 0) r += ',';
+                    r += rpc::to_json(arr[i]);
+                }
+                return r + "]";
+            }
+            if (sub == "ALL") {
+                const auto* arr = network.server_info_array();
+                std::string r = "{"
+                    "\"config\":"             + rpc::config_to_json(network.config())          + ","
+                    "\"state\":\""            + std::string(rpc::to_str(network.state()))       + "\","
+                    "\"modem_info\":"         + rpc::to_json(network.modem_info())              + ","
+                    "\"sim_status\":\""       + std::string(rpc::to_str(network.sim_status()))  + "\","
+                    "\"radio_tech\":\""       + std::string(rpc::to_str(network.radio_tech()))  + "\","
+                    "\"reg_status\":\""       + std::string(rpc::to_str(network.reg_status()))  + "\","
+                    "\"reg_info\":"           + rpc::to_json(network.registration_info())       + ","
+                    "\"network_info\":"       + rpc::to_json(network.network_info())            + ","
+                    "\"signal_quality\":"     + rpc::to_json(network.signal_quality())          + ","
+                    "\"psm_mode\":\""         + std::string(rpc::to_str(network.psm_mode()))    + "\","
+                    "\"cpsms_config\":"       + rpc::to_json(network.cpsms_config())            + ","
+                    "\"telit_cpsms_config\":" + rpc::to_json(network.telit_cpsms_config())      + ","
+                    "\"telit_cpsms_status\":" + rpc::to_json(network.telit_cpsms_status())      + ","
+                    "\"survey_result\":"      + rpc::to_json(network.network_survey_result())   + ","
+                    "\"server_info\":[";
+                for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
+                    if (i > 0) r += ',';
+                    r += rpc::to_json(arr[i]);
+                }
+                r += "]}";
+                return r;
+            }
+            return "ERROR: unknown GET resource";
+        }
+
+        if (cmd == "SET") {
+            auto sp2    = sub.find(' ');
+            std::string res  = sub.substr(0, sp2 == std::string::npos ? sub.size() : sp2);
+            std::string args = sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
+            if (res == "CONFIG") {
+                auto cfg = network.config();
+                if (rpc::apply_config_fields(args, cfg)) {
+                    network.set_config(cfg);
+                    return rpc::config_to_json(network.config());
+                }
+                return "ERROR: no valid fields provided (use key=value pairs)";
+            }
+            return "ERROR: unknown SET resource";
+        }
+
+        return "ERROR: unknown command — use GET <resource> or SET CONFIG <key>=<value>";
+    };
+
+    rpc_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
+        std::string req(reinterpret_cast<const char*>(data), len);
+        MODEM_LOG_INF("RPC IPC >> %s", req.c_str());
+        std::string resp = handle_rpc(req) + "\r\n";
+        rpc_ipc.send(reinterpret_cast<const uint8_t*>(resp.data()),
+                     static_cast<uint16_t>(resp.size()));
+    });
+    if (!rpc_ipc.start()) {
+        MODEM_LOG_WRN("RPC IPC server failed to start on port 9003 (continuing without it)");
+    } else {
+        MODEM_LOG_INF("RPC IPC server listening on localhost:9003 (RPC get/set)");
     }
 
     bool net_res = network.network_connect();

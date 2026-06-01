@@ -24,6 +24,18 @@ const std::string&      NetworkLte::imsi()              const { return modemInfo
 const NetworkLteConfig& NetworkLte::config()            const { return lteConfig; }
 void NetworkLte::set_config(const NetworkLteConfig& config) { lteConfig = config; }
 
+const ModemInfo&           NetworkLte::modem_info()           const { return modemInfo; }
+SimStatus                  NetworkLte::sim_status()           const { return simStatus; }
+RadioTech                  NetworkLte::radio_tech()           const { return radioTech; }
+RegStatus                  NetworkLte::reg_status()           const { return regStatus; }
+const NetworkInfo&         NetworkLte::network_info()         const { return networkInfo; }
+PsmMode                    NetworkLte::psm_mode()             const { return psmMode; }
+const CpsmsConfig&         NetworkLte::cpsms_config()         const { return cpsmsConfig; }
+const TelitCpsmsConfig&    NetworkLte::telit_cpsms_config()   const { return telitCpsmsConfig; }
+const TelitCpsmsStatus&    NetworkLte::telit_cpsms_status()   const { return telitCpsmsStatus; }
+const NetworkSurveyResult& NetworkLte::network_survey_result()const { return networkSurveyResult; }
+const ServerInfo*          NetworkLte::server_info_array()    const { return serverInfo; }
+
 NetworkLteState NetworkLte::state() const { return state_; }
 NetworkLteEvent NetworkLte::event() const { return event_; }
 
@@ -211,6 +223,17 @@ bool NetworkLte::exit_transparent_mode() {
         return true;
     }
     return false;    
+}
+
+bool NetworkLte::leave_transparent_mode() {
+    if (state_ != NetworkLteState::transparent_mode) {
+        MODEM_LOG_ERR("Not currently in transparent mode, cannot leave");
+        return false;
+    }
+    // Use the action handler so URCs are properly re-enabled before state changes.
+    call_action(ModemAction::leave_transparent_mode);
+    execute_actions();
+    return state_ != NetworkLteState::transparent_mode;
 }
 
 bool NetworkLte::send_at_command(std::string command, std::string& response, uint16_t timeout_ms) {
