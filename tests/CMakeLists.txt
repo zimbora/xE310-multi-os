@@ -36,3 +36,14 @@ target_link_libraries(test_network_lte PRIVATE
 )
 
 gtest_discover_tests(test_network_lte)
+
+add_executable(test_message_queue
+    test_message_queue.cpp
+)
+
+target_link_libraries(test_message_queue PRIVATE
+    modem_xe310
+    GTest::gtest_main
+)
+
+gtest_discover_tests(test_message_queue)

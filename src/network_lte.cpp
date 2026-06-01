@@ -1,6 +1,7 @@
 #include "modem/network_lte.h"
 #include "modem/log.h"
 #include "modem/timer_factory.h"
+#include "modem/message_queue_factory.h"
 
 namespace modem {
 
@@ -12,6 +13,7 @@ NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceive
     : modem_(modem), lteConfig(config), on_data_received_(std::move(on_data_received)),
       timer_(std::move(timer)) {
         st_timer = modem::create_platform_timer();
+        message_queue_ = modem::create_platform_message_queue();
     }
 
 // --- Accessors ---
@@ -161,25 +163,14 @@ bool NetworkLte::server_disconnect(uint8_t conn_id) {
     }
 }
 
-bool NetworkLte::send_data(uint8_t conn_id, uint8_t* data, size_t length) { 
-     if(state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode) {
-        MODEM_LOG_INF("Not currently in data ready or sleep mode, attempting to go to data ready mode before sending data");
-        go_to_state(NetworkLteState::data_ready);
-    }
-    if( state_ != NetworkLteState::data_ready) {
-        MODEM_LOG_ERR("Not currently connected to network, cannot send data");
-        return false;
-    }
-    if( serverInfo[conn_id-1].state != ServerState::connected){
-        MODEM_LOG_ERR("Not currently connected to a server, cannot send data");
-        return false; // not connected to server, cannot send data
-    }
-    auto status = modem_.udp_send(conn_id, std::vector<uint8_t>(data, data + length));
-    if(status != ModemStatus::ok){
-        MODEM_LOG_ERR("Failed to send data to UDP server for CID %d", conn_id);
-        return false;
-    }
-    return true;
+QueueError NetworkLte::tx_write(uint8_t conn_id, const uint8_t* data, size_t length) {
+    if (!message_queue_) return QueueError::invalid_id;
+    return message_queue_->tx_push(conn_id, data, length);
+}
+
+QueueError NetworkLte::rx_read(uint8_t conn_id, QueueMessage& msg) {
+    if (!message_queue_) return QueueError::invalid_id;
+    return message_queue_->rx_pop(conn_id, msg);
 }
 
 bool NetworkLte::enter_sleep() {
@@ -306,12 +297,20 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             change_state(NetworkLteState::data_ready);
             break;
         case NetworkLteEvent::data_available: {
-            MODEM_LOG_INF("Data available event received");
+            MODEM_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
+            uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
             std::vector<uint8_t> buf;
-            if (modem_.udp_receive(lteConfig.conn_id, buf) == ModemStatus::ok && !buf.empty()) {
+            if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
+                // Push to RX queue for this connection
+                if (message_queue_) {
+                    auto err = message_queue_->rx_push(conn, buf.data(), buf.size());
+                    if (err != QueueError::ok) {
+                        MODEM_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
+                    }
+                }
                 std::string payload(buf.begin(), buf.end());
                 if (on_data_received_) {
-                    on_data_received_(lteConfig.conn_id, payload, static_cast<uint16_t>(buf.size()));
+                    on_data_received_(conn, payload, static_cast<uint16_t>(buf.size()));
                 }
             }
             break;
@@ -648,14 +647,29 @@ void NetworkLte::execute_actions() {
             break;
         
         case ModemAction::send_data:
-            // for testing, we can just send some dummy data to a predefined server and port, in real implementation, we would get data from a buffer
             {
-                std::string test_data = "Hello, World!";
-                std::vector<uint8_t> buf(test_data.begin(), test_data.end());
-                auto status = modem_.udp_send(lteConfig.conn_id, buf);
-                if(status != ModemStatus::ok){
-                    MODEM_LOG_ERR("Failed to send data");
-                    // flag error
+                // Drain TX queues for all connection IDs, checking protocol per conn_id
+                for (uint8_t id = 1; id <= MAX_SERVER_CONNECTIONS; ++id) {
+                    if (!message_queue_ || message_queue_->tx_count(id) == 0) {
+                        continue;
+                    }
+                    if (serverInfo[id - 1].state != ServerState::connected) {
+                        MODEM_LOG_WRN("conn_id %d not connected, skipping TX drain", id);
+                        continue;
+                    }
+                    QueueMessage msg;
+                    while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
+                        if (serverInfo[id - 1].protocol == "UDP") {
+                            auto status = modem_.udp_send(id, msg.data);
+                            if (status != ModemStatus::ok) {
+                                MODEM_LOG_ERR("Failed to send UDP data on conn_id %d", id);
+                            }
+                        } else if (serverInfo[id - 1].protocol == "TCP") {
+                            MODEM_LOG_WRN("TCP send not implemented for conn_id %d", id);
+                        } else {
+                            MODEM_LOG_ERR("Unknown protocol for conn_id %d, cannot send", id);
+                        }
+                    }
                 }
             }
             break;
@@ -750,16 +764,15 @@ void NetworkLte::handle_urc(const std::string& urc) {
         return;
     }
     // SRING: <conn_id>  →  new data available on socket
-    if (urc.rfind("SRING: 1", 0) == 0) {
+    if (urc.rfind("SRING:", 0) == 0) {
         MODEM_LOG_DBG("Data available URC received");
         std::string body = urc.substr(6);
         auto s = body.find_first_not_of(' ');
         if (s != std::string::npos) {
             int id = std::stoi(body.substr(s));
+            last_data_conn_id_ = static_cast<uint8_t>(id);
             MODEM_LOG_DBG("Data available on id: %d", id);
-            //if (id == lteConfig.conn_id) {
-                on_event(NetworkLteEvent::data_available);
-            //}
+            on_event(NetworkLteEvent::data_available);
         }
         return;
     }

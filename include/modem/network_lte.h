@@ -2,6 +2,7 @@
 
 #include "modem/xe310.h"
 #include "modem/timer_interface.h"
+#include "modem/message_queue_interface.h"
 #include "xe310.h"
 
 #include <cstdint>
@@ -164,6 +165,7 @@ struct ServerInfo {
     std::string protocol;
     std::string address;
     uint16_t port;
+    bool fHasData = false; // flag to indicate if we have data to send to the server, used to trigger data send flow when we get to data ready state    
 };
 
 
@@ -216,8 +218,12 @@ public:
     bool server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
     bool server_disconnect(uint8_t conn_id);
-    /// Send data to the server. Data is buffered if not currently connected.
-    bool send_data(uint8_t cid, uint8_t* data, size_t length);
+
+    /// Write data into the TX queue for the given connection ID (1-based).
+    QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length);
+
+    /// Read data from the RX queue for the given connection ID (1-based).
+    QueueError rx_read(uint8_t conn_id, QueueMessage& msg);
     /// Enter sleep mode (PSM).
     bool enter_sleep();
     /// Enter transparent mode (if supported by the modem).
@@ -323,6 +329,8 @@ private:
     uint8_t nPdpRetries = 0; // number of consecutive PDP activation attempts
 
     std::unique_ptr<TimerInterface> timer_;
+    std::unique_ptr<MessageQueueInterface> message_queue_;
+    uint8_t last_data_conn_id_ = 0;  ///< Connection ID from the most recent SRING URC
 
     /// Called by the timer when it expires; injects a timeout modem event.
     void on_timer_expired();
