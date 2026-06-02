@@ -35,7 +35,13 @@ const TelitCpsmsConfig&    NetworkLte::telit_cpsms_config()   const { return tel
 const TelitCpsmsStatus&    NetworkLte::telit_cpsms_status()   const { return telitCpsmsStatus; }
 const NetworkSurveyResult& NetworkLte::network_survey_result()const { return networkSurveyResult; }
 const std::vector<Operator>& NetworkLte::available_operators()  const { return operatorList; }
+const CsurvResult&           NetworkLte::csurv_result()         const { return csurvResult; }
 const ServerInfo*          NetworkLte::server_info_array()    const { return serverInfo; }
+
+bool NetworkLte::scan_networks(uint32_t start_ch, uint32_t end_ch) {
+    auto status = modem_.scan_networks(csurvResult, start_ch, end_ch);
+    return status == ModemStatus::ok;
+}
 
 NetworkLteState NetworkLte::state() const { return state_; }
 NetworkLteEvent NetworkLte::event() const { return event_; }

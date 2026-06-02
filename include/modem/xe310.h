@@ -198,6 +198,25 @@ struct Operator {
     RadioTech act;
 };
 
+/// A single cell entry from AT#CSURV with AT#CSURVF=2 (hex numeric format).
+struct CsurvCell {
+    int      earfcn         = 0;  ///< E-UTRA Assigned Radio Channel
+    int      rx_lev         = 0;  ///< Reception level in dBm
+    uint16_t mcc            = 0;  ///< Mobile country code (hex)
+    uint16_t mnc            = 0;  ///< Mobile network code (hex)
+    uint32_t cell_id        = 0;  ///< Physical cell identifier (hex)
+    uint32_t tac            = 0;  ///< Tracking Area Code (4-digit hex)
+    uint64_t cell_identity  = 0;  ///< Cell identifier (hex)
+};
+
+/// Result of AT#CSURV (with AT#CSURVF=2 pre-set).
+struct CsurvResult {
+    std::vector<CsurvCell> cells;
+    bool has_summary = false;
+    int  no_arfcn    = 0;  ///< Number of scanned frequencies
+    int  no_bcch     = 0;  ///< Number of found BCCH
+};
+
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -350,6 +369,11 @@ public:
     /// AT+COPS=? — List all available operators.
     /// Parses +COPS: (<stat>,<long>,<short>,<numeric>,<act>),... into operators.
     ModemStatus get_available_operators(std::vector<Operator>& operators);
+
+    /// AT#CSURVF=2 + AT#CSURV — Network survey in labeled/hex format.
+    /// Sets CSURVF=2 (hex numerics + summary line) then runs AT#CSURV[=<s>,<e>].
+    /// Pass 0 for both start_ch and end_ch to scan the full band.
+    ModemStatus scan_networks(CsurvResult& result, uint32_t start_ch = 0, uint32_t end_ch = 0);
 
     // --- Network Attach ---
 

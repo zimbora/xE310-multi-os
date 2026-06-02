@@ -724,6 +724,85 @@ ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
     return ModemStatus::ok;
 }
 
+ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_t end_ch) {
+    AtResponse response;
+
+    // Set numeric output format and enable summary line (Carrier/BCCh counts).
+    auto status = controller_.send_raw("AT#CSURVF=2", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // Build survey command (optional channel range).
+    std::string cmd;
+    if (start_ch == 0 && end_ch == 0) {
+        cmd = "AT#CSURV";
+    } else {
+        cmd = "AT#CSURV=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
+    }
+    status = controller_.send_raw(cmd, response, 120000);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    result = {};
+
+    // Extract the string value that follows a labeled key in a space-delimited line.
+    // e.g. extract_value("earfcn: 1234 rxLev: -80", "earfcn:") → "1234"
+    auto extract_value = [](const std::string& line, const char* label) -> std::string {
+        auto pos = line.find(label);
+        if (pos == std::string::npos) return "";
+        pos += std::strlen(label);
+        while (pos < line.size() && line[pos] == ' ') ++pos;
+        auto end = line.find(' ', pos);
+        return (end == std::string::npos) ? line.substr(pos) : line.substr(pos, end - pos);
+    };
+
+    // Split body on AT_TERMINATOR and parse each line.
+    std::string_view body       = response.body;
+    std::string_view terminator = AT_TERMINATOR;
+    std::string_view::size_type start = 0;
+
+    while (start < body.size()) {
+        auto end  = body.find(terminator, start);
+        auto line = (end == std::string_view::npos)
+                    ? std::string(body.substr(start))
+                    : std::string(body.substr(start, end - start));
+        start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
+
+        if (line.empty() || line.rfind("Network survey started", 0) == 0) {
+            continue;
+        }
+
+        // Summary line: "Network survey ended (Carrier: <N> BCCh: <M>)"
+        if (line.rfind("Network survey ended", 0) == 0) {
+            result.has_summary = true;
+            std::sscanf(line.c_str(), "Network survey ended (Carrier: %d BCCh: %d)",
+                        &result.no_arfcn, &result.no_bcch);
+            continue;
+        }
+
+        // Cell line format (CSURVF=2, labeled, hex numerics):
+        // earfcn: <earfcn> rxLev: <rxLev> mcc: <mcc> mnc: <mnc>
+        //   cellid: <cellId> tac: <tac> cellIdentity: <cellIdentity>
+        auto earfcn_str = extract_value(line, "earfcn:");
+        if (earfcn_str.empty()) continue;
+
+        CsurvCell cell;
+        cell.earfcn        = std::atoi(earfcn_str.c_str());
+        cell.rx_lev        = std::atoi(extract_value(line, "rxLev:").c_str());
+        cell.mcc           = static_cast<uint16_t>(std::strtoul(extract_value(line, "mcc:").c_str(),         nullptr, 16));
+        cell.mnc           = static_cast<uint16_t>(std::strtoul(extract_value(line, "mnc:").c_str(),         nullptr, 16));
+        cell.cell_id       = static_cast<uint32_t>(std::strtoul(extract_value(line, "cellid:").c_str(),      nullptr, 16));
+        cell.tac           = static_cast<uint32_t>(std::strtoul(extract_value(line, "tac:").c_str(),         nullptr, 16));
+        cell.cell_identity = static_cast<uint64_t>(std::strtoull(extract_value(line, "cellIdentity:").c_str(), nullptr, 16));
+
+        result.cells.push_back(std::move(cell));
+    }
+
+    return ModemStatus::ok;
+}
+
 // --- Network Attach ---
 
 ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {

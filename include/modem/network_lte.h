@@ -289,6 +289,13 @@ public:
     /// List of operators found by the last AT+COPS=? scan.
     const std::vector<Operator>& available_operators() const;
 
+    /// Result of the last AT#CSURV scan (populated by scan_networks()).
+    const CsurvResult& csurv_result() const;
+
+    /// Run AT#CSURVF=2 + AT#CSURV and store results internally.
+    /// Optionally restrict to channels [start_ch, end_ch]; pass 0 for both to scan full band.
+    bool scan_networks(uint32_t start_ch = 0, uint32_t end_ch = 0);
+
     /// Pointer to the internal server info array (MAX_SERVER_CONNECTIONS entries, 0-based).
     const ServerInfo* server_info_array() const;
 
@@ -354,6 +361,7 @@ private:
     TelitCpsmsStatus     telitCpsmsStatus;
     NetworkSurveyResult  networkSurveyResult;
     std::vector<Operator> operatorList;
+    CsurvResult          csurvResult;
     ServerInfo           serverInfo[MAX_SERVER_CONNECTIONS];
 
     NetworkLteConfig lteConfig;

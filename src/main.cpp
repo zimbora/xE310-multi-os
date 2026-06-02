@@ -87,7 +87,7 @@ int main() {
         std::string cmd(reinterpret_cast<const char*>(data), len);
         std::string response;
         MODEM_LOG_INF("AT IPC >> %s", cmd.c_str());
-        if (network.send_at_command(cmd, response, 210000)) {
+        if (network.send_at_command(cmd, response, (uint16_t)210000)) {
             // parse_response() strips the status line into AtResponse::status,
             // so response.body is empty for simple commands (e.g. AT → OK).
             // Re-append the status line so the nc client sees a complete reply.
