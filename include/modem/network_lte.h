@@ -286,6 +286,9 @@ public:
     /// Last network survey result (populated after a survey action).
     const NetworkSurveyResult& network_survey_result() const;
 
+    /// List of operators found by the last AT+COPS=? scan.
+    const std::vector<Operator>& available_operators() const;
+
     /// Pointer to the internal server info array (MAX_SERVER_CONNECTIONS entries, 0-based).
     const ServerInfo* server_info_array() const;
 
@@ -350,6 +353,7 @@ private:
     TelitCpsmsConfig     telitCpsmsConfig;
     TelitCpsmsStatus     telitCpsmsStatus;
     NetworkSurveyResult  networkSurveyResult;
+    std::vector<Operator> operatorList;
     ServerInfo           serverInfo[MAX_SERVER_CONNECTIONS];
 
     NetworkLteConfig lteConfig;
