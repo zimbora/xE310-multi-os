@@ -120,7 +120,7 @@ int main() {
     // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
     // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
     //            SIGNALQUALITY, PSMMODE, CPSMSCONFIG, TELITCPSMSCONFIG, TELITCPSMSSTATUS,
-    //            SURVEYRESULT, OPERATORLIST, SERVERINFO [n], STATE, ALL
+    //            SURVEYRESULT, OPERATORLIST, SCANSURVEY, SERVERINFO [n], STATE, ALL
     IpcServer rpc_ipc(9003, nullptr, IpcServer::Mode::line);
 
     auto handle_rpc = [&](const std::string& req) -> std::string {
@@ -148,6 +148,10 @@ int main() {
             if (sub == "TELITCPSMSSTATUS")   return rpc::to_json(network.telit_cpsms_status());
             if (sub == "SURVEYRESULT")       return rpc::to_json(network.network_survey_result());
             if (sub == "OPERATORLIST")        return rpc::to_json(network.available_operators());
+            if (sub == "SCANSURVEY") {
+                network.scan_networks();
+                return rpc::to_json(network.csurv_result());
+            }
             if (sub == "STATE")              return "\"" + std::string(rpc::to_str(network.state()))       + "\"";
             if (sub.rfind("SERVERINFO", 0) == 0) {
                 std::string arg = sub.size() > 10 ? sub.substr(11) : "";

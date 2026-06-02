@@ -257,7 +257,32 @@ inline std::string to_json(const std::vector<modem::Operator>& ops) {
     s += "]";
     return s;
 }
+inline std::string to_json(const modem::CsurvCell& c) {
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+        "{\"earfcn\":%d,\"rx_lev\":%d,"
+        "\"mcc\":%u,\"mnc\":%u,"
+        "\"cell_id\":%u,\"tac\":%u,\"cell_identity\":%llu}",
+        c.earfcn, c.rx_lev,
+        (unsigned)c.mcc, (unsigned)c.mnc,
+        (unsigned)c.cell_id, (unsigned)c.tac,
+        (unsigned long long)c.cell_identity);
+    return buf;
+}
 
+inline std::string to_json(const modem::CsurvResult& r) {
+    std::string s = "{\"cells\":[";
+    for (size_t i = 0; i < r.cells.size(); ++i) {
+        if (i > 0) s += ',';
+        s += to_json(r.cells[i]);
+    }
+    char tail[64];
+    snprintf(tail, sizeof(tail),
+        "],\"has_summary\":%s,\"no_arfcn\":%d,\"no_bcch\":%d}",
+        r.has_summary ? "true" : "false", r.no_arfcn, r.no_bcch);
+    s += tail;
+    return s;
+}
 inline std::string config_to_json(const modem::NetworkLteConfig& c) {
     char buf[1024];
     snprintf(buf, sizeof(buf),
