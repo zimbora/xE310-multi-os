@@ -620,10 +620,108 @@ ModemStatus xE310::set_operator_auto() {
 ModemStatus xE310::get_operator(std::string& oper) {
     AtResponse response;
     auto status = controller_.send_raw("AT+COPS?", response);
-    if (status == ModemStatus::ok) {
-        oper = response.body;
+    if (status != ModemStatus::ok) {
+        return status;
     }
-    return status;
+
+    // Response body: "+COPS: <mode>[,<format>,<oper>,<act>]"
+    // If deregistered only <mode> is present — oper is left unchanged.
+    auto colon = response.body.find(':');
+    if (colon == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+
+    std::string params = response.body.substr(colon + 1);
+    std::vector<std::string> fields;
+    size_t pos = 0;
+    while (pos <= params.size()) {
+        auto comma = params.find(',', pos);
+        if (comma == std::string::npos) {
+            fields.push_back(params.substr(pos));
+            break;
+        }
+        fields.push_back(params.substr(pos, comma - pos));
+        pos = comma + 1;
+    }
+
+    // fields[2] = <oper> (quoted string)
+    if (fields.size() >= 3) {
+        auto a = fields[2].find_first_not_of(" \t\"");
+        auto b = fields[2].find_last_not_of(" \t\"");
+        oper = (a == std::string::npos) ? "" : fields[2].substr(a, b - a + 1);
+    }
+
+    return ModemStatus::ok;
+}
+
+ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
+    AtResponse response;
+    // AT+COPS=? can take up to 3 minutes to complete a full scan
+    auto status = controller_.send_raw("AT+COPS=?", response, 180000);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    operators.clear();
+
+    // Response body example:
+    // +COPS: (2,"Vodafone PT","Vodafone","26801",8),(1,"NOS","NOS","26803",8),...
+    // Each operator entry is wrapped in parentheses.
+    const std::string& body = response.body;
+    size_t pos = 0;
+    while (pos < body.size()) {
+        auto open = body.find('(', pos);
+        if (open == std::string::npos) break;
+        auto close = body.find(')', open);
+        if (close == std::string::npos) break;
+
+        std::string entry = body.substr(open + 1, close - open - 1);
+        pos = close + 1;
+
+        // Tokenize comma-separated fields, respecting quoted strings
+        std::vector<std::string> fields;
+        size_t fp = 0;
+        while (fp <= entry.size()) {
+            // skip whitespace
+            while (fp < entry.size() && entry[fp] == ' ') ++fp;
+            if (fp >= entry.size()) break;
+
+            size_t start = fp;
+            if (entry[fp] == '"') {
+                // quoted field
+                ++fp;
+                while (fp < entry.size() && entry[fp] != '"') ++fp;
+                if (fp < entry.size()) ++fp; // skip closing quote
+                // advance to comma or end
+                while (fp < entry.size() && entry[fp] != ',') ++fp;
+                fields.push_back(entry.substr(start, fp - start));
+            } else {
+                while (fp < entry.size() && entry[fp] != ',') ++fp;
+                fields.push_back(entry.substr(start, fp - start));
+            }
+            if (fp < entry.size() && entry[fp] == ',') ++fp;
+        }
+
+        if (fields.size() < 4) continue; // need at least stat + 3 name fields
+
+        auto strip = [](const std::string& s) -> std::string {
+            auto a = s.find_first_not_of(" \t\"");
+            auto b = s.find_last_not_of(" \t\"");
+            return (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
+        };
+
+        Operator op;
+        // fields[0] = stat (skip), [1] = long_name, [2] = short_name, [3] = numeric, [4] = act
+        op.long_name  = strip(fields[1]);
+        op.short_name = strip(fields[2]);
+        op.numeric    = strip(fields[3]);
+        op.act        = (fields.size() >= 5)
+                        ? static_cast<RadioTech>(std::atoi(fields[4].c_str()))
+                        : RadioTech::gsm;
+        operators.push_back(std::move(op));
+    }
+
+    return ModemStatus::ok;
 }
 
 // --- Network Attach ---
@@ -637,10 +735,64 @@ ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
 ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
     AtResponse response;
     auto status = controller_.send_raw("AT+CGDCONT?", response);
-    if (status == ModemStatus::ok) {
-        apn = response.body;
+    if (status != ModemStatus::ok) {
+        return status;
     }
-    return status;
+
+    // Response body may contain multiple lines (one per context), joined by AT_TERMINATOR.
+    // Each line: +CGDCONT: <cid>,<PDP_type>,<APN>,<PDP_addr>,<d_comp>,<h_comp>,0,0
+    std::string_view body = response.body;
+    std::string_view terminator = AT_TERMINATOR;
+    std::string_view::size_type start = 0;
+
+    while (start < body.size()) {
+        auto end  = body.find(terminator, start);
+        auto line = (end == std::string_view::npos)
+                    ? std::string(body.substr(start))
+                    : std::string(body.substr(start, end - start));
+        start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
+
+        // Find the prefix "+CGDCONT:"
+        constexpr std::string_view prefix = "+CGDCONT:";
+        auto p = line.find(prefix);
+        if (p == std::string::npos) continue;
+
+        // Tokenize comma-separated fields after the colon
+        std::string params = line.substr(p + prefix.size());
+        std::vector<std::string> fields;
+        size_t pos = 0;
+        while (pos <= params.size()) {
+            auto comma = params.find(',', pos);
+            if (comma == std::string::npos) {
+                fields.push_back(params.substr(pos));
+                break;
+            }
+            fields.push_back(params.substr(pos, comma - pos));
+            pos = comma + 1;
+        }
+
+        auto strip = [](const std::string& s) -> std::string {
+            auto a = s.find_first_not_of(" \t\"");
+            auto b = s.find_last_not_of(" \t\"");
+            return (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
+        };
+
+        if (fields.empty()) continue;
+
+        // fields[0] = cid
+        uint8_t line_cid = static_cast<uint8_t>(std::atoi(strip(fields[0]).c_str()));
+        if (line_cid != cid) continue;
+
+        // fields[2] = APN
+        if (fields.size() >= 3) apn = strip(fields[2]);
+        // fields[3] = PDP_addr (IP address assigned by network)
+        //if (fields.size() >= 4) regInfo.ip_address = strip(fields[3]);
+
+        return ModemStatus::ok;
+    }
+
+    // Context with requested cid not found in response
+    return ModemStatus::at_error;
 }
 
 ModemStatus xE310::set_pdp_urc(bool enable) {
