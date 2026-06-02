@@ -48,7 +48,9 @@ Commands are case-insensitive. Values in `SET CONFIG` preserve their original ca
 | `GET CPSMSCONFIG` | object | 3GPP `CpsmsConfig` (timer octet strings) |
 | `GET TELITCPSMSCONFIG` | object | Telit `TelitCpsmsConfig` (timer values in seconds) |
 | `GET TELITCPSMSSTATUS` | object | Telit `TelitCpsmsStatus` (network-granted timers) |
-| `GET SURVEYRESULT` | object | Last `NetworkSurveyResult` (cells array) |
+| `GET SURVEYRESULT` | object | Last `NetworkSurveyResult` from `AT#CSURVC` (cells array) |
+| `GET SCANSURVEY` | object | Run `AT#CSURVF=2` + `AT#CSURV`, wait up to 120 s, return `CsurvResult` |
+| `GET OPERATORLIST` | array | Last operator list from `AT+COPS=?` (cached; does **not** trigger a new scan) |
 | `GET SERVERINFO` | array | All 5 `ServerInfo` entries |
 | `GET SERVERINFO <n>` | object | Single entry for connection ID `n` (1–5) |
 | `GET ALL` | object | Single response containing all of the above |
@@ -67,6 +69,12 @@ GET SIGNALQUALITY
 
 GET SERVERINFO 1
 {"conn_id":1,"state":"connected","protocol":"UDP","address":"185.205.209.91","port":10000,"has_data":false}
+
+GET SCANSURVEY
+{"cells":[{"earfcn":6300,"rx_lev":-85,"mcc":268,"mnc":1,"cell_id":123,"tac":18448,"cell_identity":17825793}],"has_summary":true,"no_arfcn":10,"no_bcch":1}
+
+GET OPERATORLIST
+[{"long_name":"Vodafone PT","short_name":"Vodafone","numeric":"26801","act":"cat_m1"},{"long_name":"NOS","short_name":"NOS","numeric":"26803","act":"cat_m1"}]
 
 GET ALL
 { ... full snapshot ... }
@@ -137,5 +145,7 @@ All errors are returned as a plain string (not JSON):
 ## Notes
 
 - The server runs on its own thread (separate from the main loop and the AT passthrough thread on port 9002). Requests are handled synchronously within the RPC thread — `GET` reads shared state, `SET` writes `lteConfig` — no locking is applied beyond what the `NetworkLte` methods already provide.
-- The `GET SURVEYRESULT` resource returns the last cached survey. To trigger a fresh network scan, run `AT#CSURVC` via the AT passthrough server on port 9002.
+- The `GET SURVEYRESULT` resource returns the last cached survey from `AT#CSURVC`. To trigger a fresh scan, run `AT#CSURVC` via the AT passthrough server on port 9002.
+- `GET SCANSURVEY` actively triggers a new scan via `AT#CSURVF=2` + `AT#CSURV`. This blocks the RPC thread for up to **120 seconds** while the modem scans. The result is also cached in `NetworkLte::csurv_result()`.
+- `GET OPERATORLIST` returns the cached list from the last `AT+COPS=?` scan. To populate it, run `AT+COPS=?` via the AT passthrough server on port 9002 (scan can take up to 3 minutes).
 - `GET MODEMINFO` contains data gathered at startup (IMEI, ICCID, model). Fields will be empty strings if the modem was not fully initialised.
