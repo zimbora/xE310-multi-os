@@ -87,7 +87,7 @@ int main() {
         std::string cmd(reinterpret_cast<const char*>(data), len);
         std::string response;
         MODEM_LOG_INF("AT IPC >> %s", cmd.c_str());
-        if (network.send_at_command(cmd, response, 5000)) {
+        if (network.send_at_command(cmd, response, (uint16_t)210000)) {
             // parse_response() strips the status line into AtResponse::status,
             // so response.body is empty for simple commands (e.g. AT → OK).
             // Re-append the status line so the nc client sees a complete reply.
@@ -120,7 +120,7 @@ int main() {
     // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
     // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
     //            SIGNALQUALITY, PSMMODE, CPSMSCONFIG, TELITCPSMSCONFIG, TELITCPSMSSTATUS,
-    //            SURVEYRESULT, SERVERINFO [n], STATE, ALL
+    //            SURVEYRESULT, OPERATORLIST, SCANSURVEY, SERVERINFO [n], STATE, ALL
     IpcServer rpc_ipc(9003, nullptr, IpcServer::Mode::line);
 
     auto handle_rpc = [&](const std::string& req) -> std::string {
@@ -147,6 +147,11 @@ int main() {
             if (sub == "TELITCPSMSCONFIG")   return rpc::to_json(network.telit_cpsms_config());
             if (sub == "TELITCPSMSSTATUS")   return rpc::to_json(network.telit_cpsms_status());
             if (sub == "SURVEYRESULT")       return rpc::to_json(network.network_survey_result());
+            if (sub == "OPERATORLIST")        return rpc::to_json(network.available_operators());
+            if (sub == "SCANSURVEY") {
+                network.scan_networks();
+                return rpc::to_json(network.csurv_result());
+            }
             if (sub == "STATE")              return "\"" + std::string(rpc::to_str(network.state()))       + "\"";
             if (sub.rfind("SERVERINFO", 0) == 0) {
                 std::string arg = sub.size() > 10 ? sub.substr(11) : "";
@@ -182,8 +187,7 @@ int main() {
                     "\"cpsms_config\":"       + rpc::to_json(network.cpsms_config())            + ","
                     "\"telit_cpsms_config\":" + rpc::to_json(network.telit_cpsms_config())      + ","
                     "\"telit_cpsms_status\":" + rpc::to_json(network.telit_cpsms_status())      + ","
-                    "\"survey_result\":"      + rpc::to_json(network.network_survey_result())   + ","
-                    "\"server_info\":[";
+                    "\"survey_result\":"      + rpc::to_json(network.network_survey_result())   + ","                    "\"operator_list\":"      + rpc::to_json(network.available_operators())     + ","                    "\"server_info\":[";
                 for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
                     if (i > 0) r += ',';
                     r += rpc::to_json(arr[i]);

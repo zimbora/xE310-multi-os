@@ -34,7 +34,14 @@ const CpsmsConfig&         NetworkLte::cpsms_config()         const { return cps
 const TelitCpsmsConfig&    NetworkLte::telit_cpsms_config()   const { return telitCpsmsConfig; }
 const TelitCpsmsStatus&    NetworkLte::telit_cpsms_status()   const { return telitCpsmsStatus; }
 const NetworkSurveyResult& NetworkLte::network_survey_result()const { return networkSurveyResult; }
+const std::vector<Operator>& NetworkLte::available_operators()  const { return operatorList; }
+const CsurvResult&           NetworkLte::csurv_result()         const { return csurvResult; }
 const ServerInfo*          NetworkLte::server_info_array()    const { return serverInfo; }
+
+bool NetworkLte::scan_networks(uint32_t start_ch, uint32_t end_ch) {
+    auto status = modem_.scan_networks(csurvResult, start_ch, end_ch);
+    return status == ModemStatus::ok;
+}
 
 NetworkLteState NetworkLte::state() const { return state_; }
 NetworkLteEvent NetworkLte::event() const { return event_; }
@@ -835,6 +842,14 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             break;
         case NetworkLteState::data_ready:
             {
+                
+                //modem_.get_iot_tech(regInfo.act, networkInfo.gsm_priority); // update IoT tech in info struct after applying it to modem
+                modem_.get_registration_status(regInfo, RadioTech::gsm); // update registration info in info struct after applying it to modem
+                modem_.get_signal_quality(signalQuality); // update signal quality in info struct after applying it to modem
+                modem_.get_operator(regInfo.operator_name); // update operator name in info struct after applying it to modem
+                modem_.get_apn(lteConfig.cid, regInfo.apn); // parse +CGDCONT? into regInfo.apn and regInfo.ip_address
+                //modem_.get_pdp_state(lteConfig.cid, regInfo.pdp_active); // update PDP state in info struct after applying it to modem
+                
                 TelitCpsmsStatus state;
                 auto status = modem_.get_telit_psm(state); // update PSM config in info struct after applying it to modem
                 if(status == ModemStatus::ok){

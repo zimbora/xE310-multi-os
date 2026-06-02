@@ -8,25 +8,6 @@
 
 namespace modem {
 
-/// Software package version from AT#SWPKGV.
-struct SoftwarePackageVersion {
-    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
-    std::string modem_version;       ///< <Modem Package Version>
-    std::string prod_params_version; ///< <Production Parameters Version>
-    std::string app_version;         ///< <Application Software Version>
-};
-
-struct ModemInfo {
-    std::string imei_sv;   ///< IMEI Software Version from AT+IMEISV
-    std::string iccid;     ///< ICCID from AT+CCID
-    std::string imsi;      ///< IMSI from AT+CIMI
-    std::string model_id;
-    SoftwarePackageVersion sw_package_version;
-    std::string telit_id;
-    std::string identification;
-    std::string imei;
-};
-
 /// SIM detection mode for AT#SIMDET.
 enum class SimDetMode : uint8_t {
     gpio = 0,     ///< SIM detection via GPIO
@@ -70,7 +51,9 @@ struct RegistrationInfo {
     RegStatus stat = RegStatus::not_registered;
     std::string lac;          ///< TAC (tracking area code) for LTE / LAC for 2G
     std::string ci;           ///< Cell identity
+    std::string operator_name;    ///< Operator name from AT+COPS?
     RadioTech act = RadioTech::gsm;
+    std::string apn;              ///< APN from AT+CGDCONT?
     bool has_location = false;
     std::string ip_address;
     // Extended / reject fields (extended format)
@@ -186,6 +169,52 @@ struct NetworkSurveyResult {
     bool    has_summary   = false;
     int     no_arfcn      = 0;   ///< total scanned frequencies (if #CSURVF=2)
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
+};
+
+/// Software package version from AT#SWPKGV.
+struct SoftwarePackageVersion {
+    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
+    std::string modem_version;       ///< <Modem Package Version>
+    std::string prod_params_version; ///< <Production Parameters Version>
+    std::string app_version;         ///< <Application Software Version>
+};
+
+struct ModemInfo {
+    std::string imei_sv;   ///< IMEI Software Version from AT+IMEISV
+    std::string iccid;     ///< ICCID from AT+CCID
+    std::string imsi;      ///< IMSI from AT+CIMI
+    std::string model_id;
+    SoftwarePackageVersion sw_package_version;
+    std::string telit_id;
+    std::string identification;
+    std::string imei;
+};
+
+/// Operator info from AT+COPS?.
+struct Operator {
+    std::string long_name;
+    std::string short_name;
+    std::string numeric;
+    RadioTech act;
+};
+
+/// A single cell entry from AT#CSURV with AT#CSURVF=2 (hex numeric format).
+struct CsurvCell {
+    int      earfcn         = 0;  ///< E-UTRA Assigned Radio Channel
+    int      rx_lev         = 0;  ///< Reception level in dBm
+    uint16_t mcc            = 0;  ///< Mobile country code (hex)
+    uint16_t mnc            = 0;  ///< Mobile network code (hex)
+    uint32_t cell_id        = 0;  ///< Physical cell identifier (hex)
+    uint32_t tac            = 0;  ///< Tracking Area Code (4-digit hex)
+    uint64_t cell_identity  = 0;  ///< Cell identifier (hex)
+};
+
+/// Result of AT#CSURV (with AT#CSURVF=2 pre-set).
+struct CsurvResult {
+    std::vector<CsurvCell> cells;
+    bool has_summary = false;
+    int  no_arfcn    = 0;  ///< Number of scanned frequencies
+    int  no_bcch     = 0;  ///< Number of found BCCH
 };
 
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
@@ -334,15 +363,25 @@ public:
     /// AT+COPS=0 — Automatic operator selection.
     ModemStatus set_operator_auto();
 
-    /// AT+COPS? — Read current operator.
+    /// AT+COPS? — Read current operator. Parses +COPS: <mode>[,<format>,<oper>,<act>] into oper.
     ModemStatus get_operator(std::string& oper);
+
+    /// AT+COPS=? — List all available operators.
+    /// Parses +COPS: (<stat>,<long>,<short>,<numeric>,<act>),... into operators.
+    ModemStatus get_available_operators(std::vector<Operator>& operators);
+
+    /// AT#CSURVF=2 + AT#CSURV — Network survey in labeled/hex format.
+    /// Sets CSURVF=2 (hex numerics + summary line) then runs AT#CSURV[=<s>,<e>].
+    /// Pass 0 for both start_ch and end_ch to scan the full band.
+    ModemStatus scan_networks(CsurvResult& result, uint32_t start_ch = 0, uint32_t end_ch = 0);
 
     // --- Network Attach ---
 
     /// AT+CGDCONT — Set PDP context (APN).
     ModemStatus set_apn(uint8_t cid, const std::string& apn);
 
-    /// AT+CGDCONT? — Read current APN for a context.
+    /// AT+CGDCONT? — Read current APN and IP address for a context.
+    /// Parses +CGDCONT: <cid>,<PDP_type>,<APN>,<PDP_addr>,... and gets apn.
     ModemStatus get_apn(uint8_t cid, std::string& apn);
     
     /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
