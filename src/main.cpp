@@ -13,13 +13,20 @@
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
-int main() {
-    
-    
+int main(int argc, char* argv[]) {
+
+    std::string port = "COM17";
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string(argv[i]) == "-p") {
+            port = argv[i + 1];
+            break;
+        }
+    }
+
     auto uart = modem::create_platform_uart();
     modem::ModemController modemController(std::move(uart));
-    
-    modemController.connect("COM17", modem::UartConfig{});
+
+    modemController.connect(port.c_str(), modem::UartConfig{});
 
     modem::xE310 modem(modemController);
     auto status = modem.at_ok();
@@ -242,6 +249,7 @@ int main() {
         // Queue initial message for TX
         std::string hello = "Hello, World!";
         network.tx_write(lteConfig.conn_id, reinterpret_cast<const uint8_t*>(hello.data()), hello.size());
+        network.call_action(modem::ModemAction::send_data);
         MODEM_LOG_INF("Initial message queued for TX");
     }else{
         MODEM_LOG_ERR("Failed to connect to server");
