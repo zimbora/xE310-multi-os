@@ -8,6 +8,12 @@
 #include <string>
 #include <vector>
 
+#ifdef PLATFORM_ZEPHYR
+#include <zephyr/kernel.h>
+#else
+#include <mutex>
+#endif
+
 namespace modem {
 
 enum class ModemStatus {
@@ -16,6 +22,7 @@ enum class ModemStatus {
     not_connected,
     at_error,
     timeout,
+    invalid_param,
 };
 
 /// High-level modem controller — platform-independent.
@@ -51,6 +58,34 @@ public:
     std::vector<std::string> poll_urc(uint32_t timeout_ms = 50);
 
 private:
+    class IoMutex {
+    public:
+#ifdef PLATFORM_ZEPHYR
+        IoMutex() { k_mutex_init(&m_); }
+        void lock()   { k_mutex_lock(&m_, K_FOREVER); }
+        void unlock() { k_mutex_unlock(&m_); }
+    private:
+        struct k_mutex m_;
+#else
+        void lock()   { m_.lock(); }
+        void unlock() { m_.unlock(); }
+    private:
+        std::mutex m_;
+#endif
+    };
+
+    class IoLockGuard {
+    public:
+        explicit IoLockGuard(IoMutex& m) : m_(m) { m_.lock(); }
+        ~IoLockGuard() { m_.unlock(); }
+        IoLockGuard(const IoLockGuard&) = delete;
+        IoLockGuard& operator=(const IoLockGuard&) = delete;
+    private:
+        IoMutex& m_;
+    };
+
+    // Serialize UART read/write access across command and URC paths.
+    mutable IoMutex io_mutex_;
     std::unique_ptr<UartInterface> uart_;
     std::unique_ptr<TimerInterface> cmd_timer_;
 };

@@ -12,6 +12,7 @@ ModemController::ModemController(std::unique_ptr<UartInterface> uart,
       cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
+    IoLockGuard lock(io_mutex_);
     if (!uart_) {
         return ModemStatus::uart_error;
     }
@@ -25,17 +26,20 @@ ModemStatus ModemController::connect(const char* port, const UartConfig& config)
 }
 
 void ModemController::disconnect() {
+    IoLockGuard lock(io_mutex_);
     if (uart_ && uart_->is_open()) {
         uart_->close();
     }
 }
 
 bool ModemController::is_connected() const {
+    IoLockGuard lock(io_mutex_);
     return uart_ && uart_->is_open();
 }
 
 ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& response) {
-    if (!is_connected()) {
+    IoLockGuard lock(io_mutex_);
+    if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
 
@@ -98,7 +102,8 @@ ModemStatus ModemController::send_raw(const std::string& command, AtResponse& re
 
 ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,
                                          uint32_t timeout_ms) {
-    if (!is_connected()) {
+    IoLockGuard lock(io_mutex_);
+    if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
 
@@ -142,7 +147,8 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
                                                const std::vector<uint8_t>& data,
                                                AtResponse& response,
                                                uint32_t timeout_ms) {
-    if (!is_connected()) {
+    IoLockGuard lock(io_mutex_);
+    if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
 
@@ -207,7 +213,8 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
 
 std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     std::vector<std::string> urcs;
-    if (!is_connected()) {
+    IoLockGuard lock(io_mutex_);
+    if (!(uart_ && uart_->is_open())) {
         return urcs;
     }
 
