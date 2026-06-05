@@ -58,9 +58,25 @@ int main(int argc, char* argv[]) {
     modem::NetworkLte network(modem, lteConfig, on_data_received);
 
     ipc.set_callback([&](const uint8_t* data, uint16_t len) {
-        network.tx_write(lteConfig.conn_id, data, len);
-        network.call_action(modem::ModemAction::send_data);
-        MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+        if(network.network_connect()) {
+            MODEM_LOG_INF("Successfully connected to network");
+        } else {
+            MODEM_LOG_ERR("Failed to connect to network");
+            //close socket
+            ipc.stop();
+            return 1;
+        }
+        bool res = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+        if(res){
+            network.tx_write(lteConfig.conn_id, data, len);
+            network.call_action(modem::ModemAction::send_data);
+            MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+        }else{
+            MODEM_LOG_ERR("Failed to connect to server");
+            //close socket
+            ipc.stop();
+            return 1;
+        }
     });
     if (!ipc.start()) {
         MODEM_LOG_WRN("IPC server failed to start on port 9000 (continuing without it)");
