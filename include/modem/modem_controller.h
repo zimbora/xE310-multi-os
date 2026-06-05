@@ -11,6 +11,7 @@
 #ifdef PLATFORM_ZEPHYR
 #include <zephyr/kernel.h>
 #else
+#include <chrono>
 #include <mutex>
 #endif
 
@@ -18,6 +19,7 @@ namespace modem {
 
 enum class ModemStatus {
     ok = 0,
+    busy,
     uart_error,
     not_connected,
     at_error,
@@ -62,30 +64,34 @@ private:
     public:
 #ifdef PLATFORM_ZEPHYR
         IoMutex() { k_mutex_init(&m_); }
-        void lock()   { k_mutex_lock(&m_, K_FOREVER); }
+        bool lock_for(uint32_t timeout_ms) { return k_mutex_lock(&m_, K_MSEC(timeout_ms)) == 0; }
         void unlock() { k_mutex_unlock(&m_); }
     private:
         struct k_mutex m_;
 #else
-        void lock()   { m_.lock(); }
+        bool lock_for(uint32_t timeout_ms) { return m_.try_lock_for(std::chrono::milliseconds(timeout_ms)); }
         void unlock() { m_.unlock(); }
     private:
-        std::mutex m_;
+        std::timed_mutex m_;
 #endif
     };
 
     class IoLockGuard {
     public:
-        explicit IoLockGuard(IoMutex& m) : m_(m) { m_.lock(); }
-        ~IoLockGuard() { m_.unlock(); }
+        explicit IoLockGuard(IoMutex& m, uint32_t timeout_ms = 5000) : m_(m), owns_(m_.lock_for(timeout_ms)) {}
+        ~IoLockGuard() { if (owns_) m_.unlock(); }
         IoLockGuard(const IoLockGuard&) = delete;
         IoLockGuard& operator=(const IoLockGuard&) = delete;
+        explicit operator bool() const { return owns_; }
     private:
         IoMutex& m_;
+        bool owns_;
     };
 
     // Serialize UART read/write access across command and URC paths.
     mutable IoMutex io_mutex_;
+    // Accumulates partial URC chunks until a full \r\n-terminated line is available.
+    std::string urc_rx_buffer_;
     std::unique_ptr<UartInterface> uart_;
     std::unique_ptr<TimerInterface> cmd_timer_;
 };

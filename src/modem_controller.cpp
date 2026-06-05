@@ -13,6 +13,9 @@ ModemController::ModemController(std::unique_ptr<UartInterface> uart,
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return ModemStatus::busy;
+    }
     if (!uart_) {
         return ModemStatus::uart_error;
     }
@@ -27,6 +30,9 @@ ModemStatus ModemController::connect(const char* port, const UartConfig& config)
 
 void ModemController::disconnect() {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return;
+    }
     if (uart_ && uart_->is_open()) {
         uart_->close();
     }
@@ -34,11 +40,17 @@ void ModemController::disconnect() {
 
 bool ModemController::is_connected() const {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return false;
+    }
     return uart_ && uart_->is_open();
 }
 
 ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& response) {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return ModemStatus::busy;
+    }
     if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
@@ -84,11 +96,29 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             accumulated.append(reinterpret_cast<const char*>(buffer), bytes_read);
             response = AtCommand::parse_response(accumulated);
 
-            if (response.status == AtStatus::ok) {
-                return ModemStatus::ok;
-            }
-            if (response.status == AtStatus::error || response.status == AtStatus::busy) {
-                return ModemStatus::at_error;
+            if (response.status == AtStatus::ok || response.status == AtStatus::error || response.status == AtStatus::busy) {
+                // Extract any URCs that arrived after the status line and buffer them for poll_urc().
+                // This prevents URCs in the response window from corrupting the payload.
+                size_t status_end = accumulated.find(response.status == AtStatus::ok ? "OK" : 
+                                                     response.status == AtStatus::error ? "ERROR" : "BUSY");
+                if (status_end != std::string::npos) {
+                    // Find the end of the status line (OK\r\n or ERROR\r\n)
+                    status_end = accumulated.find("\r\n", status_end);
+                    if (status_end != std::string::npos) {
+                        status_end += 2; // skip the \r\n
+                        // Anything after the status line goes to the URC buffer
+                        if (status_end < accumulated.size()) {
+                            urc_rx_buffer_ += accumulated.substr(status_end);
+                        }
+                    }
+                }
+                
+                if (response.status == AtStatus::ok) {
+                    return ModemStatus::ok;
+                }
+                if (response.status == AtStatus::error || response.status == AtStatus::busy) {
+                    return ModemStatus::at_error;
+                }
             }
         }
     }
@@ -103,6 +133,9 @@ ModemStatus ModemController::send_raw(const std::string& command, AtResponse& re
 ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,
                                          uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return ModemStatus::busy;
+    }
     if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
@@ -148,6 +181,9 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
                                                AtResponse& response,
                                                uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return ModemStatus::busy;
+    }
     if (!(uart_ && uart_->is_open())) {
         return ModemStatus::not_connected;
     }
@@ -214,6 +250,9 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
 std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     std::vector<std::string> urcs;
     IoLockGuard lock(io_mutex_);
+    if (!lock) {
+        return urcs;
+    }
     if (!(uart_ && uart_->is_open())) {
         return urcs;
     }
@@ -226,6 +265,10 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
         "+CME ERROR:", "+CMS ERROR:",       // async errors
         "#CSURV:",                          // survey URC
         "SRING:",                           // socket data available
+        "RING",                             // incoming call (can be "RING" or "RING: N")
+        "NO CARRIER",                       // connection terminated
+        "BUSY",                             // line busy
+        "NO DIALTONE",                      // no dial tone
         nullptr
     };
 
@@ -237,26 +280,37 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     }
 
     buffer[bytes_read] = '\0';
-    std::string raw(reinterpret_cast<const char*>(buffer), bytes_read);
+    std::string raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
 
-    MODEM_LOG_DBG("<< (URC poll): %s", raw.c_str());
-    
-    // Split on \r\n and collect lines matching a known prefix
-    size_t pos = 0;
-    while (pos < raw.size()) {
-        size_t end = raw.find("\r\n", pos);
-        if (end == std::string::npos) end = raw.size();
-        std::string line = raw.substr(pos, end - pos);
-        pos = (end == raw.size()) ? end : end + 2;
+    MODEM_LOG_DBG("<< (URC poll raw): %s [%zu bytes]", raw_chunk.c_str(), bytes_read);
+    MODEM_LOG_DBG("<< (URC buffer before): size=%zu", urc_rx_buffer_.size());
 
-        if (line.empty()) continue;
+    // Append and parse only complete CRLF-terminated lines. This avoids losing
+    // URCs split across reads, e.g. "S" then "RING: 1\r\n".
+    urc_rx_buffer_ += raw_chunk;
+
+    MODEM_LOG_DBG("<< (URC buffer after append): size=%zu", urc_rx_buffer_.size());
+
+    size_t end = 0;
+    while ((end = urc_rx_buffer_.find("\r\n")) != std::string::npos) {
+        std::string line = urc_rx_buffer_.substr(0, end);
+        urc_rx_buffer_.erase(0, end + 2);
+
+        if (line.empty()) {
+            continue;
+        }
         for (const char* const* p = kPrefixes; *p; ++p) {
             if (line.rfind(*p, 0) == 0) {
-                MODEM_LOG_DBG("URC: %s", line.c_str());
+                MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
                 urcs.push_back(line);
                 break;
             }
         }
+    }
+
+    // Prevent unbounded growth if we keep receiving non-terminated garbage.
+    if (urc_rx_buffer_.size() > 1024) {
+        urc_rx_buffer_.erase(0, urc_rx_buffer_.size() - 512);
     }
     return urcs;
 }
