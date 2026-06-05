@@ -3,6 +3,7 @@
 #include "modem/xe310.h"
 #include "modem/timer_interface.h"
 #include "modem/message_queue_interface.h"
+#include "modem_controller.h"
 #include "xe310.h"
 
 #include <cstdint>
@@ -93,7 +94,8 @@ enum class NetworkLteEvent : uint8_t {
     // errors
     network_error,          // generic error for network-related failures (e.g. registration failure, unexpected detach, etc.) that can trigger retries and fallback mechanisms before giving up and going to done state
     attach_error,           // specific error for attach failures (e.g. after max attach retries reached)
-    context_error           // specific error for PDP context activation failures (e.g. after max PDP activation retries reached)
+    context_error,          // specific error for PDP context activation failures (e.g. after max PDP activation retries reached)
+    at_command_no_response, // error for unexpected AT command failures (e.g. modem becomes unresponsive, or returns an error to a command we expect to always succeed like AT or AT+CGMM). This can trigger recovery actions like modem reboot or factory reset.
 };
 
 /// Actions that the state machine can trigger on the modem. These are executed in loop() based on the current state and event.
@@ -346,6 +348,8 @@ public:
 
     /// Process a single URC line (e.g. "+CREG: 1") and update event_ if relevant.
     void handle_urc(const std::string& urc);
+
+    bool check_status_response(ModemStatus status);
 private:
     xE310& modem_;
     ModemInfo            modemInfo;
