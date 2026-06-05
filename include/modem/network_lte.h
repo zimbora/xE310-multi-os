@@ -155,10 +155,16 @@ struct NetworkLteConfig {
     uint8_t     conn_id                  = 1; ///< Connection ID to query for server connection status (e.g. for UDP sockets)
 };
 
-enum class ServerState : uint8_t {
-    unknown,
+enum class ServerState : int8_t {
+    unknown = -1,
     disconnected,
     connected,
+    suspended,
+    pending_data,
+    listening,
+    incoming_connection,
+    dns_resolving,
+    connecting
 };
 
 struct ServerInfo {

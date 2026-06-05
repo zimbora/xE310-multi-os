@@ -87,10 +87,38 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
         MODEM_LOG_DBG("Checking current connection state for CID %d before connecting to server", conn_id);
         modem_.udp_status(conn_id, state);
         serverInfo[conn_id-1].state = static_cast<ServerState>(state);
-        if(serverInfo[conn_id-1].state == ServerState::connected){
-            MODEM_LOG_ERR("Already connected to a server, cannot connect to a different one without disconnecting first");
+        if( serverInfo[conn_id-1].state == ServerState::connected){
+            MODEM_LOG_INF("Already connected to a server, cannot connect to a different one without disconnecting first");
             return true; // already connected to a server, cannot connect to a different one without disconnecting first
         }
+        if( serverInfo[conn_id-1].state == ServerState::suspended){
+            MODEM_LOG_INF("Resuming suspended connection to server at %s:%d", ip.c_str(), port);
+            auto status = modem_.udp_close(conn_id);
+            if(status != ModemStatus::ok){
+                MODEM_LOG_ERR("Failed to close connection to server at %s:%d", ip.c_str(), port);
+                return false;
+            }else{
+                serverInfo[conn_id-1].state = ServerState::connected;
+                MODEM_LOG_INF("Successfully closed connection to server at %s:%d", ip.c_str(), port);
+            }
+        }
+        /*
+        if( serverInfo[conn_id-1].state == ServerState::pending_data){
+            // read data
+        }
+        if( serverInfo[conn_id-1].state == ServerState::listening){
+            // what to do??
+        }   
+        if( serverInfo[conn_id-1].state == ServerState::incoming_connection){
+            // accept connection
+        }   
+        */
+        if( serverInfo[conn_id-1].state == ServerState::dns_resolving ||
+            serverInfo[conn_id-1].state == ServerState::connecting){
+            MODEM_LOG_ERR("Already in the process of connecting to a server, cannot connect to a different one without disconnecting first");
+            return false; // already in the process of connecting to a server, cannot connect to a different one without disconnecting first
+        }
+
         if(protocol == "UDP"){
             MODEM_LOG_INF("Connecting to UDP server at %s:%d", ip.c_str(), port);
             auto status = modem_.udp_open(conn_id, ip, port);
@@ -727,13 +755,17 @@ void NetworkLte::execute_actions() {
             break;      
         case ModemAction::send_data:
             {
+                if (state_ != NetworkLteState::data_ready) {
+                    MODEM_LOG_WRN("Ignoring send_data action: state=%d (requires data_ready)", static_cast<int>(state_));
+                    break;
+                }
                 // Drain TX queues for all connection IDs, checking protocol per conn_id
                 for (uint8_t id = 1; id <= MAX_SERVER_CONNECTIONS; ++id) {
                     if (!message_queue_ || message_queue_->tx_count(id) == 0) {
                         continue;
                     }
                     if (serverInfo[id - 1].state != ServerState::connected) {
-                        MODEM_LOG_WRN("conn_id %d not connected, skipping TX drain", id);
+                        MODEM_LOG_WRN("conn_id %d not connected, state: %d skipping TX drain", id, static_cast<int>(serverInfo[id - 1].state));
                         continue;
                     }
                     QueueMessage msg;
