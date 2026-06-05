@@ -316,6 +316,7 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
 
 void xE310::power_on() {
     // TODO: assert power-enable GPIO
+
 }
 
 void xE310::power_off() {
@@ -324,6 +325,7 @@ void xE310::power_off() {
 
 ModemStatus xE310::power_radio() {
     AtResponse response;
+    // GPIO -> wake0
     return controller_.send_raw("AT+CFUN=1", response, 15000);
 }
 
@@ -454,21 +456,42 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
 // needs reboot to take effect, so we don't apply it directly in the attach flow, but expose it for manual configuration/testing
 ModemStatus xE310::set_iot_tech(RadioTech tech, uint8_t gsm_priority) {
     AtResponse response;
-    auto cmd = "AT#WS46=" + std::to_string(static_cast<uint8_t>(tech)) + "," + std::to_string(gsm_priority);
+    uint8_t n = 0;
+    #ifdef ME310M1
+        if(tech == RadioTech::cat_m1)
+            n = 0;
+        else if(tech == RadioTech::nb_iot)
+            n = 1;
+        else
+            return ModemStatus::invalid_param;
+        gsm_priority = 0; // GSM is not supported on ME310M1, so priority param is ignored and set to 0
+    #endif
+    
+    auto cmd = "AT#WS46=" + std::to_string(n) + "," + std::to_string(gsm_priority);
     return controller_.send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#WS46?", response);
+    auto status = controller_.send_raw("AT#WS46?", response,5000);
     if (status == ModemStatus::ok) {
         // Response body: "#WS46: <n>,<GSM_P>"
         auto colon = response.body.find(':');
         if (colon != std::string::npos) {
             unsigned int nv = 0, gp = 0;
             std::sscanf(response.body.c_str() + colon + 1, " %u,%u", &nv, &gp);
-            tech         = static_cast<RadioTech>(nv);
+            //#ifdef ME301M1
+            if(nv == 0)
+                tech = RadioTech::cat_m1;
+            else if(nv == 1)
+                tech = RadioTech::nb_iot;
+            else
+                tech = RadioTech::unknown;
             gsm_priority = static_cast<uint8_t>(gp);
+            //#else
+            //tech         = static_cast<RadioTech>(nv);
+            //gsm_priority = static_cast<uint8_t>(gp);
+            //#endif
         }
     }
     return status;
@@ -515,7 +538,7 @@ ModemStatus xE310::set_registration_urc(bool enable) {
 ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tech) {
     AtResponse response;
     std::string cmd = (tech == RadioTech::gsm) ? "AT+CREG?" : "AT+CEREG?";
-    auto result = controller_.send_raw(cmd, response);
+    auto result = controller_.send_raw(cmd, response,5000);
     if (result != ModemStatus::ok) {
         return result;
     }
