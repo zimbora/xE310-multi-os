@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#define ME310M1
+
 namespace modem {
 
 /// SIM detection mode for AT#SIMDET.
@@ -23,10 +25,11 @@ enum class SimStatus : uint8_t {
 };
 
 /// Radio access technology for AT+COPS <act> parameter.
-enum class RadioTech : uint8_t {
+enum class RadioTech : int8_t {
+    unknown = -1,
     gsm = 0,
-    lte = 7,
-    cat_m1 = 8,
+    lte = 6,
+    cat_m1 = 7,
     nb_iot = 9,
 };
 
