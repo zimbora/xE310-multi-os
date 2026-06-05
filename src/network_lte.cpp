@@ -53,44 +53,6 @@ uint8_t NetworkLte::get_pdp_retries() const { return nPdpRetries; }
 void NetworkLte::set_attach_retries(uint8_t n) { nAttachRetries = n; }
 void NetworkLte::set_pdp_retries(uint8_t n) { nPdpRetries = n; }
 
-// --- Timer ---
-
-TimerError NetworkLte::start_timer(uint32_t timeout_ms) {
-    if (!timer_) {
-        return TimerError::not_running;
-    }
-    return timer_->start(timeout_ms, [this]() { on_timer_expired(); });
-}
-
-TimerError NetworkLte::stop_timer() {
-    if (!timer_) {
-        return TimerError::not_running;
-    }
-    return timer_->stop();
-}
-
-TimerError NetworkLte::reset_timer(uint32_t timeout_ms) {
-    if (!timer_) {
-        return TimerError::not_running;
-    }
-    return timer_->reset(timeout_ms);
-}
-
-bool NetworkLte::is_timer_running() const {
-    return timer_ && timer_->is_running();
-}
-
-uint32_t NetworkLte::timer_elapsed_seconds() const {
-    if (!timer_) {
-        return 0;
-    }
-    return timer_->elapsed_ms() / 1000u;
-}
-
-void NetworkLte::on_timer_expired() {
-    on_event(NetworkLteEvent::timeout);
-}
-
 bool NetworkLte::network_connect() {
     if(state_ == NetworkLteState::data_ready){
         MODEM_LOG_INF("Already connected to network");
@@ -132,6 +94,7 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
         if(protocol == "UDP"){
             MODEM_LOG_INF("Connecting to UDP server at %s:%d", ip.c_str(), port);
             auto status = modem_.udp_open(conn_id, ip, port);
+
             if(status != ModemStatus::ok){
                 modem_.udp_close(conn_id); // ensure we close any half-open connection
                 MODEM_LOG_ERR("Failed to connect to server at %s:%d", ip.c_str(), port);
@@ -330,25 +293,42 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             MODEM_LOG_INF("Network PDP context opened, IP address assigned: %s", networkInfo.ip_address.c_str());
             change_state(NetworkLteState::data_ready);
             break;
-        case NetworkLteEvent::data_available: {
-            MODEM_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
-            uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
-            std::vector<uint8_t> buf;
-            if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
-                // Push to RX queue for this connection
-                if (message_queue_) {
-                    auto err = message_queue_->rx_push(conn, buf.data(), buf.size());
-                    if (err != QueueError::ok) {
-                        MODEM_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
+        case NetworkLteEvent::data_available: 
+            {
+                MODEM_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
+                uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
+                std::vector<uint8_t> buf;
+                if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
+                    // Push to RX queue for this connection
+                    if (message_queue_) {
+                        auto err = message_queue_->rx_push(conn, buf.data(), buf.size());
+                        if (err != QueueError::ok) {
+                            MODEM_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
+                        }
                     }
-                }
-                std::string payload(buf.begin(), buf.end());
-                if (on_data_received_) {
-                    on_data_received_(conn, payload, static_cast<uint16_t>(buf.size()));
+                    std::string payload(buf.begin(), buf.end());
+                    if (on_data_received_) {
+                        on_data_received_(conn, payload, static_cast<uint16_t>(buf.size()));
+                    }
                 }
             }
             break;
-        }
+        case NetworkLteEvent::timeout:
+            {
+                if(state_ == NetworkLteState::data_ready){
+                    call_action(ModemAction::enter_sleep); // if we are in data ready state and we receive a timeout event, we can assume the connection is lost, so we can trigger radio shutdown to restart the attach flow
+                }else if(state_ == NetworkLteState::transparent_mode){
+                    call_action(ModemAction::leave_transparent_mode); // if we are in transparent mode and we receive a timeout event, we can assume the connection is lost, so we can trigger exit transparent mode to restart the normal flow and eventually go back to data ready if the connection is still active
+                }
+                else{
+                    call_action(ModemAction::attach_network);
+                }
+                change_state(NetworkLteState::done);
+            }
+            break;
+        case NetworkLteEvent::at_command_no_response:
+            call_action(ModemAction::check_responsiveness); // if we receive an AT command error, we can check if the modem is still responsive, if not, we can trigger a reboot to try to recover
+            break;
         default:
             break; // other events are handled in the state switch below
     }
@@ -369,43 +349,44 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
     if(state_ == target_state) {
         return true; // already in target state
     }
-    
-    // This function generates the necessary sequence of events to transition from the current state to the target state.
-    // For simplicity, we will just call loop() in a loop until we reach the target state, relying on the fact that loop() will process events and update the state accordingly.
-    // In a more complex implementation, we could have a predefined map of required events for each state transition to speed this up and avoid unnecessary iterations.
-    switch(state_){
-        case NetworkLteState::switched_off:
-            if(target_state == NetworkLteState::data_ready || 
-                target_state == NetworkLteState::transparent_mode || 
-                target_state == NetworkLteState::network_detached){
-                call_action(ModemAction::power_on);
-            }
-            break;
-        case NetworkLteState::off_mode:
-            if(target_state == NetworkLteState::idle_mode || target_state == NetworkLteState::setup_mode || target_state == NetworkLteState::network_detached){
-                call_action(ModemAction::turn_on_radio);
-            }
-            break;
-        case NetworkLteState::sleep_mode:
-            if(target_state == NetworkLteState::data_ready){
-                call_action(ModemAction::wake_up); // trigger wake up to go back to data ready state
-            }
-            break;
-        /*
-        case NetworkLteState::transparent_mode:
-            if(target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode){
-                call_action(ModemAction::leave_transparent_mode); // trigger exit transparent mode to go back to idle mode and restart normal flow, which should lead us back to data ready if the connection is still active
-            }
-            break;
-        */
-        default:
-            if(target_state == NetworkLteState::transparent_mode){
-                call_action(ModemAction::enter_transparent_mode);
-            }
-            break; // for other states, we will rely on the normal event flow to transition to the target state
-    }
 
     while (state_ != target_state) {
+            // This function generates the necessary sequence of events to transition from the current state to the target state.
+        // For simplicity, we will just call loop() in a loop until we reach the target state, relying on the fact that loop() will process events and update the state accordingly.
+        // In a more complex implementation, we could have a predefined map of required events for each state transition to speed this up and avoid unnecessary iterations.
+        switch(state_){
+            case NetworkLteState::switched_off:
+                if( target_state == NetworkLteState::data_ready || 
+                    target_state == NetworkLteState::transparent_mode){
+                    call_action(ModemAction::power_on);
+                }
+                break;
+            case NetworkLteState::off_mode:
+                if( target_state == NetworkLteState::data_ready || 
+                    target_state == NetworkLteState::transparent_mode){
+                    call_action(ModemAction::turn_on_radio);
+                }
+                break;
+            case NetworkLteState::sleep_mode:
+                if( target_state == NetworkLteState::data_ready ||
+                    target_state == NetworkLteState::transparent_mode){
+                    call_action(ModemAction::wake_up); // trigger wake up to go back to data ready state
+                }
+                break;
+            /*
+            case NetworkLteState::transparent_mode:
+                if(target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode){
+                    call_action(ModemAction::leave_transparent_mode); // trigger exit transparent mode to go back to idle mode and restart normal flow, which should lead us back to data ready if the connection is still active
+                }
+                break;
+            */
+            default:
+                if(target_state == NetworkLteState::transparent_mode){
+                    call_action(ModemAction::enter_transparent_mode);
+                }
+                break; // for other states, we will rely on the normal event flow to transition to the target state
+        }
+
         loop(target_state); // process events and update state until we reach the target state
         // In a real implementation, we might want to add a timeout here to avoid infinite loops in case of unexpected conditions.
         // if timeout reached:
@@ -433,8 +414,9 @@ void NetworkLte::execute_actions() {
         case ModemAction::reboot:
             {
                 auto status = modem_.reboot();
-                if(status == ModemStatus::ok){
+                if(check_status_response(status)){
                     change_state(NetworkLteState::rebooting); // after reboot, we can consider
+                    call_action(ModemAction::power_on); // after reboot, check responsiveness to continue with the flow
                 }
             }
             break;
@@ -442,12 +424,18 @@ void NetworkLte::execute_actions() {
             {
                 // check if modem is responsive by sending an AT command
                 std::string response;
-                auto status = modem_.at_ok();
-                if(status != ModemStatus::ok){
-                    MODEM_LOG_ERR("Modem is not responsive");
-                    call_action(ModemAction::reboot); // try rebooting the modem to recover responsiveness
-                }else{
-                    MODEM_LOG_INF("Modem is responsive");
+                while(true){
+                    auto status = modem_.at_ok();
+                    if(status != ModemStatus::ok){
+                        MODEM_LOG_ERR("Modem is not responsive");
+                        //call_action(ModemAction::reboot); // try rebooting the modem to recover responsiveness
+                    }else{
+                        MODEM_LOG_INF("Modem is responsive");
+                        change_state(NetworkLteState::idle_mode); // if modem is responsive, we can go to idle mode and continue with the flow
+                        call_action(ModemAction::query_network_status); // trigger radio setup to start attach flow
+                        break;
+                    }
+                    delay_ms(2000); // wait for 2 seconds before trying again
                 }
             }
             break;
@@ -485,7 +473,8 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::power_off:
             {
-                modem_.power_off();
+                //modem_.power_off();
+                MODEM_LOG_INF("Fake power off!!");
                 change_state(NetworkLteState::switched_off);
             }
             break;
@@ -498,16 +487,15 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::switch_off_radio:
             {
-                modem_.shutdown();
+                //modem_.shutdown();
+                MODEM_LOG_INF("Fake shutdown!!");
                 change_state(NetworkLteState::off_mode);
             }
             break;
         case ModemAction::enter_sleep:
             {
-                // how can we force the modem to enter sleep mode (PSM) ? is there a specific command we can send to trigger it, or do we just need to wait for the network to trigger it based on our PSM configuration ?
-                // for now, we will just rely on the normal event flow to enter sleep mode when the network triggers it based on our PSM configuration
-                // if PSM is active, do nothing and wait for event
-                // otherwise call off mode action
+                // check if modem is in PSM modem by reading GPIO state or PSM status, if not, we can trigger radio shutdown to restart the attach flow and eventually enter PSM if it is enabled in the configuration
+                call_action(ModemAction::switch_off_radio); // if PSM is not enabled, we can trigger radio shutdown to restart the attach flow    
             }
             break;
         case ModemAction::wake_up:
@@ -558,13 +546,14 @@ void NetworkLte::execute_actions() {
                 // get modem configuration (bands, iot tech, apn) and apply it
                 
                 if(fChangeBands || fChangeRAT){
+                    bool fReboot = false;
                     if(fChangeBands){
                         fChangeBands = false;
                         auto status = modem_.set_lte_bands(lteConfig.default_lte_bands);
                         if (status != ModemStatus::ok) {
                             MODEM_LOG_ERR("Failed to set LTE bands");
                             // flag error
-                        }
+                        }else fReboot = true;
                     }
                     if(fChangeRAT){
                         fChangeRAT = false;
@@ -572,10 +561,11 @@ void NetworkLte::execute_actions() {
                         if (status != ModemStatus::ok) {
                             MODEM_LOG_ERR("Failed to set IoT technology");
                             // flag error
-                        }
+                        }else fReboot = true;
                     }
                     // reboot modem to apply new bands configuration
-                    call_action(ModemAction::reboot);
+                    if(fReboot)
+                        call_action(ModemAction::reboot);
                 } else {
                     if(fWarmBoot || fColdBoot){
                         MODEM_LOG_INF("Re-applying modem configuration after boot");
@@ -606,6 +596,8 @@ void NetworkLte::execute_actions() {
         case ModemAction::query_network_status:
             {
                 auto status = modem_.get_registration_status(regInfo, RadioTech::cat_m1);
+                if(!check_status_response(status))
+                    break;
                 if(regInfo.stat == RegStatus::denied ||
                     regInfo.stat == RegStatus::not_registered || 
                     regInfo.stat == RegStatus::searching ){
@@ -636,6 +628,17 @@ void NetworkLte::execute_actions() {
                             fChangeRAT = true;
                         }
                     }
+                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
+                    if(status == ModemStatus::ok){
+                        if(regInfo.apn != lteConfig.default_apn){
+                            MODEM_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
+                            auto status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
+                            if (status != ModemStatus::ok) {
+                                MODEM_LOG_ERR("Failed to set APN");
+                                // flag error
+                            }
+                        }
+                    }
                     // check default bands
                     std::string bands;
                     status = modem_.get_bands(bands);
@@ -649,7 +652,7 @@ void NetworkLte::execute_actions() {
                     */
                     // if any diferent set it to default config and reboot to apply, then start attach flow in idle mode
                     if(fChangeRAT || fChangeBands){
-                        call_action(ModemAction::reboot); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
+                        call_action(ModemAction::setup_radio); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
                         break;
                     }
 
@@ -669,6 +672,15 @@ void NetworkLte::execute_actions() {
                     }else{
                         MODEM_LOG_ERR("Failed to set operator manual for fallback configuration");
                         // flag error and stay in the same state to retry later
+                    }
+
+                    if(regInfo.apn != lteConfig.fallback_apn){
+                        MODEM_LOG_WRN("Current APN %s is different from fallback config %s, changing it to fallback config", regInfo.apn.c_str(), lteConfig.fallback_apn.c_str());
+                        auto status = modem_.set_apn(lteConfig.cid, lteConfig.fallback_apn);
+                        if (status != ModemStatus::ok) {
+                            MODEM_LOG_ERR("Failed to set APN");
+                            // flag error
+                        }
                     }
                 }
                 else if(nAttachRetries < lteConfig.max_attach_retries){
@@ -726,6 +738,8 @@ void NetworkLte::execute_actions() {
                     }
                     QueueMessage msg;
                     while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
+                        MODEM_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.data.size()));
+                        MODEM_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
                         if (serverInfo[id - 1].protocol == "UDP") {
                             auto status = modem_.udp_send(id, msg.data);
                             if (status != ModemStatus::ok) {
@@ -835,16 +849,16 @@ void NetworkLte::change_state(NetworkLteState new_state) {
     // init timers for states that require timeouts to trigger retries or error handling if we get stuck in those states for too long (e.g. if we are attaching to the network but it is taking too long, we can trigger a retry or fallback to a different configuration)
     switch(state_){
         case NetworkLteState::network_attaching:
-            st_timer->start(lteConfig.attach_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+            st_timer->start(lteConfig.attach_timeout_sec*1000, [this](){ on_timer_expired(); }); // example timeout, adjust as needed
             break;
         case NetworkLteState::pdp_context_opening:
-            st_timer->start(lteConfig.pdp_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+            st_timer->start(lteConfig.pdp_timeout_sec*1000, [this](){ on_timer_expired(); }); // example timeout, adjust as needed
             break;
         case NetworkLteState::data_ready:
             {
                 
                 //modem_.get_iot_tech(regInfo.act, networkInfo.gsm_priority); // update IoT tech in info struct after applying it to modem
-                modem_.get_registration_status(regInfo, RadioTech::gsm); // update registration info in info struct after applying it to modem
+                //modem_.get_registration_status(regInfo, RadioTech::gsm); // update registration info in info struct after applying it to modem
                 modem_.get_signal_quality(signalQuality); // update signal quality in info struct after applying it to modem
                 modem_.get_operator(regInfo.operator_name); // update operator name in info struct after applying it to modem
                 modem_.get_apn(lteConfig.cid, regInfo.apn); // parse +CGDCONT? into regInfo.apn and regInfo.ip_address
@@ -869,11 +883,11 @@ void NetworkLte::change_state(NetworkLteState new_state) {
                 } else {
                     MODEM_LOG_ERR("Failed to get PSM status");
                 }
-                st_timer->start(lteConfig.data_ready_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+                st_timer->start(lteConfig.data_ready_timeout_sec*1000, [this](){on_timer_expired(); }); // example timeout, adjust as needed
             }
             break;
         case NetworkLteState::transparent_mode:
-            st_timer->start(lteConfig.transparent_timeout_sec*1000, [this](){ on_event(NetworkLteEvent::timeout); }); // example timeout, adjust as needed
+            st_timer->start(lteConfig.transparent_timeout_sec*1000, [this](){on_timer_expired(); }); // example timeout, adjust as needed
             break;
         default:
             break; // no special handling needed for other states when entering
@@ -941,7 +955,8 @@ void NetworkLte::handle_urc(const std::string& urc) {
             ev.rfind("ME DEACT",  0) == 0) {   // ME forced context deactivation
             on_event(NetworkLteEvent::context_closed);
         } else if (ev.rfind("NW_DETACH", 0) == 0 ||  // network PS detach (all contexts lost)
-                   ev.rfind("ME_DETACH",  0) == 0) {  // ME PS detach (all contexts lost)
+                   ev.rfind("ME_DETACH",  0) == 0 ||
+                   ev.rfind("ME DETACH",  0) == 0){  // ME PS detach (all contexts lost)
             on_event(NetworkLteEvent::network_detached);
         } else if (ev.rfind("REJECT", 0) == 0) {     // context activation rejected
             on_event(NetworkLteEvent::context_rejected);
@@ -1096,4 +1111,56 @@ void NetworkLte::log_action() const {
         MODEM_LOG_DBG("new action: %s", action_to_str(modem_action_));
 }
 
-} // namespace modem
+// --- Timer ---
+
+TimerError NetworkLte::start_timer(uint32_t timeout_ms) {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->start(timeout_ms, [this]() { on_timer_expired(); });
+}
+
+TimerError NetworkLte::stop_timer() {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->stop();
+}
+
+TimerError NetworkLte::reset_timer(uint32_t timeout_ms) {
+    if (!timer_) {
+        return TimerError::not_running;
+    }
+    return timer_->reset(timeout_ms);
+}
+
+bool NetworkLte::is_timer_running() const {
+    return timer_ && timer_->is_running();
+}
+
+uint32_t NetworkLte::timer_elapsed_seconds() const {
+    if (!timer_) {
+        return 0;
+    }
+    return timer_->elapsed_ms() / 1000u;
+}
+
+void NetworkLte::on_timer_expired() {
+    on_event(NetworkLteEvent::timeout);
+}
+
+bool NetworkLte::check_status_response(ModemStatus status) {
+    if (status == ModemStatus::ok) {
+        return true;
+    }else{
+        if(status == ModemStatus::timeout){
+            MODEM_LOG_ERR("No response from modem, it might be unresponsive or powered off");
+            on_event(NetworkLteEvent::at_command_no_response); // flag a generic network error for now, we can have more specific error events if needed (e.g. attach_error, context_error, etc.) and trigger them based on the current state and action that was being performed when the error occurred
+        } else {    
+            MODEM_LOG_ERR("Modem command failed with status: %d", static_cast<int>(status));
+        }
+    }
+    return false;
+} 
+
+}// namespace modem
