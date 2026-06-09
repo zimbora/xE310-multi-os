@@ -183,6 +183,81 @@ QueueError NetworkLte::rx_read(uint8_t conn_id, QueueMessage& msg) {
     return message_queue_->rx_pop(conn_id, msg);
 }
 
+bool NetworkLte::force_PSM(){
+
+    if(state_ != NetworkLteState::data_ready){
+        MODEM_LOG_INF("Currently not in data ready state, cannot force PSM mode");
+        return false;
+    }
+
+    // stop timers and URCs to avoid interference with PSM flow
+    if (st_timer) {
+        st_timer->stop();
+    }
+
+    modem_.set_psm_urc(false); // enable PSM URCs in normal mode
+    modem_.set_registration_urc(false); // enable registration URCs in normal mode
+    modem_.set_pdp_urc(false); // enable PDP URCs in normal mode
+
+    bool psmModeAttached = false;
+    // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
+    std::vector<Operator> operatorList;
+    auto status = modem_.get_available_operators(operatorList);
+    for(const auto& op : operatorList){
+        MODEM_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
+        if(op.act == RadioTech::cat_m1 || op.act == RadioTech::nb_iot)
+            MODEM_LOG_INF("Operator %s supports tech with PSM, trying to register to it", op.long_name.c_str());
+        modem_.set_operator_manual(op.numeric, op.act);
+        RegistrationInfo reg_info;
+        RadioTech tech = RadioTech::unknown;
+        modem_.get_registration_status(reg_info,tech);
+        if(reg_info.stat == RegStatus::registered_home || reg_info.stat == RegStatus::registered_roaming){
+            TelitCpsmsStatus tCpsmsStatus;
+            status = modem_.get_telit_psm(tCpsmsStatus);
+            if(status != ModemStatus::ok){
+                MODEM_LOG_ERR("Failed to get PSM configuration");
+                continue; // try next operator
+            }
+            MODEM_LOG_INF("PSM status for operator %s: status=%d, mode=%d, t3412=%d, t3324=%d psm_version=%d, psm_threshold=%d", op.long_name.c_str(), tCpsmsStatus.status, static_cast<int>(tCpsmsStatus.mode), tCpsmsStatus.t3412, tCpsmsStatus.t3324, static_cast<int>(tCpsmsStatus.psm_version), tCpsmsStatus.psm_threshold);
+            if(tCpsmsStatus.mode == PsmMode::disable){
+                MODEM_LOG_WRN("PSM is disabled for this operator, cannot enter PSM mode");
+                continue; // try next operator
+            }
+            else if(tCpsmsStatus.t3412 == 0 && tCpsmsStatus.t3324 == 0){
+                MODEM_LOG_WRN("PSM timers are not configured for this operator, cannot enter PSM mode");
+                continue; // try next operator
+            }else if(tCpsmsStatus.t3412 == lteConfig.psm_t3412 && tCpsmsStatus.t3324 == lteConfig.psm_t3324){
+                MODEM_LOG_INF("PSM timers were accepted by network for this operator");
+                psmModeAttached = true;
+                break;
+            }else{
+                MODEM_LOG_WRN("PSM timers were not accepted by network for this operator, but different timers were granted");
+                psmModeAttached = true;
+                break;
+            }
+        }else{
+            MODEM_LOG_WRN("Failed to register to operator %s, cannot enter PSM mode", op.long_name.c_str());
+            continue; // try next operator
+        }
+    }
+    
+    if(psmModeAttached)
+        change_state(NetworkLteState::data_ready);
+    else
+        change_state(NetworkLteState::idle_mode); // if we couldn't enter PSM mode with any operator, go back to idle mode
+    
+    // resume timers and URCs after PSM flow
+    if (st_timer) {
+        st_timer->start(lteConfig.data_ready_timeout_sec * 1000, [this]() { on_timer_expired(); });
+    }
+    
+    modem_.set_psm_urc(true); // enable PSM URCs in normal mode
+    modem_.set_registration_urc(true); // enable registration URCs in normal mode
+    modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
+
+    return psmModeAttached; // return whether PSM mode was successfully entered
+}
+
 bool NetworkLte::enter_sleep() {
     if(state_ != NetworkLteState::sleep_mode && state_ != NetworkLteState::off_mode && state_ != NetworkLteState::switched_off) {
         go_to_state(NetworkLteState::sleep_mode);
@@ -606,9 +681,13 @@ void NetworkLte::execute_actions() {
                             false,
                             0,
                             true,
-                            lteConfig.psm_t3412,
+                            lteConfig.psm_t3412, // periodic TAU timer in seconds
                             true,
-                            lteConfig.psm_t3324
+                            lteConfig.psm_t3324, // active time timer in seconds
+                            false,
+                            PsmVersion::rel12_retain, // Rel12 retain
+                            false,
+                            60 // min duration to enter PSM in seconds
                         };
                         modem_.set_telit_psm(cfg);
                         modem_.set_psm_urc(true); // enable PSM URCs in normal mode
@@ -631,13 +710,15 @@ void NetworkLte::execute_actions() {
                     regInfo.stat == RegStatus::searching ){
                     change_state(NetworkLteState::network_detached); // start attach with fallback config
                 }
-                else if(regInfo.stat == RegStatus::registered_home || regInfo.stat == RegStatus::registered_roaming){
+                else if(regInfo.stat == RegStatus::registered_home || 
+                    regInfo.stat == RegStatus::registered_roaming ){
                     call_action(ModemAction::query_pdp_context); // trigger PDP activation flow in context closed state
                 }
                 else if( regInfo.stat == RegStatus::unknown ){
                     // How to deal with it ?
                     // let's assume we are connected for now
                     MODEM_LOG_DBG("Registration status unknown..");
+                    change_state(NetworkLteState::network_detached); // start attach with fallback config
                 }
             }
             break;      

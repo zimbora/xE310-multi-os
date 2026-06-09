@@ -272,6 +272,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    auto timer = modem::create_platform_timer();
+
+    bool forcePSMMode = false;
+    timer->start(15000, [&]() {
+        forcePSMMode = true;
+    });
+    
     uint32_t count = 0;
     while(true){
         network.loop();
@@ -283,7 +290,12 @@ int main(int argc, char* argv[]) {
             MODEM_LOG_INF("RX queue [conn %d]: %s (%zu bytes)", lteConfig.conn_id, payload.c_str(), rx_msg.data.size());
             ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
         }
-        
+      
+        if(forcePSMMode){
+            MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
+            forcePSMMode = false;
+            network.force_PSM();
+        }
         /*
         std::this_thread::sleep_for(std::chrono::seconds(1));
         count++;
