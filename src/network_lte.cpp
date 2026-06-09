@@ -310,7 +310,7 @@ bool NetworkLte::leave_transparent_mode() {
     return state_ != NetworkLteState::transparent_mode;
 }
 
-bool NetworkLte::send_at_command(std::string command, std::string& response, uint16_t timeout_ms) {
+bool NetworkLte::send_at_command(std::string command, std::string& response, uint32_t timeout_ms) {
     // send command
     if(state_ != NetworkLteState::transparent_mode){
         MODEM_LOG_ERR("Modem is not in transparent mode, cannot send AT command");

@@ -437,7 +437,7 @@ public:
     ModemStatus udp_status(uint8_t conn_id, uint8_t& state);
 
     /// Send a raw AT command string and return the response body.
-    ModemStatus send_at_command(const std::string& command, std::string& response, uint16_t timeout_ms = 5000);
+    ModemStatus send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms = 5000);
 
     // --- Event Handlers ---
 

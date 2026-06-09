@@ -253,7 +253,7 @@ public:
     /// @param response The response from the modem.
     /// @param timeout_ms The timeout for the AT command in milliseconds.
     /// @return True if the command was successful, false otherwise.
-    bool send_at_command(std::string command, std::string& response, uint16_t timeout_ms);
+    bool send_at_command(std::string command, std::string& response, uint32_t timeout_ms);
     /// @brief Update the modem firmware or configuration.
     /// @return True if the update was successful, false otherwise.
     bool update_modem(std::string firmware_url);

@@ -1051,7 +1051,7 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     return status;
 }
 
-ModemStatus xE310::send_at_command(const std::string& command, std::string& response, uint16_t timeout_ms) {
+ModemStatus xE310::send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms) {
     AtResponse at_response;
     auto status = controller_.send_raw(command, at_response, timeout_ms);
     if (status == ModemStatus::ok) {
