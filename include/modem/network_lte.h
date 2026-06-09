@@ -14,11 +14,16 @@
 
 #define MAX_SERVER_CONNECTIONS 5
 
+// Choose one MVNO
 #define TELENOR_PUBLIC 
+//#define ONET_PUBLIC 
+// --- --- ---
 #define COUNTRY_CODE 268
 #define DEFAULT_IOT_TECH RadioTech::cat_m1
 #define FALLBACK_IOT_TECH RadioTech::cat_m1
-#define DEFAULT_PLMN "26801"
+#define DEFAULT_PLMN "26801" // VDF
+//#define DEFAULT_PLMN "26803" // NOS
+//#define DEFAULT_PLMN "26806" // MEO
 
 #if defined(ONET_PUBLIC)
     #define DEFAULT_APN "terminal.apn"
@@ -150,7 +155,7 @@ struct NetworkLteConfig {
     std::string plmn                     = DEFAULT_PLMN; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
 
     uint32_t    psm_t3412                = 3600; ///< Sleep time in PSM mode, in seconds
-    uint32_t    psm_t3324                = 300; ///< Active time in PSM mode, in seconds
+    uint32_t    psm_t3324                = 60; ///< Active time in PSM mode, in seconds
 
     uint8_t     conn_id                  = 1; ///< Connection ID to query for server connection status (e.g. for UDP sockets)
 };
@@ -232,6 +237,9 @@ public:
 
     /// Read data from the RX queue for the given connection ID (1-based).
     QueueError rx_read(uint8_t conn_id, QueueMessage& msg);
+
+    /// Try to register on a network with PSM enabled, by checking the current network registration and PSM configuration, and iterating through available operators if registration or PSM is not available with the current one. Returns true if successfully registered on a network with PSM enabled, false otherwise.
+    bool force_PSM();
     /// Enter sleep mode (PSM).
     bool enter_sleep();
     /// Enter transparent mode (if supported by the modem).

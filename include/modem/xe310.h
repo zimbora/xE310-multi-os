@@ -39,7 +39,7 @@ enum class RegStatus : uint8_t {
     registered_home = 1,
     searching = 2,
     denied = 3,
-    unknown = 4,
+    unknown = 4, // out of coverage or suspended. SIM in PSM/eDRX can also show as unknown.
     registered_roaming = 5,
     sms_only = 6,
     sms_only_roaming = 7,
@@ -98,6 +98,13 @@ enum class PsmMode : uint8_t {
     enable  = 1,
 };
 
+enum class PsmVersion : uint8_t {
+    no_coord = 1,      ///< PSM without network coordination (legacy)
+    rel12_no_retain = 2, ///< Rel-12 PSM without context retain support
+    rel12_retain = 4,    ///< Rel-12 PSM with context retain support
+    edrx = 8,           ///< eDRX (extended discontinuous reception) mode
+};
+
 /// AT+CPSMS configuration (3GPP standard — timer values as 8-bit binary octet strings).
 struct CpsmsConfig {
     PsmMode     mode                  = PsmMode::disable;
@@ -119,18 +126,18 @@ struct TelitCpsmsConfig {
     bool     has_active_time    = false;
     uint32_t req_active_time    = 0;    ///< T3324 in seconds
     bool     has_psm_version    = false;
-    uint8_t  psm_version        = 4;    ///< bitmask: 1=no-coord, 2=Rel12 no-retain, 4=Rel12 retain, 8=eDRX
+    PsmVersion  psm_version     = PsmVersion::rel12_retain;    ///< bitmask: 1=no-coord, 2=Rel12 no-retain, 4=Rel12 retain, 8=eDRX
     bool     has_psm_threshold  = false;
     uint32_t psm_threshold      = 60;   ///< min duration threshold to enter PSM, seconds (min 60)
 };
 
 /// AT#CPSMS? read response.
 struct TelitCpsmsStatus {
-    uint8_t  status         = 1;               ///< 0=PSM active in network, 1=PSM not active
+    uint8_t  status         = 0;               ///< 0=PSM disabled in the network, 1=PSM enabled in the network
     uint32_t t3324          = 0;               ///< active time granted by network, seconds
     uint32_t t3412          = 0;               ///< TAU timer granted by network, seconds
-    uint8_t  psm_version    = 4;
-    uint32_t psm_threshold  = 60;
+    uint8_t  psm_version    = 0;
+    uint32_t psm_threshold  = 0;
     PsmMode  mode           = PsmMode::disable;
 };
 

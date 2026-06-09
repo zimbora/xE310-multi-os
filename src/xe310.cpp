@@ -249,7 +249,7 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
     append_opt(2, cfg.has_gprs_ready_timer, cfg.req_gprs_ready_timer);
     append_opt(3, cfg.has_periodic_tau,    cfg.req_periodic_tau);
     append_opt(4, cfg.has_active_time,     cfg.req_active_time);
-    append_opt(5, cfg.has_psm_version,     cfg.psm_version);
+    append_opt(5, cfg.has_psm_version,     static_cast<uint32_t>(cfg.psm_version));
     append_opt(6, cfg.has_psm_threshold,   cfg.psm_threshold);
 
     return controller_.send_raw(cmd, response);
@@ -680,7 +680,7 @@ ModemStatus xE310::get_operator(std::string& oper) {
 ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
     AtResponse response;
     // AT+COPS=? can take up to 3 minutes to complete a full scan
-    auto status = controller_.send_raw("AT+COPS=?", response, 180000);
+    auto status = controller_.send_raw("AT+COPS=?", response, 210000);
     if (status != ModemStatus::ok) {
         return status;
     }

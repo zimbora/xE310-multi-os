@@ -6,6 +6,8 @@
 #include "modem/log.h"
 #include "ipc_server.h"
 #include "rpc_helpers.h"
+#include "modem/timer_interface.h"
+#include "modem/timer_factory.h"
 #include <memory>
 
 #include <thread>
@@ -77,6 +79,7 @@ int main(int argc, char* argv[]) {
             ipc.stop();
             return 1;
         }
+        return 0;
     });
     if (!ipc.start()) {
         MODEM_LOG_WRN("IPC server failed to start on port 9000 (continuing without it)");
@@ -120,10 +123,9 @@ int main(int argc, char* argv[]) {
             at_ipc.send(reinterpret_cast<const uint8_t*>(response.data()),
                         static_cast<uint16_t>(response.size()));
         } else {
-            const std::string err = "ERROR\r\n";
             MODEM_LOG_ERR("AT IPC: command failed");
-            at_ipc.send(reinterpret_cast<const uint8_t*>(err.data()),
-                        static_cast<uint16_t>(err.size()));
+            at_ipc.send(reinterpret_cast<const uint8_t*>(response.data()),
+                        static_cast<uint16_t>(response.size()));
         }
     });
     at_ipc.set_disconnect_callback([&]() {
@@ -272,6 +274,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    auto timer = modem::create_platform_timer();
+
+    bool forcePSMMode = false;
+    timer->start(15000, [&]() {
+        forcePSMMode = true;
+    });
+    
     uint32_t count = 0;
     while(true){
         network.loop();
@@ -283,7 +292,12 @@ int main(int argc, char* argv[]) {
             MODEM_LOG_INF("RX queue [conn %d]: %s (%zu bytes)", lteConfig.conn_id, payload.c_str(), rx_msg.data.size());
             ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
         }
-        
+      
+        if(forcePSMMode){
+            MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
+            forcePSMMode = false;
+            network.force_PSM();
+        }
         /*
         std::this_thread::sleep_for(std::chrono::seconds(1));
         count++;
