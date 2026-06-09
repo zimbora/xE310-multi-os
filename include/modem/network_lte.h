@@ -14,11 +14,16 @@
 
 #define MAX_SERVER_CONNECTIONS 5
 
+// Choose one MVNO
 #define TELENOR_PUBLIC 
+//#define ONET_PUBLIC 
+// --- --- ---
 #define COUNTRY_CODE 268
 #define DEFAULT_IOT_TECH RadioTech::cat_m1
 #define FALLBACK_IOT_TECH RadioTech::cat_m1
-#define DEFAULT_PLMN "26801"
+#define DEFAULT_PLMN "26801" // VDF
+//#define DEFAULT_PLMN "26803" // NOS
+//#define DEFAULT_PLMN "26806" // MEO
 
 #if defined(ONET_PUBLIC)
     #define DEFAULT_APN "terminal.apn"
