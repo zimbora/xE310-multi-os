@@ -67,6 +67,7 @@ bool NetworkLte::network_connect() {
         return false;
     }
 }
+
 void NetworkLte::new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port){
     serverInfo[conn_id-1].state = ServerState::disconnected;
     serverInfo[conn_id-1].protocol = protocol;
@@ -313,11 +314,21 @@ bool NetworkLte::send_at_command(std::string command, std::string& response, uin
     // send command
     if(state_ != NetworkLteState::transparent_mode){
         MODEM_LOG_ERR("Modem is not in transparent mode, cannot send AT command");
+        response = "ERROR: Not in transparent mode";
         return false;
     }
     auto status = modem_.send_at_command(command, response, timeout_ms);
-    if (status != ModemStatus::ok) {
+    if( status == ModemStatus::timeout){
+        MODEM_LOG_ERR("Timeout while sending AT command: %s", command.c_str());
+        response = "ERROR: Timeout";
+        return false;
+    }else if (status == ModemStatus::busy) {
         MODEM_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        response = "ERROR: Busy";
+        return false;
+    }else if (status != ModemStatus::ok) {
+        MODEM_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        response = "ERROR: Failed to send AT command";
         return false;
     }
     return true;
