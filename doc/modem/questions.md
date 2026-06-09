@@ -10,5 +10,8 @@ How to avoid COPS long response? >> reduce bands
 
 --- New Questions ---
 
-What means NO CARRIER? Why I receive it?
+What means NO CARRIER? Why I receive it? Socket closed? which one?
+
 How to wake up modem on dev kit from DH0 (PSM mode and off mode)
+
+max time for AT+COPS=? Sometimes it takes more than 3 minutes!!!
