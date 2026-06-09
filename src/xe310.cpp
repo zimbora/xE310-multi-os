@@ -442,8 +442,16 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
         // "Network survey ended" — with or without "(Carrier: N BCCh: M)" suffix
         if (line.rfind("Network survey ended", 0) == 0) {
             result.has_summary = true;
-            std::sscanf(line.c_str(), "Network survey ended (Carrier: %d BCCh: %d)",
-                        &result.no_arfcn, &result.no_bcch);
+            auto carrier_pos = line.find("Carrier:");
+            auto bcch_pos = line.find("BCCh:");
+            if (carrier_pos != std::string::npos && bcch_pos != std::string::npos) {
+                const char* carrier_ptr = line.c_str() + carrier_pos + std::strlen("Carrier:");
+                const char* bcch_ptr = line.c_str() + bcch_pos + std::strlen("BCCh:");
+                while (*carrier_ptr == ' ') ++carrier_ptr;
+                while (*bcch_ptr == ' ') ++bcch_ptr;
+                result.no_arfcn = std::atoi(carrier_ptr);
+                result.no_bcch = std::atoi(bcch_ptr);
+            }
             continue;
         }
 
@@ -479,7 +487,12 @@ ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
         auto colon = response.body.find(':');
         if (colon != std::string::npos) {
             unsigned int nv = 0, gp = 0;
-            std::sscanf(response.body.c_str() + colon + 1, " %u,%u", &nv, &gp);
+            std::string params = response.body.substr(colon + 1);
+            auto comma = params.find(',');
+            if (comma != std::string::npos) {
+                nv = static_cast<unsigned int>(std::strtoul(params.substr(0, comma).c_str(), nullptr, 10));
+                gp = static_cast<unsigned int>(std::strtoul(params.substr(comma + 1).c_str(), nullptr, 10));
+            }
             //#ifdef ME301M1
             if(nv == 0)
                 tech = RadioTech::cat_m1;
@@ -606,11 +619,38 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
     auto status = controller_.send_raw("AT+CESQ", response);
     if (status == ModemStatus::ok) {
         // Response: +CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>
-        // rscp and ecno are WCDMA-only — skip them with %*d.
+        // rscp and ecno are WCDMA-only — ignored here.
         auto pos = response.body.find(':');
         if (pos != std::string::npos) {
-            std::sscanf(response.body.c_str() + pos + 1, " %d,%d,%*d,%*d,%d,%d",
-                        &sq.rssi, &sq.ber, &sq.rsrq, &sq.rsrp);
+            std::string values = response.body.substr(pos + 1);
+            std::vector<int> parsed;
+            size_t start = 0;
+            while (start <= values.size()) {
+                auto comma = values.find(',', start);
+                auto token = (comma == std::string::npos)
+                    ? values.substr(start)
+                    : values.substr(start, comma - start);
+
+                auto first = token.find_first_not_of(" \t");
+                auto last = token.find_last_not_of(" \t");
+                if (first == std::string::npos) {
+                    parsed.push_back(0);
+                } else {
+                    parsed.push_back(std::atoi(token.substr(first, last - first + 1).c_str()));
+                }
+
+                if (comma == std::string::npos) {
+                    break;
+                }
+                start = comma + 1;
+            }
+
+            if (parsed.size() >= 6) {
+                sq.rssi = parsed[0];
+                sq.ber  = parsed[1];
+                sq.rsrq = parsed[4];
+                sq.rsrp = parsed[5];
+            }
         }
     }
     return status;
@@ -800,8 +840,16 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         // Summary line: "Network survey ended (Carrier: <N> BCCh: <M>)"
         if (line.rfind("Network survey ended", 0) == 0) {
             result.has_summary = true;
-            std::sscanf(line.c_str(), "Network survey ended (Carrier: %d BCCh: %d)",
-                        &result.no_arfcn, &result.no_bcch);
+            auto carrier_pos = line.find("Carrier:");
+            auto bcch_pos = line.find("BCCh:");
+            if (carrier_pos != std::string::npos && bcch_pos != std::string::npos) {
+                const char* carrier_ptr = line.c_str() + carrier_pos + std::strlen("Carrier:");
+                const char* bcch_ptr = line.c_str() + bcch_pos + std::strlen("BCCh:");
+                while (*carrier_ptr == ' ') ++carrier_ptr;
+                while (*bcch_ptr == ' ') ++bcch_ptr;
+                result.no_arfcn = std::atoi(carrier_ptr);
+                result.no_bcch = std::atoi(bcch_ptr);
+            }
             continue;
         }
 
