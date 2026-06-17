@@ -20,6 +20,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(MODEM_BUILD_TESTS "Build unit tests" ON)
 option(MODEM_BUILD_SHARED "Build shared library" OFF)
 
+set(MODEM_LOG_LEVEL "3" CACHE STRING "Compile-time modem log level (0=none,1=err,2=wrn,3=inf,4=dbg)")
+set_property(CACHE MODEM_LOG_LEVEL PROPERTY STRINGS 0 1 2 3 4)
+set(NETWORK_LOG_LEVEL "3" CACHE STRING "Compile-time network log level (0=none,1=err,2=wrn,3=inf,4=dbg)")
+set_property(CACHE NETWORK_LOG_LEVEL PROPERTY STRINGS 0 1 2 3 4)
+
+if(NOT MODEM_LOG_LEVEL MATCHES "^[0-4]$")
+    message(FATAL_ERROR "MODEM_LOG_LEVEL must be 0..4")
+endif()
+
+if(NOT NETWORK_LOG_LEVEL MATCHES "^[0-4]$")
+    message(FATAL_ERROR "NETWORK_LOG_LEVEL must be 0..4")
+endif()
+
 # --- Detect platform ---
 if(CONFIG_ZEPHYR)
     set(MODEM_PLATFORM "zephyr")
@@ -66,6 +79,11 @@ target_include_directories(modem_xe310
 )
 
 target_compile_features(modem_xe310 PUBLIC cxx_std_17)
+target_compile_definitions(modem_xe310
+    PUBLIC
+        MODEM_LOG_LEVEL=${MODEM_LOG_LEVEL}
+        NETWORK_LOG_LEVEL=${NETWORK_LOG_LEVEL}
+)
 
 # --- Platform-specific link dependencies ---
 if(MODEM_PLATFORM STREQUAL "windows")

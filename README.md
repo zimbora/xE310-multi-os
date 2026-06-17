@@ -52,6 +52,28 @@ All code must compile and run correctly on every target platform.
 .\build_zephyr.ps1
 ```
 
+### Log Levels
+
+Log verbosity is selected at compile time with CMake cache variables:
+
+- `MODEM_LOG_LEVEL` for `MODEM_LOG_*`
+- `NETWORK_LOG_LEVEL` for `NETWORK_LOG_*`
+
+Supported values:
+
+- `0` = none
+- `1` = error
+- `2` = warning
+- `3` = info
+- `4` = debug
+
+Example:
+
+```bash
+cmake -S . -B build -DMODEM_LOG_LEVEL=4 -DNETWORK_LOG_LEVEL=2
+cmake --build build --config Release
+```
+
 ## Conventions
 
 - AT commands are sent as null-terminated strings over UART
