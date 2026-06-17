@@ -460,9 +460,6 @@ public:
 
     // --- Event Handlers ---
 
-    /// Handler for unsolicited result codes (URCs) from the modem. Should be called by ModemController when a URC is received.
-    ModemStatus parse_urc_handler(std::string urc);
-
     /// Returns the last registration info populated by parse_urc_handler or get_registration_status.
     const RegistrationInfo& registration_info() const;
 
