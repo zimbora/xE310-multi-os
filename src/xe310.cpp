@@ -599,6 +599,13 @@ ModemStatus xE310::set_registration_urc(bool enable) {
     return ModemStatus::ok;
 }
 
+ModemStatus xE310::delete_mru_list(MruListRat rat) {
+    AtResponse response;
+    auto cmd = "AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\"," +
+               std::to_string(static_cast<unsigned int>(rat));
+    return controller_.send_raw(cmd, response);
+}
+
 ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tech) {
     AtResponse response;
     std::string cmd = (tech == RadioTech::gsm) ? "AT+CREG?" : "AT+CEREG?";

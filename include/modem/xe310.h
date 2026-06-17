@@ -33,6 +33,13 @@ enum class RadioTech : int8_t {
     nb_iot = 9,
 };
 
+/// RAT selector for AT%TRSHCMD="BSPFILE","ERASE_LTEPP",<param>.
+enum class MruListRat : uint8_t {
+    lte_m = 0,
+    nb_iot = 2,
+    ntn = 5,
+};
+
 /// Network registration status for AT+CEREG.
 enum class RegStatus : uint8_t {
     not_registered = 0,
@@ -335,6 +342,9 @@ public:
 
     // AT+CEREG=2 — Enable network registration URC with location info and IP address.
     ModemStatus set_registration_urc(bool);
+
+    /// AT%TRSHCMD="BSPFILE","ERASE_LTEPP",<param> — Delete MRU list for selected RAT.
+    ModemStatus delete_mru_list(MruListRat rat);
 
     /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
     /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.

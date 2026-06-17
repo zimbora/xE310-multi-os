@@ -471,10 +471,26 @@ TEST_F(Xe310Test, SetBands) {
 
 TEST_F(Xe310Test, GetBands) {
     expect_command_ok("AT#BND?", "#BND: 0,0,524420,0,0");
-    std::string bands;
+    BandConfig bands;
     auto status = modem_->get_bands(bands);
     EXPECT_EQ(status, ModemStatus::ok);
-    EXPECT_FALSE(bands.empty());
+    EXPECT_EQ(bands.gsm_mask, 0u);
+    EXPECT_EQ(bands.umts_mask, 0u);
+    EXPECT_EQ(bands.lte_mask, 524420u);
+    EXPECT_EQ(bands.tdscdma_mask, 0u);
+    EXPECT_EQ(bands.lte_mask_over_64, 0u);
+}
+
+TEST_F(Xe310Test, GetBandsMalformedResponse) {
+    expect_command_ok("AT#BND?", "#BND: 0,0,524420");
+    BandConfig bands;
+    auto status = modem_->get_bands(bands);
+    EXPECT_EQ(status, ModemStatus::at_error);
+}
+
+TEST_F(Xe310Test, DeleteMruListNbIot) {
+    expect_command_ok("AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",2", "");
+    EXPECT_EQ(modem_->delete_mru_list(MruListRat::nb_iot), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusHome) {
