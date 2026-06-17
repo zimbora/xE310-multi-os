@@ -1,6 +1,6 @@
 # IPC Servers
 
-`main.cpp` exposes three TCP IPC servers so external processes can interact with the modem without linking the library directly. All servers bind to `INADDR_ANY` (port accessible from WSL2 and other local interfaces). Each server runs its accept/client loop on a dedicated background thread.
+`main.cpp` exposes four TCP IPC servers so external processes can interact with the modem without linking the library directly. All servers bind to `INADDR_ANY` (port accessible from WSL2 and other local interfaces). Each server runs its accept/client loop on a dedicated background thread.
 
 ---
 
@@ -11,6 +11,7 @@
 | 9000 | Data IPC | Line (newline-delimited) | Queue outbound data for TX; receive inbound data from the modem |
 | 9001 | CoAP IPC | Framed (`[uint16_t len LE][payload]`) | Send/receive CoAP binary frames |
 | 9002 | AT passthrough | Line (newline-delimited) | Forward raw AT commands to the modem and receive responses |
+| 9003 | RPC IPC | Line (newline-delimited) | Query runtime modem/network state and update config fields |
 
 ---
 
@@ -83,6 +84,61 @@ OK\r\n                                (or ERROR\r\n on failure)
 
 ---
 
+## Port 9003 — RPC IPC (line mode)
+
+**Usage:** `nc <host> 9003`
+
+This server provides a small text RPC protocol over newline-delimited TCP messages.
+
+### Command format
+
+```
+GET <RESOURCE>
+SET CONFIG <key>=<value>[,<key>=<value>...]
+SET NETWORKDISCONNECT [conn_id]
+```
+
+### Supported GET resources
+
+`CONFIG`, `MODEMINFO`, `SIMSTATUS`, `RADIOTECH`, `REGSTATUS`, `REGINFO`,
+`NETWORKINFO`, `SIGNALQUALITY`, `PSMMODE`, `CPSMSCONFIG`, `TELITCPSMSCONFIG`,
+`TELITCPSMSSTATUS`, `SURVEYRESULT`, `OPERATORLIST`, `SCANSURVEY`, `STATE`,
+`SERVERINFO [n]`, `ALL`
+
+Notes:
+- `GET SCANSURVEY` actively triggers a scan (`network.scan_networks()`) before returning JSON.
+- `GET SERVERINFO` returns all server slots; `GET SERVERINFO <n>` returns one slot (`1..MAX_SERVER_CONNECTIONS`).
+
+### Supported SET operations
+
+- `SET CONFIG <key>=<value>[,...]`
+  - Applies provided config fields via `rpc::apply_config_fields(...)`.
+  - Returns the updated full config JSON.
+- `SET NETWORKDISCONNECT [conn_id]`
+  - Calls `server_disconnect(conn_id)` and `network_disconnect()`.
+  - Returns JSON summary:
+    `{"resource":"NETWORKDISCONNECT","conn_id":<n>,"server_disconnect":<bool>,"network_disconnect":<bool>}`
+
+### Example session
+
+```
+GET STATE
+"idle_mode"
+
+GET CONFIG
+{"cid":1,"default_lte_bands":524416,...}
+
+SET CONFIG default_apn=my.apn
+{"cid":1,"default_lte_bands":524416,...,"default_apn":"my.apn",...}
+
+SET NETWORKDISCONNECT 1
+{"resource":"NETWORKDISCONNECT","conn_id":1,"server_disconnect":true,"network_disconnect":true}
+```
+
+Errors are returned as plain text starting with `ERROR:`.
+
+---
+
 ## Threading model
 
 ```
@@ -93,7 +149,8 @@ IPC thread (one per server, spawned by IpcServer::start())
   └─ accept loop
        └─ client loop  — recv / send on the accepted socket
             ├─ port 9000/9001: calls network.tx_write() + call_action()
-            └─ port 9002:      calls network.send_at_command() (blocks until reply)
+    ├─ port 9002:      calls network.send_at_command() (blocks until reply)
+    └─ port 9003:      calls RPC handler (GET/SET, returns text/JSON)
 ```
 
 `call_action()` is thread-safe (it only appends to the pending action queue). `send_at_command()` performs a synchronous UART exchange on the IPC thread; during this time the main thread must not read from UART — guaranteed by the `transparent_mode` state guard in `loop()`.
