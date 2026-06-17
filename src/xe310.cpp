@@ -10,6 +10,31 @@
 
 namespace modem {
 
+/// Parses a standard AT response body of the form "<prefix>: <f0>,<f1>,..."
+/// Returns a vector of trimmed (leading/trailing whitespace and quotes stripped) field strings.
+/// Returns an empty vector if no ':' separator is found in body.
+static std::vector<std::string> parse_at_params(const std::string& body) {
+    auto colon = body.find(':');
+    if (colon == std::string::npos) {
+        return {};
+    }
+    std::vector<std::string> fields;
+    const std::string params = body.substr(colon + 1);
+    size_t pos = 0;
+    while (pos <= params.size()) {
+        auto comma = params.find(',', pos);
+        auto token = (comma == std::string::npos)
+                     ? params.substr(pos)
+                     : params.substr(pos, comma - pos);
+        auto start = token.find_first_not_of(" \t\"");
+        auto end   = token.find_last_not_of(" \t\"");
+        fields.push_back(start == std::string::npos ? "" : token.substr(start, end - start + 1));
+        if (comma == std::string::npos) break;
+        pos = comma + 1;
+    }
+    return fields;
+}
+
 xE310::xE310(ModemController& controller)
     : controller_(controller) {}
 
@@ -138,9 +163,9 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
     auto result = controller_.send_raw("AT#QSS?", response);
     if (result == ModemStatus::ok) {
         // Response body: "#QSS: <mode>,<status>"
-        auto comma_pos = response.body.find(',');
-        if (comma_pos != std::string::npos) {
-            status = static_cast<SimStatus>(std::atoi(response.body.c_str() + comma_pos + 1));
+        auto fields = parse_at_params(response.body);
+        if (fields.size() >= 2) {
+            status = static_cast<SimStatus>(std::atoi(fields[1].c_str()));
         }
     }
     return result;
@@ -184,37 +209,16 @@ ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
         return status;
     }
     // Response body: "+CPSMS: <mode>,[<RAU>],[<GPRSTimer>],[<TAU>],[<ActiveTime>]"
-    auto colon = response.body.find(':');
-    if (colon == std::string::npos) {
+    auto fields = parse_at_params(response.body);
+    if (fields.empty()) {
         return ModemStatus::at_error;
     }
-    std::string params = response.body.substr(colon + 1);
 
-    auto strip_quotes = [](std::string s) -> std::string {
-        if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
-            s = s.substr(1, s.size() - 2);
-        }
-        return s;
-    };
-
-    // Tokenize on commas
-    std::vector<std::string> fields;
-    std::string_view sv = params;
-    while (!sv.empty()) {
-        auto comma = sv.find(',');
-        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
-        // trim leading space
-        auto start = token.find_first_not_of(' ');
-        fields.push_back(start == std::string_view::npos ? "" : std::string(token.substr(start)));
-        if (comma == std::string_view::npos) break;
-        sv = sv.substr(comma + 1);
-    }
-
-    if (fields.size() >= 1) cfg.mode = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
-    if (fields.size() >= 2) cfg.req_periodic_rau         = strip_quotes(fields[1]);
-    if (fields.size() >= 3) cfg.req_gprs_ready_timer      = strip_quotes(fields[2]);
-    if (fields.size() >= 4) cfg.req_periodic_tau          = strip_quotes(fields[3]);
-    if (fields.size() >= 5) cfg.req_active_time           = strip_quotes(fields[4]);
+    if (fields.size() >= 1) cfg.mode                  = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
+    if (fields.size() >= 2) cfg.req_periodic_rau       = fields[1];
+    if (fields.size() >= 3) cfg.req_gprs_ready_timer   = fields[2];
+    if (fields.size() >= 4) cfg.req_periodic_tau       = fields[3];
+    if (fields.size() >= 5) cfg.req_active_time        = fields[4];
 
     return ModemStatus::ok;
 }
@@ -262,29 +266,17 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
         return result;
     }
     // Response body: "#CPSMS: <status>,[<T3324>],[<T3412>],<psmVersion>,<psmThreshold>,<mode>"
-    auto colon = response.body.find(':');
-    if (colon == std::string::npos) {
+    auto fields = parse_at_params(response.body);
+    if (fields.empty()) {
         return ModemStatus::at_error;
     }
-    std::string params = response.body.substr(colon + 1);
 
-    std::vector<std::string> fields;
-    std::string_view sv = params;
-    while (!sv.empty()) {
-        auto comma = sv.find(',');
-        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
-        auto start = token.find_first_not_of(' ');
-        fields.push_back(start == std::string_view::npos ? "" : std::string(token.substr(start)));
-        if (comma == std::string_view::npos) break;
-        sv = sv.substr(comma + 1);
-    }
-
-    if (fields.size() >= 1) st.status        = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
+    if (fields.size() >= 1) st.status       = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
     if (fields.size() >= 2 && !fields[1].empty()) st.t3324 = static_cast<uint32_t>(std::atol(fields[1].c_str()));
     if (fields.size() >= 3 && !fields[2].empty()) st.t3412 = static_cast<uint32_t>(std::atol(fields[2].c_str()));
-    if (fields.size() >= 4) st.psm_version   = static_cast<uint8_t>(std::atoi(fields[3].c_str()));
-    if (fields.size() >= 5) st.psm_threshold  = static_cast<uint32_t>(std::atol(fields[4].c_str()));
-    if (fields.size() >= 6) st.mode           = static_cast<PsmMode>(std::atoi(fields[5].c_str()));
+    if (fields.size() >= 4) st.psm_version  = static_cast<uint8_t>(std::atoi(fields[3].c_str()));
+    if (fields.size() >= 5) st.psm_threshold = static_cast<uint32_t>(std::atol(fields[4].c_str()));
+    if (fields.size() >= 6) st.mode          = static_cast<PsmMode>(std::atoi(fields[5].c_str()));
 
     return ModemStatus::ok;
 }
@@ -304,9 +296,9 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
     auto status = controller_.send_raw("AT#PSMURC?", response);
     if (status == ModemStatus::ok) {
         // Response body: "#PSMURC: <en>"
-        auto colon = response.body.find(':');
-        if (colon != std::string::npos) {
-            enabled = std::atoi(response.body.c_str() + colon + 1) != 0;
+        auto fields = parse_at_params(response.body);
+        if (!fields.empty()) {
+            enabled = std::atoi(fields[0].c_str()) != 0;
         }
     }
     return status;
@@ -484,15 +476,10 @@ ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
     auto status = controller_.send_raw("AT#WS46?", response,5000);
     if (status == ModemStatus::ok) {
         // Response body: "#WS46: <n>,<GSM_P>"
-        auto colon = response.body.find(':');
-        if (colon != std::string::npos) {
-            unsigned int nv = 0, gp = 0;
-            std::string params = response.body.substr(colon + 1);
-            auto comma = params.find(',');
-            if (comma != std::string::npos) {
-                nv = static_cast<unsigned int>(std::strtoul(params.substr(0, comma).c_str(), nullptr, 10));
-                gp = static_cast<unsigned int>(std::strtoul(params.substr(comma + 1).c_str(), nullptr, 10));
-            }
+        auto fields = parse_at_params(response.body);
+        if (fields.size() >= 2) {
+            unsigned int nv = static_cast<unsigned int>(std::strtoul(fields[0].c_str(), nullptr, 10));
+            unsigned int gp = static_cast<unsigned int>(std::strtoul(fields[1].c_str(), nullptr, 10));
             //#ifdef ME301M1
             if(nv == 0)
                 tech = RadioTech::cat_m1;
@@ -530,43 +517,16 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
         return status;
     }
 
-    auto colon = response.body.find(':');
-    if (colon == std::string::npos) {
-        return ModemStatus::at_error;
-    }
-
-    std::string params = response.body.substr(colon + 1);
-    std::vector<std::string> fields;
-    size_t pos = 0;
-    while (pos <= params.size()) {
-        auto comma = params.find(',', pos);
-        if (comma == std::string::npos) {
-            fields.push_back(params.substr(pos));
-            break;
-        }
-        fields.push_back(params.substr(pos, comma - pos));
-        pos = comma + 1;
-    }
-
+    auto fields = parse_at_params(response.body);
     if (fields.size() < 5) {
         return ModemStatus::at_error;
     }
 
     auto parse_u64 = [](const std::string& s, uint64_t& out) -> bool {
-        auto start = s.find_first_not_of(" \t\"");
-        auto end = s.find_last_not_of(" \t\"");
-        if (start == std::string::npos) {
-            return false;
-        }
-
-        auto token = s.substr(start, end - start + 1);
-        char* parse_end = nullptr;
-        unsigned long long value = std::strtoull(token.c_str(), &parse_end, 10);
-        if (parse_end == token.c_str() || *parse_end != '\0') {
-            return false;
-        }
-
-        out = static_cast<uint64_t>(value);
+        char* end = nullptr;
+        unsigned long long v = std::strtoull(s.c_str(), &end, 10);
+        if (end == s.c_str() || *end != '\0') return false;
+        out = static_cast<uint64_t>(v);
         return true;
     };
 
@@ -615,48 +575,22 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
     }
 
     // Response body: "+CEREG: <mode>,<stat>[,<lac>,<ci>[,<AcT>]]"
-    auto colon_pos = response.body.find(':');
-    if (colon_pos == std::string::npos) {
+    auto fields = parse_at_params(response.body);
+    if (fields.size() < 2) {
         return ModemStatus::at_error;
     }
 
-    // Tokenize from after the colon
-    std::string params = response.body.substr(colon_pos + 1);
-
-    // Parse comma-separated fields
-    std::vector<std::string> fields;
-    size_t pos = 0;
-    while (pos < params.size()) {
-        auto comma = params.find(',', pos);
-        if (comma == std::string::npos) {
-            fields.push_back(params.substr(pos));
-            break;
-        }
-        fields.push_back(params.substr(pos, comma - pos));
-        pos = comma + 1;
-    }
-
-    // Trim leading/trailing whitespace and quotes from each field
-    auto trim = [](const std::string& s) -> std::string {
-        auto start = s.find_first_not_of(" \t\"");
-        auto end = s.find_last_not_of(" \t\"");
-        if (start == std::string::npos) return "";
-        return s.substr(start, end - start + 1);
-    };
-
-    if (fields.size() >= 2) {
-        info.mode = static_cast<uint8_t>(std::atoi(trim(fields[0]).c_str()));
-        info.stat = static_cast<RegStatus>(std::atoi(trim(fields[1]).c_str()));
-    }
+    info.mode = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
+    info.stat = static_cast<RegStatus>(std::atoi(fields[1].c_str()));
 
     if (fields.size() >= 4) {
-        info.lac = trim(fields[2]);
-        info.ci = trim(fields[3]);
+        info.lac = fields[2];
+        info.ci  = fields[3];
         info.has_location = true;
     }
 
     if (fields.size() >= 5) {
-        info.act = static_cast<RadioTech>(std::atoi(trim(fields[4]).c_str()));
+        info.act = static_cast<RadioTech>(std::atoi(fields[4].c_str()));
     }
 
     return ModemStatus::ok;
@@ -678,37 +612,12 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
     if (status == ModemStatus::ok) {
         // Response: +CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>
         // rscp and ecno are WCDMA-only — ignored here.
-        auto pos = response.body.find(':');
-        if (pos != std::string::npos) {
-            std::string values = response.body.substr(pos + 1);
-            std::vector<int> parsed;
-            size_t start = 0;
-            while (start <= values.size()) {
-                auto comma = values.find(',', start);
-                auto token = (comma == std::string::npos)
-                    ? values.substr(start)
-                    : values.substr(start, comma - start);
-
-                auto first = token.find_first_not_of(" \t");
-                auto last = token.find_last_not_of(" \t");
-                if (first == std::string::npos) {
-                    parsed.push_back(0);
-                } else {
-                    parsed.push_back(std::atoi(token.substr(first, last - first + 1).c_str()));
-                }
-
-                if (comma == std::string::npos) {
-                    break;
-                }
-                start = comma + 1;
-            }
-
-            if (parsed.size() >= 6) {
-                sq.rssi = parsed[0];
-                sq.ber  = parsed[1];
-                sq.rsrq = parsed[4];
-                sq.rsrp = parsed[5];
-            }
+        auto fields = parse_at_params(response.body);
+        if (fields.size() >= 6) {
+            sq.rssi = std::atoi(fields[0].c_str());
+            sq.ber  = std::atoi(fields[1].c_str());
+            sq.rsrq = std::atoi(fields[4].c_str());
+            sq.rsrp = std::atoi(fields[5].c_str());
         }
     }
     return status;
@@ -747,29 +656,14 @@ ModemStatus xE310::get_operator(std::string& oper) {
 
     // Response body: "+COPS: <mode>[,<format>,<oper>,<act>]"
     // If deregistered only <mode> is present — oper is left unchanged.
-    auto colon = response.body.find(':');
-    if (colon == std::string::npos) {
+    auto fields = parse_at_params(response.body);
+    if (fields.empty()) {
         return ModemStatus::at_error;
     }
 
-    std::string params = response.body.substr(colon + 1);
-    std::vector<std::string> fields;
-    size_t pos = 0;
-    while (pos <= params.size()) {
-        auto comma = params.find(',', pos);
-        if (comma == std::string::npos) {
-            fields.push_back(params.substr(pos));
-            break;
-        }
-        fields.push_back(params.substr(pos, comma - pos));
-        pos = comma + 1;
-    }
-
-    // fields[2] = <oper> (quoted string)
+    // fields[2] = <oper> (quoted string, already unquoted by parse_at_params)
     if (fields.size() >= 3) {
-        auto a = fields[2].find_first_not_of(" \t\"");
-        auto b = fields[2].find_last_not_of(" \t\"");
-        oper = (a == std::string::npos) ? "" : fields[2].substr(a, b - a + 1);
+        oper = fields[2];
     }
 
     return ModemStatus::ok;
@@ -1149,9 +1043,9 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     auto status = controller_.send_raw("AT#SS=" + std::to_string(conn_id), response);
     if (status == ModemStatus::ok) {
         // Response: #SS: <connId>,<state>
-        auto comma_pos = response.body.find(',');
-        if (comma_pos != std::string::npos) {
-            state = static_cast<uint8_t>(std::atoi(response.body.c_str() + comma_pos + 1));
+        auto fields = parse_at_params(response.body);
+        if (fields.size() >= 2) {
+            state = static_cast<uint8_t>(std::atoi(fields[1].c_str()));
         }
     }
     return status;
