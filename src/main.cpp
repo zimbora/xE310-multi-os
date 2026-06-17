@@ -278,7 +278,7 @@ int main(int argc, char* argv[]) {
 
     bool forcePSMMode = false;
     timer->start(15000, [&]() {
-        forcePSMMode = true;
+        //forcePSMMode = true;
     });
     
     uint32_t count = 0;
