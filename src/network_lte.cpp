@@ -55,16 +55,31 @@ void NetworkLte::set_pdp_retries(uint8_t n) { nPdpRetries = n; }
 
 bool NetworkLte::network_connect() {
     if(state_ == NetworkLteState::data_ready){
-        MODEM_LOG_INF("Already connected to network");
+        NETWORK_LOG_INF("Already connected to network");
         return true; // already connected to network
     }
     go_to_state(NetworkLteState::data_ready); // trigger attach flow in idle mode
     if(state_ == NetworkLteState::data_ready){
-        MODEM_LOG_INF("Successfully connected to network");
+        NETWORK_LOG_INF("Successfully connected to network");
         return true;
     } else {
-        MODEM_LOG_ERR("Failed to connect to network");
+        NETWORK_LOG_ERR("Failed to connect to network");
         return false;
+    }
+}
+
+bool NetworkLte::network_disconnect() {
+    
+    if(state_ == NetworkLteState::data_ready){
+        auto status = modem_.network_detach();
+        if(status == ModemStatus::ok)
+            change_state(NetworkLteState::network_detached);
+        else
+            NETWORK_LOG_ERR("Failed to detach from network");
+        return true; // already connected to network
+    }else{
+        NETWORK_LOG_ERR("Not currently connected to network, cannot disconnect");
+        return true;
     }
 }
 
@@ -78,29 +93,29 @@ void NetworkLte::new_connection(uint8_t conn_id, const std::string& protocol, co
 bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port) {
     
     if(state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode){
-        MODEM_LOG_INF("Not currently in data ready mode or PSM, connect to the network first");
+        NETWORK_LOG_INF("Not currently in data ready mode or PSM, connect to the network first");
         return false; // not connected to network, cannot connect to server
     }
 
-    MODEM_LOG_DBG("Attempting to connect to server with CID %d, protocol %s, IP %s, port %d", conn_id, protocol.c_str(), ip.c_str(), port); 
+    NETWORK_LOG_DBG("Attempting to connect to server with CID %d, protocol %s, IP %s, port %d", conn_id, protocol.c_str(), ip.c_str(), port); 
     if(state_ == NetworkLteState::data_ready ){
         uint8_t state = 0;
-        MODEM_LOG_DBG("Checking current connection state for CID %d before connecting to server", conn_id);
+        NETWORK_LOG_DBG("Checking current connection state for CID %d before connecting to server", conn_id);
         modem_.udp_status(conn_id, state);
         serverInfo[conn_id-1].state = static_cast<ServerState>(state);
         if( serverInfo[conn_id-1].state == ServerState::connected){
-            MODEM_LOG_INF("Already connected to a server, cannot connect to a different one without disconnecting first");
+            NETWORK_LOG_INF("Already connected to a server, cannot connect to a different one without disconnecting first");
             return true; // already connected to a server, cannot connect to a different one without disconnecting first
         }
         if( serverInfo[conn_id-1].state == ServerState::suspended){
-            MODEM_LOG_INF("Resuming suspended connection to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_INF("Resuming suspended connection to server at %s:%d", ip.c_str(), port);
             auto status = modem_.udp_close(conn_id);
             if(status != ModemStatus::ok){
-                MODEM_LOG_ERR("Failed to close connection to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_ERR("Failed to close connection to server at %s:%d", ip.c_str(), port);
                 return false;
             }else{
                 serverInfo[conn_id-1].state = ServerState::connected;
-                MODEM_LOG_INF("Successfully closed connection to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_INF("Successfully closed connection to server at %s:%d", ip.c_str(), port);
             }
         }
         /*
@@ -116,60 +131,60 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
         */
         if( serverInfo[conn_id-1].state == ServerState::dns_resolving ||
             serverInfo[conn_id-1].state == ServerState::connecting){
-            MODEM_LOG_ERR("Already in the process of connecting to a server, cannot connect to a different one without disconnecting first");
+            NETWORK_LOG_ERR("Already in the process of connecting to a server, cannot connect to a different one without disconnecting first");
             return false; // already in the process of connecting to a server, cannot connect to a different one without disconnecting first
         }
 
         if(protocol == "UDP"){
-            MODEM_LOG_INF("Connecting to UDP server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_INF("Connecting to UDP server at %s:%d", ip.c_str(), port);
             auto status = modem_.udp_open(conn_id, ip, port);
 
             if(status != ModemStatus::ok){
                 modem_.udp_close(conn_id); // ensure we close any half-open connection
-                MODEM_LOG_ERR("Failed to connect to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_ERR("Failed to connect to server at %s:%d", ip.c_str(), port);
                 return false;
             }else{
                 serverInfo[conn_id-1].state = ServerState::connected;
                 serverInfo[conn_id-1].protocol = protocol;
                 serverInfo[conn_id-1].address = ip;
                 serverInfo[conn_id-1].port = port;
-                MODEM_LOG_INF("Successfully connected to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_INF("Successfully connected to server at %s:%d", ip.c_str(), port);
                 return true;
             }
         }else if(protocol == "TCP"){
-            MODEM_LOG_WRN("TCP protocol is not currently supported, cannot connect to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_WRN("TCP protocol is not currently supported, cannot connect to server at %s:%d", ip.c_str(), port);
             return false; // TCP not supported, cannot connect
         }else{
-            MODEM_LOG_ERR("Unknown protocol for server connection, cannot connect to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_ERR("Unknown protocol for server connection, cannot connect to server at %s:%d", ip.c_str(), port);
             return false; // unknown protocol, cannot connect
         }
     } else {
-        MODEM_LOG_ERR("Failed to connect to network, cannot connect to server");
+        NETWORK_LOG_ERR("Failed to connect to network, cannot connect to server");
         return false;
     }
 }
 
 bool NetworkLte::server_disconnect(uint8_t conn_id) {
     if(serverInfo[conn_id-1].state != ServerState::connected){
-        MODEM_LOG_ERR("Not currently connected to a server, cannot disconnect");
+        NETWORK_LOG_ERR("Not currently connected to a server, cannot disconnect");
         return false; // not connected to server, cannot disconnect
     }
     if(serverInfo[conn_id-1].protocol == "UDP"){
-        MODEM_LOG_INF("Attempting to disconnect from UDP server at %s:%d", serverInfo[conn_id-1].address.c_str(), serverInfo[conn_id-1].port);
+        NETWORK_LOG_INF("Attempting to disconnect from UDP server at %s:%d", serverInfo[conn_id-1].address.c_str(), serverInfo[conn_id-1].port);
         auto status = modem_.udp_close(conn_id);
         if(status != ModemStatus::ok){
-            MODEM_LOG_ERR("Failed to disconnect from UDP server for CID %d", conn_id);
+            NETWORK_LOG_ERR("Failed to disconnect from UDP server for CID %d", conn_id);
             return false;
         }else{
             serverInfo[conn_id-1].state = ServerState::disconnected;
-            MODEM_LOG_INF("Successfully disconnected from UDP server for CID %d", conn_id);
+            NETWORK_LOG_INF("Successfully disconnected from UDP server for CID %d", conn_id);
             return true;
         }
     } else if(serverInfo[conn_id-1].protocol == "TCP"){
-        MODEM_LOG_WRN("TCP protocol is not currently supported, cannot disconnect from server at %s:%d", serverInfo[conn_id-1].address.c_str(), serverInfo[conn_id-1].port);
+        NETWORK_LOG_WRN("TCP protocol is not currently supported, cannot disconnect from server at %s:%d", serverInfo[conn_id-1].address.c_str(), serverInfo[conn_id-1].port);
         return false; // TCP not supported, cannot disconnect
     } else {
-        MODEM_LOG_ERR("Unknown protocol for server connection, cannot disconnect");
+        NETWORK_LOG_ERR("Unknown protocol for server connection, cannot disconnect");
         return false;
     }
 }
@@ -187,7 +202,7 @@ QueueError NetworkLte::rx_read(uint8_t conn_id, QueueMessage& msg) {
 bool NetworkLte::force_PSM(){
 
     if(state_ != NetworkLteState::data_ready){
-        MODEM_LOG_INF("Currently not in data ready state, cannot force PSM mode");
+        NETWORK_LOG_INF("Currently not in data ready state, cannot force PSM mode");
         return false;
     }
 
@@ -205,9 +220,9 @@ bool NetworkLte::force_PSM(){
     std::vector<Operator> operatorList;
     auto status = modem_.get_available_operators(operatorList);
     for(const auto& op : operatorList){
-        MODEM_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
+        NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
         if(op.act == RadioTech::cat_m1 || op.act == RadioTech::nb_iot)
-            MODEM_LOG_INF("Operator %s supports tech with PSM, trying to register to it", op.long_name.c_str());
+            NETWORK_LOG_INF("Operator %s supports tech with PSM, trying to register to it", op.long_name.c_str());
         modem_.set_operator_manual(op.numeric, op.act);
         RegistrationInfo reg_info;
         RadioTech tech = RadioTech::unknown;
@@ -216,28 +231,28 @@ bool NetworkLte::force_PSM(){
             TelitCpsmsStatus tCpsmsStatus;
             status = modem_.get_telit_psm(tCpsmsStatus);
             if(status != ModemStatus::ok){
-                MODEM_LOG_ERR("Failed to get PSM configuration");
+                NETWORK_LOG_ERR("Failed to get PSM configuration");
                 continue; // try next operator
             }
-            MODEM_LOG_INF("PSM status for operator %s: status=%d, mode=%d, t3412=%d, t3324=%d psm_version=%d, psm_threshold=%d", op.long_name.c_str(), tCpsmsStatus.status, static_cast<int>(tCpsmsStatus.mode), tCpsmsStatus.t3412, tCpsmsStatus.t3324, static_cast<int>(tCpsmsStatus.psm_version), tCpsmsStatus.psm_threshold);
+            NETWORK_LOG_INF("PSM status for operator %s: status=%d, mode=%d, t3412=%d, t3324=%d psm_version=%d, psm_threshold=%d", op.long_name.c_str(), tCpsmsStatus.status, static_cast<int>(tCpsmsStatus.mode), tCpsmsStatus.t3412, tCpsmsStatus.t3324, static_cast<int>(tCpsmsStatus.psm_version), tCpsmsStatus.psm_threshold);
             if(tCpsmsStatus.mode == PsmMode::disable){
-                MODEM_LOG_WRN("PSM is disabled for this operator, cannot enter PSM mode");
+                NETWORK_LOG_WRN("PSM is disabled for this operator, cannot enter PSM mode");
                 continue; // try next operator
             }
             else if(tCpsmsStatus.t3412 == 0 && tCpsmsStatus.t3324 == 0){
-                MODEM_LOG_WRN("PSM timers are not configured for this operator, cannot enter PSM mode");
+                NETWORK_LOG_WRN("PSM timers are not configured for this operator, cannot enter PSM mode");
                 continue; // try next operator
             }else if(tCpsmsStatus.t3412 == lteConfig.psm_t3412 && tCpsmsStatus.t3324 == lteConfig.psm_t3324){
-                MODEM_LOG_INF("PSM timers were accepted by network for this operator");
+                NETWORK_LOG_INF("PSM timers were accepted by network for this operator");
                 psmModeAttached = true;
                 break;
             }else{
-                MODEM_LOG_WRN("PSM timers were not accepted by network for this operator, but different timers were granted");
+                NETWORK_LOG_WRN("PSM timers were not accepted by network for this operator, but different timers were granted");
                 psmModeAttached = true;
                 break;
             }
         }else{
-            MODEM_LOG_WRN("Failed to register to operator %s, cannot enter PSM mode", op.long_name.c_str());
+            NETWORK_LOG_WRN("Failed to register to operator %s, cannot enter PSM mode", op.long_name.c_str());
             continue; // try next operator
         }
     }
@@ -263,14 +278,14 @@ bool NetworkLte::enter_sleep() {
     if(state_ != NetworkLteState::sleep_mode && state_ != NetworkLteState::off_mode && state_ != NetworkLteState::switched_off) {
         go_to_state(NetworkLteState::sleep_mode);
     }else{
-        MODEM_LOG_INF("Already in sleep mode or off mode");
+        NETWORK_LOG_INF("Already in sleep mode or off mode");
         return true; // already in sleep or off mode, consider it a success
     }
     if(state_ != NetworkLteState::sleep_mode && state_ != NetworkLteState::off_mode && state_ != NetworkLteState::switched_off) {
-        MODEM_LOG_ERR("Failed to enter sleep mode or off mode");
+        NETWORK_LOG_ERR("Failed to enter sleep mode or off mode");
         return false; // failed to enter sleep mode
     }
-    MODEM_LOG_INF("Successfully entered sleep mode");
+    NETWORK_LOG_INF("Successfully entered sleep mode");
     return true; // in off mode or switched off, consider it a success
 }
 
@@ -279,7 +294,7 @@ bool NetworkLte::enter_transparent_mode() {
         go_to_state(NetworkLteState::transparent_mode);
     }
     if(state_ == NetworkLteState::transparent_mode){
-        MODEM_LOG_INF("Successfully entered transparent mode");
+        NETWORK_LOG_INF("Successfully entered transparent mode");
         return true;
     }
     return false;    
@@ -287,13 +302,13 @@ bool NetworkLte::enter_transparent_mode() {
 
 bool NetworkLte::exit_transparent_mode() {
     if( state_ != NetworkLteState::transparent_mode) {
-        MODEM_LOG_ERR("Not currently in transparent mode, cannot exit");
+        NETWORK_LOG_ERR("Not currently in transparent mode, cannot exit");
         return false; // not in transparent mode, cannot exit
         
     }
     go_to_state(NetworkLteState::idle_mode); // after exiting transparent mode, go back to idle mode to restart normal flow
     if(state_ != NetworkLteState::transparent_mode){
-        MODEM_LOG_INF("Successfully exited transparent mode");
+        NETWORK_LOG_INF("Successfully exited transparent mode");
         return true;
     }
     return false;    
@@ -301,7 +316,7 @@ bool NetworkLte::exit_transparent_mode() {
 
 bool NetworkLte::leave_transparent_mode() {
     if (state_ != NetworkLteState::transparent_mode) {
-        MODEM_LOG_ERR("Not currently in transparent mode, cannot leave");
+        NETWORK_LOG_ERR("Not currently in transparent mode, cannot leave");
         return false;
     }
     // Use the action handler so URCs are properly re-enabled before state changes.
@@ -313,21 +328,21 @@ bool NetworkLte::leave_transparent_mode() {
 bool NetworkLte::send_at_command(std::string command, std::string& response, uint32_t timeout_ms) {
     // send command
     if(state_ != NetworkLteState::transparent_mode){
-        MODEM_LOG_ERR("Modem is not in transparent mode, cannot send AT command");
+        NETWORK_LOG_ERR("Modem is not in transparent mode, cannot send AT command");
         response = "ERROR: Not in transparent mode";
         return false;
     }
     auto status = modem_.send_at_command(command, response, timeout_ms);
     if( status == ModemStatus::timeout){
-        MODEM_LOG_ERR("Timeout while sending AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Timeout while sending AT command: %s", command.c_str());
         response = "ERROR: Timeout";
         return false;
     }else if (status == ModemStatus::busy) {
-        MODEM_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Failed to send AT command: %s", command.c_str());
         response = "ERROR: Busy";
         return false;
     }else if (status != ModemStatus::ok) {
-        MODEM_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Failed to send AT command: %s", command.c_str());
         response = "ERROR: Failed to send AT command";
         return false;
     }
@@ -339,12 +354,12 @@ bool NetworkLte::update_modem(std::string firmware_url){
         go_to_state(NetworkLteState::modem_fota);
     }
     if(state_ != NetworkLteState::modem_fota){
-        MODEM_LOG_ERR("Failed to enter modem FOTA mode");
+        NETWORK_LOG_ERR("Failed to enter modem FOTA mode");
         return false;
     }else{
         // send AT commands to perform FOTA update, e.g. set server, start download, etc.
-        MODEM_LOG_INF("Successfully entered modem FOTA mode, starting update process");
-        MODEM_LOG_WRN("Note: FOTA update commands are not implemented");
+        NETWORK_LOG_INF("Successfully entered modem FOTA mode, starting update process");
+        NETWORK_LOG_WRN("Note: FOTA update commands are not implemented");
         fColdBoot = true; // after FOTA, we can consider the next boot as the first one to re-apply configuration
         go_to_state(NetworkLteState::setup_mode); // after FOTA, go back to setup mode to re-apply configuration and re-attach to network
         return true;
@@ -368,11 +383,11 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
     // modem events change state without further action, actions are forbidden here for now!!
     switch(get_event()){
         case NetworkLteEvent::psm_enter:
-            MODEM_LOG_INF("Entered PSM mode");
+            NETWORK_LOG_INF("Entered PSM mode");
             change_state(NetworkLteState::sleep_mode);
             break;
         case NetworkLteEvent::psm_exit: 
-            MODEM_LOG_INF("Exited PSM mode");
+            NETWORK_LOG_INF("Exited PSM mode");
             if(prev_state_ == NetworkLteState::data_ready)
                 change_state(NetworkLteState::data_ready); // assume we were in sleep mode with an active connection, we can go directly to data ready state
             else{
@@ -381,7 +396,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             break;
         case NetworkLteEvent::network_detached:
             {
-                MODEM_LOG_ERR("Network PDP detached, no longer registered to network");
+                NETWORK_LOG_ERR("Network PDP detached, no longer registered to network");
                 uint8_t i = 0;
                 while(i < MAX_SERVER_CONNECTIONS){
                     serverInfo[i++].state = ServerState::disconnected;
@@ -390,12 +405,12 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             }
             break;
         case NetworkLteEvent::network_attached:
-            MODEM_LOG_INF("Network PDP attached, registered to network");
+            NETWORK_LOG_INF("Network PDP attached, registered to network");
             change_state(NetworkLteState::pdp_context_closed); // after network attach, we can assume any previous PDP context is now deactivated, so we can go to context deactivated state and trigger PDP activation flow from there
             break;
         case NetworkLteEvent::context_closed:
             {
-                MODEM_LOG_ERR("PDP context closed by network");
+                NETWORK_LOG_ERR("PDP context closed by network");
                 uint8_t i = 0;
                 while(i < MAX_SERVER_CONNECTIONS){
                     serverInfo[i++].state = ServerState::disconnected;
@@ -404,12 +419,12 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             }
             break;
         case NetworkLteEvent::context_opened:
-            MODEM_LOG_INF("Network PDP context opened, IP address assigned: %s", networkInfo.ip_address.c_str());
+            NETWORK_LOG_INF("Network PDP context opened, IP address assigned: %s", networkInfo.ip_address.c_str());
             change_state(NetworkLteState::data_ready);
             break;
         case NetworkLteEvent::data_available: 
             {
-                MODEM_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
+                NETWORK_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
                 uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
                 std::vector<uint8_t> buf;
                 if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
@@ -417,7 +432,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                     if (message_queue_) {
                         auto err = message_queue_->rx_push(conn, buf.data(), buf.size());
                         if (err != QueueError::ok) {
-                            MODEM_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
+                            NETWORK_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
                         }
                     }
                     std::string payload(buf.begin(), buf.end());
@@ -504,13 +519,13 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
         loop(target_state); // process events and update state until we reach the target state
         // In a real implementation, we might want to add a timeout here to avoid infinite loops in case of unexpected conditions.
         // if timeout reached:
-        //     MODEM_LOG_ERR("Timeout while trying to transition from %s to %s", state_to_str(state_), state_to_str(target_state));
+        //     NETWORK_LOG_ERR("Timeout while trying to transition from %s to %s", state_to_str(state_), state_to_str(target_state));
         //     return false;
         switch(event_){
             case NetworkLteEvent::network_error:
             case NetworkLteEvent::attach_error:
             case NetworkLteEvent::context_error:
-                MODEM_LOG_ERR("Error event received while trying to transition to target state, aborting transition");
+                NETWORK_LOG_ERR("Error event received while trying to transition to target state, aborting transition");
                 return false; // if we receive an error event during the transition, we can consider the transition failed and return false
             default:
                 break; // for other events, we will just continue processing
@@ -523,7 +538,7 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
 void NetworkLte::execute_actions() {
     ModemAction action = get_action();
     if(action != ModemAction::none)
-        MODEM_LOG_DBG("Executing action: %s", action_to_str(action));
+        NETWORK_LOG_DBG("Executing action: %s", action_to_str(action));
     switch(action){
         case ModemAction::reboot:
             {
@@ -541,10 +556,10 @@ void NetworkLte::execute_actions() {
                 while(true){
                     auto status = modem_.at_ok();
                     if(status != ModemStatus::ok){
-                        MODEM_LOG_ERR("Modem is not responsive");
+                        NETWORK_LOG_ERR("Modem is not responsive");
                         //call_action(ModemAction::reboot); // try rebooting the modem to recover responsiveness
                     }else{
-                        MODEM_LOG_INF("Modem is responsive");
+                        NETWORK_LOG_INF("Modem is responsive");
                         change_state(NetworkLteState::idle_mode); // if modem is responsive, we can go to idle mode and continue with the flow
                         call_action(ModemAction::query_network_status); // trigger radio setup to start attach flow
                         break;
@@ -573,11 +588,11 @@ void NetworkLte::execute_actions() {
                 {
                     auto status = modem_.at_ok();
                     if (status != ModemStatus::ok) {
-                        MODEM_LOG_ERR("Failed to power on modem");
+                        NETWORK_LOG_ERR("Failed to power on modem");
                         change_state(NetworkLteState::switched_off);
                         break;
                     }
-                    MODEM_LOG_INF("Modem powered on and responsive");
+                    NETWORK_LOG_INF("Modem powered on and responsive");
                     change_state(NetworkLteState::idle_mode);
                     call_action(ModemAction::setup_radio); // trigger radio setup to start attach flow
                     fColdBoot = true; 
@@ -588,7 +603,7 @@ void NetworkLte::execute_actions() {
         case ModemAction::power_off:
             {
                 //modem_.power_off();
-                MODEM_LOG_INF("Fake power off!!");
+                NETWORK_LOG_INF("Fake power off!!");
                 change_state(NetworkLteState::switched_off);
             }
             break;
@@ -602,7 +617,7 @@ void NetworkLte::execute_actions() {
         case ModemAction::switch_off_radio:
             {
                 //modem_.shutdown();
-                MODEM_LOG_INF("Fake shutdown!!");
+                NETWORK_LOG_INF("Fake shutdown!!");
                 change_state(NetworkLteState::off_mode);
             }
             break;
@@ -616,11 +631,11 @@ void NetworkLte::execute_actions() {
             {
                 // drive GPIO0 + CFUN=1, Warm boot
                 if(prev_state_ == NetworkLteState::data_ready){
-                    MODEM_LOG_INF("Waking up from sleep mode, previous state was data ready, trying to go back to data ready state");
+                    NETWORK_LOG_INF("Waking up from sleep mode, previous state was data ready, trying to go back to data ready state");
                     change_state(NetworkLteState::data_ready); // assuming we were in sleep mode with an active connection, we can try to go back to data ready state directly
                     call_action(ModemAction::query_network_status);
                 } else {
-                    MODEM_LOG_INF("Waking up from sleep mode, previous state was not data ready, going to idle mode to restart attach flow");
+                    NETWORK_LOG_INF("Waking up from sleep mode, previous state was not data ready, going to idle mode to restart attach flow");
                     fWarmBoot = true;
                     change_state(NetworkLteState::idle_mode); // after waking up, we can go back to idle mode and check network status to continue with the flow
                     call_action(ModemAction::setup_radio); // trigger attach flow in idle mode
@@ -665,7 +680,7 @@ void NetworkLte::execute_actions() {
                         fChangeBands = false;
                         auto status = modem_.set_lte_bands(lteConfig.default_lte_bands);
                         if (status != ModemStatus::ok) {
-                            MODEM_LOG_ERR("Failed to set LTE bands");
+                            NETWORK_LOG_ERR("Failed to set LTE bands");
                             // flag error
                         }else fReboot = true;
                     }
@@ -673,7 +688,7 @@ void NetworkLte::execute_actions() {
                         fChangeRAT = false;
                         auto status = modem_.set_iot_tech(lteConfig.default_iot_tech);
                         if (status != ModemStatus::ok) {
-                            MODEM_LOG_ERR("Failed to set IoT technology");
+                            NETWORK_LOG_ERR("Failed to set IoT technology");
                             // flag error
                         }else fReboot = true;
                     }
@@ -682,7 +697,7 @@ void NetworkLte::execute_actions() {
                         call_action(ModemAction::reboot);
                 } else {
                     if(fWarmBoot || fColdBoot){
-                        MODEM_LOG_INF("Re-applying modem configuration after boot");
+                        NETWORK_LOG_INF("Re-applying modem configuration after boot");
                         fWarmBoot = false;
                         fColdBoot = false;
                         TelitCpsmsConfig cfg = {
@@ -728,7 +743,7 @@ void NetworkLte::execute_actions() {
                 else if( regInfo.stat == RegStatus::unknown ){
                     // How to deal with it ?
                     // let's assume we are connected for now
-                    MODEM_LOG_DBG("Registration status unknown..");
+                    NETWORK_LOG_DBG("Registration status unknown..");
                     change_state(NetworkLteState::network_detached); // start attach with fallback config
                 }
             }
@@ -744,68 +759,99 @@ void NetworkLte::execute_actions() {
                     auto status = modem_.get_iot_tech(current_tech,gsm_priority);
                     if(status == ModemStatus::ok){
                         if(current_tech != lteConfig.default_iot_tech){
-                            MODEM_LOG_WRN("Current IoT technology %d is different from default config %d, changing it to default config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.default_iot_tech));
+                            NETWORK_LOG_WRN("Current IoT technology %d is different from default config %d, changing it to default config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.default_iot_tech));
                             fChangeRAT = true;
                         }
                     }
-                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
-                    if(status == ModemStatus::ok){
-                        if(regInfo.apn != lteConfig.default_apn){
-                            MODEM_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
-                            auto status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
-                            if (status != ModemStatus::ok) {
-                                MODEM_LOG_ERR("Failed to set APN");
-                                // flag error
-                            }
-                        }
-                    }
                     // check default bands
-                    std::string bands;
+                    BandConfig bands;
                     status = modem_.get_bands(bands);
-                    /*
+                    
                     if(status == ModemStatus::ok){
-                        if(bands != lteConfig.default_lte_bands){
-                            MODEM_LOG_WRN("Current LTE bands %s are different from default config %s, changing it to default config and rebooting to apply", networkInfo.lte_bands.c_str(), lteConfig.default_lte_bands.c_str());
+                        if(bands.lte_mask != lteConfig.default_lte_bands){
+                            NETWORK_LOG_WRN("Current LTE bands %llu are different from default config %llu, changing it to default config and rebooting to apply", static_cast<unsigned long long>(bands.lte_mask), static_cast<unsigned long long>(lteConfig.default_lte_bands));
                             fChangeBands = true;
                         }
                     }
-                    */
+                    
                     // if any diferent set it to default config and reboot to apply, then start attach flow in idle mode
                     if(fChangeRAT || fChangeBands){
                         call_action(ModemAction::setup_radio); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
                         break;
                     }
 
-                    MODEM_LOG_INF("Starting network attach with default configuration");
-                    status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
+                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
                     if(status == ModemStatus::ok){
-                        change_state(NetworkLteState::network_attaching);
-                    }else{
-                        MODEM_LOG_ERR("Failed to set operator manual for fallback configuration");
-                        // flag error and stay in the same state to retry later
-                    }
-                } else if(nAttachRetries == 1){
-                    MODEM_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
-                    auto status = modem_.set_operator_auto();
-                    if(status == ModemStatus::ok){
-                        change_state(NetworkLteState::network_attaching);
-                    }else{
-                        MODEM_LOG_ERR("Failed to set operator manual for fallback configuration");
-                        // flag error and stay in the same state to retry later
-                    }
-
-                    if(regInfo.apn != lteConfig.fallback_apn){
-                        MODEM_LOG_WRN("Current APN %s is different from fallback config %s, changing it to fallback config", regInfo.apn.c_str(), lteConfig.fallback_apn.c_str());
-                        auto status = modem_.set_apn(lteConfig.cid, lteConfig.fallback_apn);
-                        if (status != ModemStatus::ok) {
-                            MODEM_LOG_ERR("Failed to set APN");
-                            // flag error
+                        if(regInfo.apn != lteConfig.default_apn){
+                            NETWORK_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
+                            auto status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
+                            if (status != ModemStatus::ok) {
+                                NETWORK_LOG_ERR("Failed to set APN");
+                                // flag error
+                            }
                         }
                     }
-                }
-                else if(nAttachRetries < lteConfig.max_attach_retries){
-                    MODEM_LOG_ERR("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
-                    // end operation if we have reached max attach retries
+
+                    NETWORK_LOG_INF("Starting network attach with default configuration");
+                    change_state(NetworkLteState::network_attaching);
+                    status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
+                    if(status != ModemStatus::ok){
+                        NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
+                        change_state(NetworkLteState::network_detached);
+                        // flag error and stay in the same state to retry later
+                    }
+                } else if(nAttachRetries < lteConfig.max_attach_retries){
+                    NETWORK_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
+                    
+                    // check fallback iot_tech
+                    RadioTech current_tech;
+                    uint8_t gsm_priority;
+                    auto status = modem_.get_iot_tech(current_tech,gsm_priority);
+                    if(status == ModemStatus::ok){
+                        if(current_tech != lteConfig.fallback_iot_tech){
+                            NETWORK_LOG_WRN("Current IoT technology %d is different from fallback config %d, changing it to fallback config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.fallback_iot_tech));
+                            fChangeRAT = true;
+                        }
+                    }
+                    // check fallback bands
+                    BandConfig bands;
+                    status = modem_.get_bands(bands);
+                    
+                    if(status == ModemStatus::ok){
+                        if(bands.lte_mask != lteConfig.fallback_lte_bands){
+                            NETWORK_LOG_WRN("Current LTE bands %llu are different from fallback config %llu, changing it to fallback config and rebooting to apply", static_cast<unsigned long long>(bands.lte_mask), static_cast<unsigned long long>(lteConfig.fallback_lte_bands));
+                            fChangeBands = true;
+                        }
+                    }
+                    
+                    // if any diferent set it to fallback config and reboot to apply, then start attach flow in idle mode
+                    if(fChangeRAT || fChangeBands){
+                        call_action(ModemAction::setup_radio); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
+                        break;
+                    }
+                    
+                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
+                    if(status == ModemStatus::ok){
+                        if(regInfo.apn != lteConfig.fallback_apn){
+                            NETWORK_LOG_WRN("Current APN %s is different from fallback config %s, changing it to fallback config", regInfo.apn.c_str(), lteConfig.fallback_apn.c_str());
+                            status = modem_.set_apn(lteConfig.cid, lteConfig.fallback_apn);
+                            if (status != ModemStatus::ok) {
+                                NETWORK_LOG_ERR("Failed to set APN");
+                                // flag error
+                            }
+                        }
+                    }
+                    
+                    change_state(NetworkLteState::network_attaching);
+                    status = modem_.set_operator_auto();
+                    if(status != ModemStatus::ok){
+                        NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
+                        // flag error and stay in the same state to retry later
+                        change_state(NetworkLteState::network_detached);
+                    }
+
+                }else{
+                    NETWORK_LOG_ERR("Max attach retries reached, giving up");
                     change_state(NetworkLteState::done);
                     on_event(NetworkLteEvent::attach_error); // flag attach error to trigger power off in the next step
                 }
@@ -822,10 +868,10 @@ void NetworkLte::execute_actions() {
                 } else {
                     auto status = modem_.get_ip_address(lteConfig.cid, networkInfo.ip_address);
                     if(status != ModemStatus::ok){
-                        MODEM_LOG_ERR("Failed to get IP address");
+                        NETWORK_LOG_ERR("Failed to get IP address");
                         // flag error and stay in the same state to retry later
                     } else {
-                        MODEM_LOG_DBG("Already registered with IP: %s", networkInfo.ip_address.c_str());
+                        NETWORK_LOG_DBG("Already registered with IP: %s", networkInfo.ip_address.c_str());
                         change_state(NetworkLteState::data_ready); // already have IP, we can go directly to data ready state
                     }
                 }
@@ -838,7 +884,7 @@ void NetworkLte::execute_actions() {
                     //change_state(NetworkLteState::pdp_context_opening);
                     change_state(NetworkLteState::data_ready);
                 } else {
-                    MODEM_LOG_ERR("Failed to activate PDP context");
+                    NETWORK_LOG_ERR("Failed to activate PDP context");
                     // flag error and stay in the same state to retry later
                 }
                 break;
@@ -848,7 +894,7 @@ void NetworkLte::execute_actions() {
         case ModemAction::send_data:
             {
                 if (state_ != NetworkLteState::data_ready) {
-                    MODEM_LOG_WRN("Ignoring send_data action: state=%d (requires data_ready)", static_cast<int>(state_));
+                    NETWORK_LOG_WRN("Ignoring send_data action: state=%d (requires data_ready)", static_cast<int>(state_));
                     break;
                 }
                 // Drain TX queues for all connection IDs, checking protocol per conn_id
@@ -857,22 +903,22 @@ void NetworkLte::execute_actions() {
                         continue;
                     }
                     if (serverInfo[id - 1].state != ServerState::connected) {
-                        MODEM_LOG_WRN("conn_id %d not connected, state: %d skipping TX drain", id, static_cast<int>(serverInfo[id - 1].state));
+                        NETWORK_LOG_WRN("conn_id %d not connected, state: %d skipping TX drain", id, static_cast<int>(serverInfo[id - 1].state));
                         continue;
                     }
                     QueueMessage msg;
                     while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
-                        MODEM_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.data.size()));
-                        MODEM_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
+                        NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.data.size()));
+                        NETWORK_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
                         if (serverInfo[id - 1].protocol == "UDP") {
                             auto status = modem_.udp_send(id, msg.data);
                             if (status != ModemStatus::ok) {
-                                MODEM_LOG_ERR("Failed to send UDP data on conn_id %d", id);
+                                NETWORK_LOG_ERR("Failed to send UDP data on conn_id %d", id);
                             }
                         } else if (serverInfo[id - 1].protocol == "TCP") {
-                            MODEM_LOG_WRN("TCP send not implemented for conn_id %d", id);
+                            NETWORK_LOG_WRN("TCP send not implemented for conn_id %d", id);
                         } else {
-                            MODEM_LOG_ERR("Unknown protocol for conn_id %d, cannot send", id);
+                            NETWORK_LOG_ERR("Unknown protocol for conn_id %d, cannot send", id);
                         }
                     }
                 }
@@ -884,9 +930,9 @@ void NetworkLte::execute_actions() {
                 std::vector<uint8_t> buf;
                 if (modem_.udp_receive(lteConfig.conn_id, buf) == ModemStatus::ok && !buf.empty()) {
                     std::string payload(buf.begin(), buf.end());
-                    MODEM_LOG_INF("Received data: %s", payload.c_str());
+                    NETWORK_LOG_INF("Received data: %s", payload.c_str());
                 } else {
-                    MODEM_LOG_ERR("Failed to read data or no data available");
+                    NETWORK_LOG_ERR("Failed to read data or no data available");
                     // flag error
                 }
             }
@@ -905,7 +951,7 @@ void NetworkLte::execute_actions() {
                 modem_.set_psm_urc(false); // disable PSM URCs in transparent mode to avoid interfering with raw data reception
                 modem_.set_registration_urc(false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
                 modem_.set_pdp_urc(false); // disable PDP URCs in transparent mode to avoid interfering with raw data reception
-                MODEM_LOG_INF("Modem in transparent mode (ready to receive AT commands)");
+                NETWORK_LOG_INF("Modem in transparent mode (ready to receive AT commands)");
             }
             break;
 
@@ -913,7 +959,7 @@ void NetworkLte::execute_actions() {
             {
                 // switch modem to normal mode, in this mode we use UDP send/receive functions for data transmission
                 // do any task needed to switch to normal mode (e.g. close existing PDP context, set up new PDP context with normal mode settings, etc.)
-                MODEM_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
+                NETWORK_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
                 modem_.set_psm_urc(true); // enable PSM URCs in normal mode
                 modem_.set_registration_urc(true); // enable registration URCs in normal mode
                 modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
@@ -941,28 +987,28 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         case NetworkLteState::network_attaching:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                MODEM_LOG_INF("Time spent in network_attaching state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in network_attaching state: %d ms", elasped);
             }
             st_timer->stop(); // stop attach timer if running
             break;
         case NetworkLteState::pdp_context_opening:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                MODEM_LOG_INF("Time spent in pdp_context_opening state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in pdp_context_opening state: %d ms", elasped);
             }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::data_ready:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                MODEM_LOG_INF("Time spent in data_ready state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in data_ready state: %d ms", elasped);
             }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::transparent_mode:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                MODEM_LOG_INF("Time spent in transparent_mode state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in transparent_mode state: %d ms", elasped);
             }
             st_timer->stop(); // stop any timers related to transparent mode if needed
             break;
@@ -998,14 +1044,14 @@ void NetworkLte::change_state(NetworkLteState new_state) {
                     networkInfo.psm_version = state.psm_version;
                     networkInfo.psm_threshold = state.psm_threshold;
                     */
-                    MODEM_LOG_INF("PSM state: %d", state.mode);
-                    MODEM_LOG_INF("PSM t3324: %d", state.t3324);
-                    MODEM_LOG_INF("PSM t3412: %d", state.t3412);
-                    MODEM_LOG_INF("PSM psm_version: %d", state.psm_version);
-                    MODEM_LOG_INF("PSM psm_threshold: %d", state.psm_threshold);
-                    MODEM_LOG_INF("PSM mode: %d", state.mode);
+                    NETWORK_LOG_INF("PSM state: %d", state.mode);
+                    NETWORK_LOG_INF("PSM t3324: %d", state.t3324);
+                    NETWORK_LOG_INF("PSM t3412: %d", state.t3412);
+                    NETWORK_LOG_INF("PSM psm_version: %d", state.psm_version);
+                    NETWORK_LOG_INF("PSM psm_threshold: %d", state.psm_threshold);
+                    NETWORK_LOG_INF("PSM mode: %d", state.mode);
                 } else {
-                    MODEM_LOG_ERR("Failed to get PSM status");
+                    NETWORK_LOG_ERR("Failed to get PSM status");
                 }
                 st_timer->start(lteConfig.data_ready_timeout_sec*1000, [this](){on_timer_expired(); }); // example timeout, adjust as needed
             }
@@ -1019,7 +1065,7 @@ void NetworkLte::change_state(NetworkLteState new_state) {
     
     switch(state_){
         case NetworkLteState::network_detached:
-            MODEM_LOG_INF("State changed to network_detached, resetting network info and server states");
+            NETWORK_LOG_INF("State changed to network_detached, resetting network info and server states");
             networkInfo = {}; // reset network info
             {
                 uint8_t i = 0;
@@ -1030,7 +1076,7 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             call_action(ModemAction::attach_network); // trigger attach flow to try to re-attach to network
             break;
         case NetworkLteState::pdp_context_closed:
-            MODEM_LOG_INF("State changed to pdp_context_closed, resetting IP address and server states");
+            NETWORK_LOG_INF("State changed to pdp_context_closed, resetting IP address and server states");
             networkInfo.ip_address = ""; // reset IP address
             {
                 uint8_t i = 0;
@@ -1044,26 +1090,64 @@ void NetworkLte::change_state(NetworkLteState new_state) {
 }
 
 void NetworkLte::handle_urc(const std::string& urc) {
-    // +CREG / +CEREG: <n>,<stat>  or  <stat>
-    MODEM_LOG_DBG("Handle URC: %s", urc.c_str());
+    // +CREG / +CEREG URC can be either:
+    //   +CEREG: <stat>,<tac>,<ci>,<AcT>...
+    // or (query-style payload):
+    //   +CEREG: <n>,<stat>...
+    NETWORK_LOG_DBG("Handle URC: %s", urc.c_str());
     if (urc.rfind("+CREG:", 0) == 0 || urc.rfind("+CEREG:", 0) == 0) {
-        // stat field is the last token (after optional <n>,)
+        // Extract numeric CSV fields after ':' while preserving empty/quoted fields.
         int stat = -1;
-        auto comma = urc.rfind(',');
         auto colon = urc.find(':');
-        std::string val = (comma != std::string::npos)
-            ? urc.substr(comma + 1)
-            : urc.substr(colon + 1);
-        // strip whitespace
-        while (!val.empty() && (val.front() == ' ' || val.front() == '\r')) val.erase(0, 1);
-        if (!val.empty()) stat = val.front() - '0';
+        if (colon == std::string::npos) {
+            return;
+        }
+
+        auto trim = [](std::string s) {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.erase(0, 1);
+            while (!s.empty() && (s.back()  == ' ' || s.back()  == '\t' || s.back()  == '\r')) s.pop_back();
+            return s;
+        };
+
+        auto is_uint = [](const std::string& s) {
+            if (s.empty()) return false;
+            for (char c : s) {
+                if (c < '0' || c > '9') return false;
+            }
+            return true;
+        };
+
+        std::string payload = urc.substr(colon + 1);
+        std::vector<std::string> fields;
+        size_t pos = 0;
+        while (pos <= payload.size()) {
+            auto comma = payload.find(',', pos);
+            if (comma == std::string::npos) {
+                fields.push_back(trim(payload.substr(pos)));
+                break;
+            }
+            fields.push_back(trim(payload.substr(pos, comma - pos)));
+            pos = comma + 1;
+        }
+
+        if (!fields.empty() && is_uint(fields[0])) {
+            // Default for URC format: first field is <stat>.
+            stat = std::atoi(fields[0].c_str());
+
+            // Query-style payload is <n>,<stat> with both numeric first fields.
+            // In this case use second field as registration status.
+            if (fields.size() > 1 && is_uint(fields[1])) {
+                int first = std::atoi(fields[0].c_str());
+                int second = std::atoi(fields[1].c_str());
+                if (first >= 0 && first <= 5 && second >= 0 && second <= 10) {
+                    stat = second;
+                }
+            }
+        }
+
         if (stat == 1 || stat == 5) {          // registered home / roaming
             on_event(NetworkLteEvent::network_attached);
-        } else if (stat == 0 || stat == 3) {   // not registered / denied
-            TelitCpsmsStatus status;
-            modem_.get_telit_psm(status); // update PSM config in info struct after applying it to modem
-            MODEM_LOG_INF("PSM status: %d", status.mode);
-            MODEM_LOG_INF("PSM status: %d", status.mode);
+        } else if (stat == 3) {   // denied
             on_event(NetworkLteEvent::network_detached);
         }
         return;
@@ -1095,13 +1179,13 @@ void NetworkLte::handle_urc(const std::string& urc) {
     }
     // SRING: <conn_id>  →  new data available on socket
     if (urc.rfind("SRING:", 0) == 0) {
-        MODEM_LOG_DBG("Data available URC received");
+        NETWORK_LOG_DBG("Data available URC received");
         std::string body = urc.substr(6);
         auto s = body.find_first_not_of(' ');
         if (s != std::string::npos) {
             int id = std::stoi(body.substr(s));
             last_data_conn_id_ = static_cast<uint8_t>(id);
-            MODEM_LOG_DBG("Data available on id: %d", id);
+            NETWORK_LOG_DBG("Data available on id: %d", id);
             on_event(NetworkLteEvent::data_available);
         }
         return;
@@ -1223,16 +1307,16 @@ static const char* action_to_str(ModemAction a) {
 }
 
 void NetworkLte::log_state() const {
-    MODEM_LOG_DBG("new state: %s", state_to_str(state_));
+    NETWORK_LOG_DBG("new state: %s", state_to_str(state_));
 }
 
 void NetworkLte::log_event() const {
-    MODEM_LOG_DBG("new event: %s", event_to_str(event_));
+    NETWORK_LOG_DBG("new event: %s", event_to_str(event_));
 }
 
 void NetworkLte::log_action() const {
     if(modem_action_ != ModemAction::none)
-        MODEM_LOG_DBG("new action: %s", action_to_str(modem_action_));
+        NETWORK_LOG_DBG("new action: %s", action_to_str(modem_action_));
 }
 
 // --- Timer ---
@@ -1278,10 +1362,10 @@ bool NetworkLte::check_status_response(ModemStatus status) {
         return true;
     }else{
         if(status == ModemStatus::timeout){
-            MODEM_LOG_ERR("No response from modem, it might be unresponsive or powered off");
+            NETWORK_LOG_ERR("No response from modem, it might be unresponsive or powered off");
             on_event(NetworkLteEvent::at_command_no_response); // flag a generic network error for now, we can have more specific error events if needed (e.g. attach_error, context_error, etc.) and trigger them based on the current state and action that was being performed when the error occurred
         } else {    
-            MODEM_LOG_ERR("Modem command failed with status: %d", static_cast<int>(status));
+            NETWORK_LOG_ERR("Modem command failed with status: %d", static_cast<int>(status));
         }
     }
     return false;

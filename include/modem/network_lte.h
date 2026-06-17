@@ -225,6 +225,8 @@ public:
     
     /// register on network
     bool network_connect();
+    bool network_disconnect();
+    
     /// Configure a new server connection with the given parameters. Does not trigger any state changes by itself.
     void new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port);
     /// Connect to the network and server using the current configuration. Blocks until connected or max retries reached.
