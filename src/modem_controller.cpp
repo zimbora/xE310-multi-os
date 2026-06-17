@@ -275,21 +275,19 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     uint8_t buffer[512];
     size_t bytes_read = 0;
     auto err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, timeout_ms);
-    if (err != UartError::ok || bytes_read == 0) {
+    if (err == UartError::ok && bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+        std::string raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
+
+        MODEM_LOG_DBG("<< (URC poll raw): %s [%zu bytes]", raw_chunk.c_str(), bytes_read);
+
+        // Append and parse only complete CRLF-terminated lines. This avoids losing
+        // URCs split across reads, e.g. "S" then "RING: 1\r\n".
+        urc_rx_buffer_ += raw_chunk;
+    } else if (err != UartError::timeout && err != UartError::ok) {
+        // On UART errors, return what we have without modifying buffers.
         return urcs;
     }
-
-    buffer[bytes_read] = '\0';
-    std::string raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
-
-    MODEM_LOG_DBG("<< (URC poll raw): %s [%zu bytes]", raw_chunk.c_str(), bytes_read);
-    MODEM_LOG_DBG("<< (URC buffer before): size=%zu", urc_rx_buffer_.size());
-
-    // Append and parse only complete CRLF-terminated lines. This avoids losing
-    // URCs split across reads, e.g. "S" then "RING: 1\r\n".
-    urc_rx_buffer_ += raw_chunk;
-
-    MODEM_LOG_DBG("<< (URC buffer after append): size=%zu", urc_rx_buffer_.size());
 
     size_t end = 0;
     while ((end = urc_rx_buffer_.find("\r\n")) != std::string::npos) {
@@ -301,7 +299,7 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
         }
         for (const char* const* p = kPrefixes; *p; ++p) {
             if (line.rfind(*p, 0) == 0) {
-                MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
+                //MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
                 urcs.push_back(line);
                 break;
             }
