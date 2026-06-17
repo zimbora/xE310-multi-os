@@ -143,6 +143,7 @@ int main(int argc, char* argv[]) {
     // RPC server on port 9003 (line mode, nc compatible).
     // GET <RESOURCE>         → JSON response.
     // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
+    // SET NETWORKDISCONNECT [conn_id] → close server socket and move modem to sleep/off path.
     // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
     //            SIGNALQUALITY, PSMMODE, CPSMSCONFIG, TELITCPSMSCONFIG, TELITCPSMSSTATUS,
     //            SURVEYRESULT, OPERATORLIST, SCANSURVEY, SERVERINFO [n], STATE, ALL
@@ -227,6 +228,29 @@ int main(int argc, char* argv[]) {
             auto sp2    = sub.find(' ');
             std::string res  = sub.substr(0, sp2 == std::string::npos ? sub.size() : sp2);
             std::string args = sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
+            if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
+                int conn_id = lteConfig.conn_id;
+                if (!args.empty()) {
+                    try {
+                        conn_id = std::stoi(args);
+                    } catch (...) {
+                        return "ERROR: invalid conn_id";
+                    }
+                    if (conn_id < 1 || conn_id > MAX_SERVER_CONNECTIONS) {
+                        return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
+                    }
+                }
+
+                bool server_ok = network.server_disconnect(static_cast<uint8_t>(conn_id));
+                bool network_ok = network.network_disconnect();
+
+                return std::string("{")
+                    + "\"resource\":\"NETWORKDISCONNECT\"," 
+                    + "\"conn_id\":" + std::to_string(conn_id) + ","
+                    + "\"server_disconnect\":" + (server_ok ? "true" : "false") + ","
+                    + "\"network_disconnect\":" + (network_ok ? "true" : "false")
+                    + "}";
+            }
             if (res == "CONFIG") {
                 auto cfg = network.config();
                 if (rpc::apply_config_fields(args, cfg)) {
@@ -238,7 +262,7 @@ int main(int argc, char* argv[]) {
             return "ERROR: unknown SET resource";
         }
 
-        return "ERROR: unknown command — use GET <resource> or SET CONFIG <key>=<value>";
+        return "ERROR: unknown command — use GET <resource>, SET CONFIG <key>=<value>, or SET NETWORKDISCONNECT [conn_id]";
     };
 
     rpc_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
