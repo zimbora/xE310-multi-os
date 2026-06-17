@@ -134,13 +134,18 @@ int main() {
         MODEM_LOG_INF("PSM Mode: %d", static_cast<int>(psm_status.mode));
     }
 
-    std::string bands;
+    modem::BandConfig bands;
     status = modem.get_bands(bands);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve band configuration");
         log_status(status);
     } else {
-        MODEM_LOG_INF("Band Configuration: %s", bands.c_str());
+        MODEM_LOG_INF("Band Configuration - GSM: %llu, UMTS: %llu, LTE: %llu, TDSCDMA: %llu, LTE>64: %llu",
+                      static_cast<unsigned long long>(bands.gsm_mask),
+                      static_cast<unsigned long long>(bands.umts_mask),
+                      static_cast<unsigned long long>(bands.lte_mask),
+                      static_cast<unsigned long long>(bands.tdscdma_mask),
+                      static_cast<unsigned long long>(bands.lte_mask_over_64));
     }   
 
     modem::RegistrationInfo reg_info;

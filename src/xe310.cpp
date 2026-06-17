@@ -522,14 +522,65 @@ ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte
     return controller_.send_raw(cmd, response);
 }
 
-ModemStatus xE310::get_bands(std::string& bands) {
+ModemStatus xE310::get_bands(BandConfig& bands) {
     AtResponse response;
     // Response: #BND: <band>,<UMTS_band>,<LTE_band>,<TDSCDMA_band>,<LTE_band_over_64>
     auto status = controller_.send_raw("AT#BND?", response);
-    if (status == ModemStatus::ok) {
-        bands = response.body;
+    if (status != ModemStatus::ok) {
+        return status;
     }
-    return status;
+
+    auto colon = response.body.find(':');
+    if (colon == std::string::npos) {
+        return ModemStatus::at_error;
+    }
+
+    std::string params = response.body.substr(colon + 1);
+    std::vector<std::string> fields;
+    size_t pos = 0;
+    while (pos <= params.size()) {
+        auto comma = params.find(',', pos);
+        if (comma == std::string::npos) {
+            fields.push_back(params.substr(pos));
+            break;
+        }
+        fields.push_back(params.substr(pos, comma - pos));
+        pos = comma + 1;
+    }
+
+    if (fields.size() < 5) {
+        return ModemStatus::at_error;
+    }
+
+    auto parse_u64 = [](const std::string& s, uint64_t& out) -> bool {
+        auto start = s.find_first_not_of(" \t\"");
+        auto end = s.find_last_not_of(" \t\"");
+        if (start == std::string::npos) {
+            return false;
+        }
+
+        auto token = s.substr(start, end - start + 1);
+        char* parse_end = nullptr;
+        unsigned long long value = std::strtoull(token.c_str(), &parse_end, 10);
+        if (parse_end == token.c_str() || *parse_end != '\0') {
+            return false;
+        }
+
+        out = static_cast<uint64_t>(value);
+        return true;
+    };
+
+    BandConfig parsed;
+    if (!parse_u64(fields[0], parsed.gsm_mask) ||
+        !parse_u64(fields[1], parsed.umts_mask) ||
+        !parse_u64(fields[2], parsed.lte_mask) ||
+        !parse_u64(fields[3], parsed.tdscdma_mask) ||
+        !parse_u64(fields[4], parsed.lte_mask_over_64)) {
+        return ModemStatus::at_error;
+    }
+
+    bands = parsed;
+    return ModemStatus::ok;
 }
 
 ModemStatus xE310::set_registration_urc(bool enable) {

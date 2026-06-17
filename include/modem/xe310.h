@@ -227,6 +227,15 @@ struct CsurvResult {
     int  no_bcch     = 0;  ///< Number of found BCCH
 };
 
+/// AT#BND bitmask configuration.
+struct BandConfig {
+    uint64_t gsm_mask         = 0;
+    uint64_t umts_mask        = 0;
+    uint64_t lte_mask         = 0;
+    uint64_t tdscdma_mask     = 0;
+    uint64_t lte_mask_over_64 = 0;
+};
+
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -342,7 +351,7 @@ public:
                           uint64_t tdscdma_mask = 0, uint64_t lte_mask_over_64 = 0);
 
     /// AT#BND? — Read current band configuration.
-    ModemStatus get_bands(std::string& bands);
+    ModemStatus get_bands(BandConfig& bands);
 
     /// AT#WS46 — Select IoT technology (takes effect after reboot).
     /// <n>: 0=CAT-M1, 1=NB-IoT, 2=CAT-M1 preferred+NB-IoT, 3=CAT-M1+NB-IoT preferred.
