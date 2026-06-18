@@ -291,7 +291,7 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
 
 ModemStatus xE310::disable_telit_psm() {
     AtResponse response;
-    return controller_.send_raw("AT#CPSMS=", response);
+    return controller_.send_raw("AT#CPSMS=0", response);
 }
 
 ModemStatus xE310::set_psm_urc(bool enable) {
