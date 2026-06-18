@@ -144,6 +144,7 @@ int main(int argc, char* argv[]) {
     // GET <RESOURCE>         → JSON response.
     // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
     // SET NETWORKDISCONNECT [conn_id] → close server socket and move modem to sleep/off path.
+    // SET FORCEPSM → force modem into PSM mode immediately.
     // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
     //            SIGNALQUALITY, PSMMODE, CPSMSCONFIG, TELITCPSMSCONFIG, TELITCPSMSSTATUS,
     //            SURVEYRESULT, OPERATORLIST, SCANSURVEY, SERVERINFO [n], STATE, ALL
@@ -258,6 +259,10 @@ int main(int argc, char* argv[]) {
                     return rpc::config_to_json(network.config());
                 }
                 return "ERROR: no valid fields provided (use key=value pairs)";
+            }
+            if (res == "FORCEPSM") {
+                network.force_PSM();
+                return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
             }
             return "ERROR: unknown SET resource";
         }

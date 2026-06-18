@@ -25,6 +25,8 @@ Each line sent to the server is one request. Each response is one JSON line foll
 ```
 GET <RESOURCE>
 SET CONFIG <key>=<value> [<key>=<value> ...]
+SET NETWORKDISCONNECT [conn_id]
+SET FORCEPSM
 ```
 
 Commands are case-insensitive. Values in `SET CONFIG` preserve their original case (important for strings like `default_apn`).
@@ -127,6 +129,24 @@ SET CONFIG default_apn=internet plmn=26806
 
 ---
 
+## SET FORCEPSM
+
+Forces the modem into PSM (Power Saving Mode) immediately, regardless of the current network state.
+
+```
+SET FORCEPSM
+```
+
+Response:
+
+```json
+{"resource":"FORCEPSM","status":"ok"}
+```
+
+> **Note:** This triggers `network.force_PSM()` which transitions the modem to sleep. The IPC servers remain running on Windows, but modem AT communication will be unavailable until the modem wakes up.
+
+---
+
 ## Error responses
 
 All errors are returned as a plain string (not JSON):
@@ -134,7 +154,7 @@ All errors are returned as a plain string (not JSON):
 | Response | Cause |
 |---|---|
 | `ERROR: unknown GET resource` | Unrecognised resource name |
-| `ERROR: unknown SET resource` | Only `CONFIG` is settable |
+| `ERROR: unknown SET resource` | Only `CONFIG`, `NETWORKDISCONNECT`, and `FORCEPSM` are settable |
 | `ERROR: no valid fields provided (use key=value pairs)` | Malformed or unrecognised keys |
 | `ERROR: invalid conn_id` | Non-numeric argument to `GET SERVERINFO <n>` |
 | `ERROR: conn_id out of range (1-5)` | Index outside `[1, MAX_SERVER_CONNECTIONS]` |
