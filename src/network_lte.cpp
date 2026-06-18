@@ -1146,7 +1146,7 @@ void NetworkLte::handle_urc(const std::string& urc) {
         }
 
         if (stat == 1 || stat == 5) {          // registered home / roaming
-            on_event(NetworkLteEvent::network_attached);
+            call_action(ModemAction::query_pdp_context); // trigger PDP activation flow
         } else if (stat == 3) {   // denied
             on_event(NetworkLteEvent::network_detached);
         }
