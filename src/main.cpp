@@ -143,6 +143,7 @@ int main(int argc, char* argv[]) {
     // RPC server on port 9003 (line mode, nc compatible).
     // GET <RESOURCE>         → JSON response.
     // SET CONFIG <key>=<val> → update NetworkLteConfig fields, returns updated config as JSON.
+    // SET NETWORKCONNECT → attach to network and activate PDP context.
     // SET NETWORKDISCONNECT [conn_id] → close server socket and move modem to sleep/off path.
     // SET FORCEPSM → force modem into PSM mode immediately.
     // Resources: CONFIG, MODEMINFO, SIMSTATUS, RADIOTECH, REGSTATUS, REGINFO, NETWORKINFO,
@@ -229,6 +230,13 @@ int main(int argc, char* argv[]) {
             auto sp2    = sub.find(' ');
             std::string res  = sub.substr(0, sp2 == std::string::npos ? sub.size() : sp2);
             std::string args = sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
+            if (res == "NETWORKCONNECT" || res == "CONNECT") {
+                bool ok = network.network_connect();
+                return std::string("{")
+                    + "\"resource\":\"NETWORKCONNECT\","
+                    + "\"network_connect\":" + (ok ? "true" : "false")
+                    + "}";
+            }
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
                 int conn_id = lteConfig.conn_id;
                 if (!args.empty()) {

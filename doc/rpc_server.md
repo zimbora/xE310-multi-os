@@ -25,6 +25,7 @@ Each line sent to the server is one request. Each response is one JSON line foll
 ```
 GET <RESOURCE>
 SET CONFIG <key>=<value> [<key>=<value> ...]
+SET NETWORKCONNECT
 SET NETWORKDISCONNECT [conn_id]
 SET FORCEPSM
 ```
@@ -129,6 +130,30 @@ SET CONFIG default_apn=internet plmn=26806
 
 ---
 
+## SET NETWORKCONNECT
+
+Triggers the full attach flow: powers on the radio if needed, attaches to the network, and activates the PDP context. Blocks until `data_ready` state is reached or an error/timeout occurs.
+
+Alias: `SET CONNECT`
+
+```
+SET NETWORKCONNECT
+```
+
+Response:
+
+```json
+{"resource":"NETWORKCONNECT","network_connect":true}
+```
+
+On failure:
+
+```json
+{"resource":"NETWORKCONNECT","network_connect":false}
+```
+
+---
+
 ## SET FORCEPSM
 
 Forces the modem into PSM (Power Saving Mode) immediately, regardless of the current network state.
@@ -154,7 +179,7 @@ All errors are returned as a plain string (not JSON):
 | Response | Cause |
 |---|---|
 | `ERROR: unknown GET resource` | Unrecognised resource name |
-| `ERROR: unknown SET resource` | Only `CONFIG`, `NETWORKDISCONNECT`, and `FORCEPSM` are settable |
+| `ERROR: unknown SET resource` | Only `CONFIG`, `NETWORKCONNECT`, `NETWORKDISCONNECT`, and `FORCEPSM` are settable |
 | `ERROR: no valid fields provided (use key=value pairs)` | Malformed or unrecognised keys |
 | `ERROR: invalid conn_id` | Non-numeric argument to `GET SERVERINFO <n>` |
 | `ERROR: conn_id out of range (1-5)` | Index outside `[1, MAX_SERVER_CONNECTIONS]` |
