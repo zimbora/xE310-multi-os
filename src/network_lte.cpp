@@ -715,7 +715,11 @@ void NetworkLte::execute_actions() {
                             false,
                             60 // min duration to enter PSM in seconds
                         };
-                        modem_.set_telit_psm(cfg);
+                        if(!lteConfig.psm_enable)
+                            modem_.disable_telit_psm();
+                        else
+                            modem_.set_telit_psm(cfg);
+
                         modem_.set_psm_urc(true); // enable PSM URCs in normal mode
                         modem_.set_registration_urc(true); // enable registration URCs in normal mode
                         modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
