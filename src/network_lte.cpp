@@ -70,7 +70,7 @@ bool NetworkLte::network_connect() {
 
 bool NetworkLte::network_disconnect() {
     
-    if(state_ == NetworkLteState::data_ready){
+    if(true || state_ == NetworkLteState::data_ready){
         auto status = modem_.network_detach();
         if(status == ModemStatus::ok)
             change_state(NetworkLteState::network_detached);
