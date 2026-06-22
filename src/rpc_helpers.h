@@ -334,7 +334,9 @@ inline bool apply_config_fields(const std::string& args, modem::NetworkLteConfig
                           : args.substr(eq + 1, sp - eq - 1);
         pos = (sp == std::string::npos) ? args.size() : sp + 1;
 
+#ifdef __cpp_exceptions
         try {
+#endif
             if      (key == "cid")                     { cfg.cid                     = (uint8_t)std::stoul(val);  changed = true; }
             else if (key == "attach_timeout_sec")       { cfg.attach_timeout_sec       = (uint8_t)std::stoul(val);  changed = true; }
             else if (key == "pdp_timeout_sec")          { cfg.pdp_timeout_sec          = (uint8_t)std::stoul(val);  changed = true; }
@@ -353,9 +355,11 @@ inline bool apply_config_fields(const std::string& args, modem::NetworkLteConfig
             else if (key == "psm_t3412")                { cfg.psm_t3412                = std::stoul(val);           changed = true; }
             else if (key == "psm_t3324")                { cfg.psm_t3324                = std::stoul(val);           changed = true; }
             else if (key == "conn_id")                  { cfg.conn_id                  = (uint8_t)std::stoul(val);  changed = true; }
+#ifdef __cpp_exceptions
         } catch (const std::exception&) {
             // skip invalid values silently
         }
+#endif
     }
     return changed;
 }
