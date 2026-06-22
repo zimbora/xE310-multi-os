@@ -32,6 +32,13 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Build succeeded."
 
+$OutDir = Join-Path $PSScriptRoot "out"
+if (Test-Path $OutDir) {
+    Remove-Item -Recurse -Force $OutDir
+}
+Copy-Item (Join-Path $BuildDir "Release") -Destination $OutDir -Recurse
+Write-Host "Copied Release/ to out/"
+
 if ($Test) {
     Write-Host "Running tests..."
     ctest --test-dir $BuildDir --output-on-failure -C $Config
