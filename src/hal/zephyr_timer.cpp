@@ -1,6 +1,6 @@
 #include "modem/timer_interface.h"
 
-#ifdef MODEM_PLATFORM_ZEPHYR
+#if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
 #include <zephyr/kernel.h>
 
@@ -94,4 +94,4 @@ void delay_ms(uint32_t ms) {
 
 } // namespace modem
 
-#endif // MODEM_PLATFORM_ZEPHYR
+#endif // PLATFORM_ZEPHYR || __ZEPHYR__

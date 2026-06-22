@@ -18,7 +18,7 @@
 #define NETWORK_LOG_LEVEL MODEM_LOG_LEVEL
 #endif
 
-#ifdef PLATFORM_ZEPHYR
+#if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>

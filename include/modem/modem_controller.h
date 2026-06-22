@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#ifdef PLATFORM_ZEPHYR
+#if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 #include <zephyr/kernel.h>
 #else
 #include <chrono>
@@ -62,7 +62,7 @@ public:
 private:
     class IoMutex {
     public:
-#ifdef PLATFORM_ZEPHYR
+#if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
         IoMutex() { k_mutex_init(&m_); }
         bool lock_for(uint32_t timeout_ms) { return k_mutex_lock(&m_, K_MSEC(timeout_ms)) == 0; }
         void unlock() { k_mutex_unlock(&m_); }

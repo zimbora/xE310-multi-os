@@ -1,6 +1,6 @@
 #include "modem/message_queue_interface.h"
 
-#ifdef MODEM_PLATFORM_ZEPHYR
+#if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
 #include <zephyr/kernel.h>
 #include <cstring>
@@ -37,7 +37,7 @@ public:
 
     size_t tx_count(uint8_t conn_id) const override {
         if (conn_id < 1 || conn_id > max_connections) return 0;
-        return k_msgq_num_used_get(&tx_queues_[conn_id - 1]);
+        return k_msgq_num_used_get(const_cast<struct k_msgq*>(&tx_queues_[conn_id - 1]));
     }
 
     QueueError rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
@@ -50,7 +50,7 @@ public:
 
     size_t rx_count(uint8_t conn_id) const override {
         if (conn_id < 1 || conn_id > max_connections) return 0;
-        return k_msgq_num_used_get(&rx_queues_[conn_id - 1]);
+        return k_msgq_num_used_get(const_cast<struct k_msgq*>(&rx_queues_[conn_id - 1]));
     }
 
 private:
