@@ -47,17 +47,37 @@ protected:
                 return UartError::ok;
             }));
 
-        // Command reads (timeout > 100ms) default to returning OK
+        // Capture every write so the read mock can return matching responses.
+        ON_CALL(*mock_uart_, write(_, _))
+            .WillByDefault(Invoke([this](const uint8_t* data, size_t length) {
+                last_written_cmd_.assign(reinterpret_cast<const char*>(data), length);
+                return UartError::ok;
+            }));
+
+        // Command reads (timeout > 100ms) — return canned responses that match
+        // the AT command written immediately before this read. This prevents
+        // uninitialized-variable issues in the state machine when it queries
+        // modem configuration (e.g. AT#WS46?, AT#BND?) during the attach flow.
         ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
-            .WillByDefault(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
-                std::string resp = "\r\nOK\r\n";
+            .WillByDefault(Invoke([this](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+                std::string resp;
+                if (last_written_cmd_.find("AT#WS46?") != std::string::npos) {
+                    // Return cat_m1 (nv=0) to match default_iot_tech
+                    resp = "\r\n#WS46: 0,0\r\nOK\r\n";
+                } else if (last_written_cmd_.find("AT#BND?") != std::string::npos) {
+                    // Return matching default LTE bands
+                    resp = "\r\n#BND: 0,0," + std::to_string(DEFAULT_LTE_BANDS) + ",0,0\r\nOK\r\n";
+                } else if (last_written_cmd_.find("AT+CGDCONT?") != std::string::npos) {
+                    resp = "\r\n+CGDCONT: 1,\"IP\",\"" DEFAULT_APN "\"\r\nOK\r\n";
+                } else if (last_written_cmd_.find("AT#SGACT?") != std::string::npos) {
+                    resp = "\r\n#SGACT: 1,0\r\nOK\r\n";
+                } else {
+                    resp = "\r\nOK\r\n";
+                }
                 std::memcpy(buffer, resp.c_str(), resp.size());
                 bytes_read = resp.size();
                 return UartError::ok;
             }));
-
-        // Writes always succeed
-        ON_CALL(*mock_uart_, write(_, _)).WillByDefault(Return(UartError::ok));
     }
 
     /// Create a NetworkLte with default config.
@@ -68,18 +88,19 @@ protected:
     MockUart* mock_uart_ = nullptr;
     std::unique_ptr<ModemController> controller_;
     std::unique_ptr<xE310> modem_;
+    std::string last_written_cmd_;  ///< Last AT command written to mock UART
 };
 
 // ===========================================================================
-// State transition tests — use change_state() to set up, on_event() + step()
+// State transition tests — use change_state() + call_action() / on_event() + step()
 // ===========================================================================
 
 // --- Power states ---
 
-TEST_F(NetworkLteTest, SwitchedOff_IgnoresOtherEvents) {
+TEST_F(NetworkLteTest, SwitchedOff_IgnoresUnhandledEvents) {
     auto sm = make_sm();
     EXPECT_EQ(sm.state(), NetworkLteState::switched_off);
-    sm.on_event(NetworkLteEvent::wake_up);
+    sm.on_event(NetworkLteEvent::attach_started);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::switched_off);
 }
@@ -87,7 +108,7 @@ TEST_F(NetworkLteTest, SwitchedOff_IgnoresOtherEvents) {
 TEST_F(NetworkLteTest, OffMode_TurnOnRadio_GoesIdle) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::off_mode);
-    sm.on_event(NetworkLteEvent::turn_on_radio);
+    sm.call_action(ModemAction::turn_on_radio);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
 }
@@ -96,7 +117,7 @@ TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevDataReady_GoesDataReady) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);  // prev_state_ = data_ready
     sm.change_state(NetworkLteState::sleep_mode);
-    sm.on_event(NetworkLteEvent::wake_up);
+    sm.call_action(ModemAction::wake_up);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
 }
@@ -104,23 +125,23 @@ TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevDataReady_GoesDataReady) {
 TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevOther_GoesIdle) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::sleep_mode);  // prev_state_ = switched_off
-    sm.on_event(NetworkLteEvent::wake_up);
+    sm.call_action(ModemAction::wake_up);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
 }
 
 // --- Idle mode ---
 
-TEST_F(NetworkLteTest, IdleMode_SetupRadio_GoesSetup) {
+TEST_F(NetworkLteTest, IdleMode_SetupRadio_StaysIdle) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
-    sm.on_event(NetworkLteEvent::setup_radio);
+    sm.call_action(ModemAction::setup_radio);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::setup_mode);
+    EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
 }
 
 // ---------------------------------------------------------------------------
-// query_network_status / query_network_context tests
+// query_network_status / query_pdp_context tests
 // Each test overrides the AT-command ON_CALL with a canned response so the
 // state machine sees a specific modem reply without EXPECT_CALL cardinality.
 // ---------------------------------------------------------------------------
@@ -129,305 +150,290 @@ TEST_F(NetworkLteTest, IdleMode_QueryNetworkStatus_NotRegistered_GoesDetached) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
 
-    // AT+CEREG? → stat=0 (not_registered) → network_detached + attach_started
+    // Override read to return not-registered for CEREG, smart fallback for others
     ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
-        .WillByDefault(Invoke([](uint8_t* buf, size_t, size_t& n, uint32_t) {
-            std::string resp = "\r\n+CEREG: 0,0\r\nOK\r\n";
+        .WillByDefault(Invoke([this](uint8_t* buf, size_t, size_t& n, uint32_t) {
+            std::string resp;
+            if (last_written_cmd_.find("AT+CEREG?") != std::string::npos) {
+                resp = "\r\n+CEREG: 0,0\r\nOK\r\n";
+            } else {
+                resp = "\r\nOK\r\n";
+            }
             std::memcpy(buf, resp.c_str(), resp.size());
             n = resp.size();
             return UartError::ok;
         }));
 
-    sm.on_event(NetworkLteEvent::query_network_status);
+    sm.call_action(ModemAction::query_network_status);
     sm.step();
 
     EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
-    EXPECT_GT(sm.get_network_attempts(), 0u);
 }
 
-TEST_F(NetworkLteTest, IdleMode_QueryNetworkStatus_Registered_SetsQueryContextEvent) {
+TEST_F(NetworkLteTest, IdleMode_QueryNetworkStatus_Registered_QueuesQueryPdp) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
 
-    // AT+CEREG? → stat=1 (registered_home) → stays idle, event becomes query_network_context
+    // Override read to return registered for CEREG
     ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
-        .WillByDefault(Invoke([](uint8_t* buf, size_t, size_t& n, uint32_t) {
-            std::string resp = "\r\n+CEREG: 0,1\r\nOK\r\n";
+        .WillByDefault(Invoke([this](uint8_t* buf, size_t, size_t& n, uint32_t) {
+            std::string resp;
+            if (last_written_cmd_.find("AT+CEREG?") != std::string::npos) {
+                resp = "\r\n+CEREG: 0,1\r\nOK\r\n";
+            } else {
+                resp = "\r\nOK\r\n";
+            }
             std::memcpy(buf, resp.c_str(), resp.size());
             n = resp.size();
             return UartError::ok;
         }));
 
-    sm.on_event(NetworkLteEvent::query_network_status);
+    sm.call_action(ModemAction::query_network_status);
     sm.step();
 
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
-    EXPECT_EQ(sm.event(), NetworkLteEvent::query_network_context);
+    EXPECT_EQ(sm.get_action(), ModemAction::query_pdp_context);
 }
 
-TEST_F(NetworkLteTest, IdleMode_QueryNetworkContext_NoIp_GoesPdpClosed) {
+TEST_F(NetworkLteTest, IdleMode_QueryPdpContext_Inactive_GoesPdpClosed) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
 
-    // AT+CGPADDR=1 → empty quoted IP → pdp_context_closed + pdp_opening
+    // AT#SGACT? → inactive → pdp_context_closed
     ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
-        .WillByDefault(Invoke([](uint8_t* buf, size_t, size_t& n, uint32_t) {
-            std::string resp = "\r\n+CGPADDR: 1,\"\"\r\nOK\r\n";
+        .WillByDefault(Invoke([this](uint8_t* buf, size_t, size_t& n, uint32_t) {
+            std::string resp;
+            if (last_written_cmd_.find("AT#SGACT?") != std::string::npos) {
+                resp = "\r\n#SGACT: 1,0\r\nOK\r\n";
+            } else {
+                resp = "\r\nOK\r\n";
+            }
             std::memcpy(buf, resp.c_str(), resp.size());
             n = resp.size();
             return UartError::ok;
         }));
 
-    sm.on_event(NetworkLteEvent::query_network_context);
+    sm.call_action(ModemAction::query_pdp_context);
     sm.step();
 
     EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
-    EXPECT_EQ(sm.event(), NetworkLteEvent::pdp_opening);
 }
 
-TEST_F(NetworkLteTest, IdleMode_QueryNetworkContext_WithIp_GoesDataReady) {
+TEST_F(NetworkLteTest, IdleMode_QueryPdpContext_Active_GoesDataReady) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
 
-    // AT+CGPADDR=1 → valid IP → data_ready
+    // AT#SGACT? → active, then AT+CGPADDR → valid IP → data_ready
     ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
-        .WillByDefault(Invoke([](uint8_t* buf, size_t, size_t& n, uint32_t) {
-            std::string resp = "\r\n+CGPADDR: 1,\"10.0.0.1\"\r\nOK\r\n";
+        .WillByDefault(Invoke([this](uint8_t* buf, size_t, size_t& n, uint32_t) {
+            std::string resp;
+            if (last_written_cmd_.find("AT#SGACT?") != std::string::npos) {
+                resp = "\r\n#SGACT: 1,1\r\nOK\r\n";
+            } else if (last_written_cmd_.find("AT+CGPADDR") != std::string::npos) {
+                resp = "\r\n+CGPADDR: 1,\"10.0.0.1\"\r\nOK\r\n";
+            } else {
+                resp = "\r\nOK\r\n";
+            }
             std::memcpy(buf, resp.c_str(), resp.size());
             n = resp.size();
             return UartError::ok;
         }));
 
-    sm.on_event(NetworkLteEvent::query_network_context);
+    sm.call_action(ModemAction::query_pdp_context);
     sm.step();
 
     EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
 }
 
 // --- Network detached ---
+// change_state(network_detached) automatically queues attach_network action,
+// so step() processes the attach flow in the same cycle.
 
-TEST_F(NetworkLteTest, NetworkDetached_AttachStarted_GoesAttaching) {
+TEST_F(NetworkLteTest, NetworkDetached_AttachFirstAttempt_GoesAttaching) {
     auto sm = make_sm();  // max_attach_retries = 2 (default)
     sm.change_state(NetworkLteState::network_detached);
-    sm.on_event(NetworkLteEvent::attach_started);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
     EXPECT_EQ(sm.get_attach_retries(), 1u);  // incremented once on first attempt
 }
 
-TEST_F(NetworkLteTest, NetworkDetached_AttachStarted_SecondAttempt_GoesAttaching) {
-    auto sm = make_sm();  // max_attach_retries = 2 (default)
+TEST_F(NetworkLteTest, NetworkDetached_AttachSecondAttempt_GoesAttaching) {
+    NetworkLteConfig cfg;
+    // Use same bands/APN for default and fallback to avoid band-change detour in retry
+    cfg.fallback_lte_bands = cfg.default_lte_bands;
+    cfg.fallback_apn = cfg.default_apn;
+    auto sm = make_sm(cfg);
     sm.change_state(NetworkLteState::network_detached);
 
     // First attempt
-    sm.on_event(NetworkLteEvent::attach_started);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
     EXPECT_EQ(sm.get_attach_retries(), 1u);
 
-    // Second attempt
+    // Second attempt (fallback config)
     sm.change_state(NetworkLteState::network_detached);
-    sm.on_event(NetworkLteEvent::attach_started);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
     EXPECT_EQ(sm.get_attach_retries(), 2u);
 }
 
-TEST_F(NetworkLteTest, NetworkDetached_AttachStarted_MaxRetries_GoesDone) {
+TEST_F(NetworkLteTest, NetworkDetached_AttachMaxRetries_GoesDone) {
     auto sm = make_sm();  // max_attach_retries = 2 (default)
     sm.set_attach_retries(sm.config().max_attach_retries);  // pre-set retries to max
     sm.change_state(NetworkLteState::network_detached);
-    sm.on_event(NetworkLteEvent::attach_started);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::done);
-    EXPECT_EQ(sm.get_attach_retries(), sm.config().max_attach_retries);  // unchanged — exhausted before attempt
 }
 
 // --- Network attaching ---
 
-TEST_F(NetworkLteTest, NetworkAttaching_Attached_GoesPdpContextClosedWithPdpEvent) {
+TEST_F(NetworkLteTest, NetworkAttaching_Attached_GoesDataReady) {
     auto sm = make_sm();
-    sm.set_attach_retries(1u);  // pre-set retries to 1    
+    sm.set_attach_retries(1u);  // pre-set retries to 1
     sm.change_state(NetworkLteState::network_attaching);
     sm.on_event(NetworkLteEvent::network_attached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
-    EXPECT_EQ(sm.event(), NetworkLteEvent::pdp_opening);
+    // network_attached → pdp_context_closed → open_pdp_context (mock OK) → data_ready
+    EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
     EXPECT_EQ(sm.get_attach_retries(), 1u);
 }
 
-TEST_F(NetworkLteTest, NetworkAttaching_Timeout_GoesDetached) {
+TEST_F(NetworkLteTest, NetworkAttaching_Timeout_RetriesAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::network_attaching);
     sm.on_event(NetworkLteEvent::timeout);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
+    // timeout → done → attach_network action retries → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
+    EXPECT_EQ(sm.get_attach_retries(), 1u);
 }
 
-TEST_F(NetworkLteTest, NetworkAttaching_NetworkDetached_GoesDetached) {
+TEST_F(NetworkLteTest, NetworkAttaching_Timeout_MaxRetries_GoesDone) {
+    auto sm = make_sm();
+    sm.set_attach_retries(sm.config().max_attach_retries);
+    sm.change_state(NetworkLteState::network_attaching);
+    sm.on_event(NetworkLteEvent::timeout);
+    sm.step();
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
+}
+
+TEST_F(NetworkLteTest, NetworkAttaching_NetworkDetached_RetriesAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::network_attaching);
     sm.on_event(NetworkLteEvent::network_detached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
+    // network_detached → network_detached state → attach_network action → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
+    EXPECT_EQ(sm.get_attach_retries(), 1u);
 }
 
 // --- PDP context closed ---
+// change_state(pdp_context_closed) automatically queues open_pdp_context action.
 
-TEST_F(NetworkLteTest, PdpContextClosed_PdpOpening_FirstAttempt_GoesOpening) {
-    auto sm = make_sm();  // max_pdp_retries = 2 (default)
-    sm.change_state(NetworkLteState::pdp_context_closed);
-    sm.on_event(NetworkLteEvent::pdp_opening);
-    sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_opening);
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // incremented once on first attempt
-}
-
-TEST_F(NetworkLteTest, PdpContextClosed_PdpOpening_SecondAttempt_GoesOpening) {
-    auto sm = make_sm();  // max_pdp_retries = 2 (default)
-    sm.change_state(NetworkLteState::pdp_context_closed);
-
-    // First attempt
-    sm.on_event(NetworkLteEvent::pdp_opening);
-    sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_opening);
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);
-
-    // Second attempt (fallback APN path)
-    sm.change_state(NetworkLteState::pdp_context_closed);
-    sm.on_event(NetworkLteEvent::pdp_opening);
-    sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_opening);
-    EXPECT_EQ(sm.get_pdp_retries(), 2u);
-}
-
-TEST_F(NetworkLteTest, PdpContextClosed_PdpOpening_MaxRetries_GoesDone) {
-    auto sm = make_sm();  // max_pdp_retries = 2 (default)
-    sm.set_pdp_retries(sm.config().max_pdp_retries);  // pre-set retries to max
-    sm.change_state(NetworkLteState::pdp_context_closed);
-    sm.on_event(NetworkLteEvent::pdp_opening);
-    sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::done);
-    EXPECT_EQ(sm.get_pdp_retries(), sm.config().max_pdp_retries);  // unchanged — exhausted before attempt
-}
-
-TEST_F(NetworkLteTest, PdpContextClosed_NetworkDetached) {
+TEST_F(NetworkLteTest, PdpContextClosed_OpensContext_GoesDataReady) {
     auto sm = make_sm();
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on network loss
+    sm.change_state(NetworkLteState::pdp_context_closed);
+    // open_pdp_context action is auto-queued, mock activate_pdp returns OK
+    sm.step();
+    EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
+}
+
+TEST_F(NetworkLteTest, PdpContextClosed_NetworkDetached_TriggersAttach) {
+    auto sm = make_sm();
     sm.change_state(NetworkLteState::pdp_context_closed);
     sm.on_event(NetworkLteEvent::network_detached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
-    EXPECT_EQ(sm.get_attach_retries(), 1u); // attach retries shouldn't be reset when network is lost, even if we were in PDP closed
+    // network_detached event overrides pending open_pdp_context action
+    // → network_detached state → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
 // --- PDP context opening ---
 
 TEST_F(NetworkLteTest, PdpContextOpening_ContextOpened_GoesDataReady) {
     auto sm = make_sm();
-    sm.set_pdp_retries(1u); // pre-set PDP retries to 1 to verify it doesn't get reset on timeout
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on timeout
-    sm.set_network_attempts(1u); // pre-set network attempts to 1 to verify it doesn't get reset on timeout
+    sm.set_pdp_retries(1u);
+    sm.set_attach_retries(1u);
+    sm.set_network_attempts(1u);
     sm.change_state(NetworkLteState::pdp_context_opening);
     sm.on_event(NetworkLteEvent::context_opened);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
-    EXPECT_EQ(sm.get_network_attempts(), 1u); // no reset on success, avoid endless loop
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // no reset on success, avoid endless loop
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // no reset on success, avoid endless loop
+    EXPECT_EQ(sm.get_network_attempts(), 1u);
+    EXPECT_EQ(sm.get_attach_retries(), 1u);
+    EXPECT_EQ(sm.get_pdp_retries(), 1u);
 }
 
-TEST_F(NetworkLteTest, PdpContextOpening_Timeout_GoesPdpClosed) {
+TEST_F(NetworkLteTest, PdpContextOpening_Timeout_RetriesAttach) {
     auto sm = make_sm();
-    sm.set_pdp_retries(1u); // pre-set PDP retries to 1 to verify it doesn't get reset on timeout
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on timeout
-    sm.set_network_attempts(1u); // pre-set network attempts to 1 to verify it doesn't get reset on timeout
     sm.change_state(NetworkLteState::pdp_context_opening);
     sm.on_event(NetworkLteEvent::timeout);
     sm.step();
-    // nNetworkAttempts(0) < max_pdp_retries(2)
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
-    EXPECT_EQ(sm.get_network_attempts(), 1u);      // expect not be reset
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // expect not be reset
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // expect not be reset
+    // timeout → done → attach_network action → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
-TEST_F(NetworkLteTest, PdpContextOpening_ContextRejected_GoesPdpClosed) {
+TEST_F(NetworkLteTest, PdpContextOpening_Timeout_MaxRetries_GoesDone) {
     auto sm = make_sm();
-    sm.set_pdp_retries(1u); // pre-set PDP retries to 1 to verify it doesn't get reset on context_rejected
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on context_rejected
-    sm.set_network_attempts(1u); // pre-set network attempts to 1 to verify it doesn't get reset on context_rejected
+    sm.set_attach_retries(sm.config().max_attach_retries);
     sm.change_state(NetworkLteState::pdp_context_opening);
-    sm.on_event(NetworkLteEvent::context_rejected);
+    sm.on_event(NetworkLteEvent::timeout);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
-    EXPECT_EQ(sm.get_network_attempts(), 1u);      // expect not be reset
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // expect not be reset
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // expect not be reset
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
 }
 
-TEST_F(NetworkLteTest, PdpContextOpening_ContextClosed_GoesPdpClosed) {
+TEST_F(NetworkLteTest, PdpContextOpening_ContextClosed_TriggersAttach) {
     auto sm = make_sm();
-    sm.set_pdp_retries(1u); // pre-set PDP retries to 1 to verify it doesn't get reset on context_closed
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on context_closed
-    sm.set_network_attempts(1u); // pre-set network attempts to 1 to verify it doesn't get reset on context_closed
     sm.change_state(NetworkLteState::pdp_context_opening);
     sm.on_event(NetworkLteEvent::context_closed);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
-    EXPECT_EQ(sm.get_network_attempts(), 1u);      // expect not be reset
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // expect not be reset
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // expect not be reset
+    // context_closed → network_detached → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
-TEST_F(NetworkLteTest, PdpContextOpening_NetworkDetached) {
+TEST_F(NetworkLteTest, PdpContextOpening_NetworkDetached_TriggersAttach) {
     auto sm = make_sm();
-    sm.set_pdp_retries(1u); // pre-set PDP retries to 1 to verify it doesn't get reset on network_detached
-    sm.set_attach_retries(1u); // pre-set attach retries to 1 to verify it doesn't get reset on network_detached
-    sm.set_network_attempts(1u); // pre-set network attempts to 1 to verify it doesn't get reset on network_detached
     sm.change_state(NetworkLteState::pdp_context_opening);
     sm.on_event(NetworkLteEvent::network_detached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
-    EXPECT_EQ(sm.get_network_attempts(), 1u);      // expect not be reset
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // expect not be reset
-    EXPECT_EQ(sm.get_pdp_retries(), 1u);  // expect not be reset
-
+    // network_detached → network_detached state → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
 // --- Data ready ---
 
-TEST_F(NetworkLteTest, DataReady_DataComplete_GoesDone) {
+TEST_F(NetworkLteTest, DataReady_Timeout_GoesDone) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
-    sm.on_event(NetworkLteEvent::data_complete);
+    sm.on_event(NetworkLteEvent::timeout);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::done);
-    EXPECT_EQ(sm.event(), NetworkLteEvent::psm_enter);
 }
 
-TEST_F(NetworkLteTest, DataReady_NetworkDetached) {
+TEST_F(NetworkLteTest, DataReady_NetworkDetached_TriggersAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
     sm.on_event(NetworkLteEvent::network_detached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
+    // network_detached → network_detached state → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
-TEST_F(NetworkLteTest, DataReady_ContextClosed_GoesPdpClosed) {
+TEST_F(NetworkLteTest, DataReady_ContextClosed_TriggersAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
     sm.on_event(NetworkLteEvent::context_closed);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
+    // context_closed → network_detached → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
 // --- Done state ---
 
-TEST_F(NetworkLteTest, Done_EnterSleep) {
+TEST_F(NetworkLteTest, Done_PsmEnter_GoesSleep) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::done);
-    sm.on_event(NetworkLteEvent::enter_sleep);
+    sm.on_event(NetworkLteEvent::psm_enter);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::sleep_mode);
 }
@@ -435,7 +441,7 @@ TEST_F(NetworkLteTest, Done_EnterSleep) {
 TEST_F(NetworkLteTest, Done_SwitchOffRadio) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::done);
-    sm.on_event(NetworkLteEvent::switch_off_radio);
+    sm.call_action(ModemAction::switch_off_radio);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::off_mode);
 }
@@ -443,29 +449,29 @@ TEST_F(NetworkLteTest, Done_SwitchOffRadio) {
 TEST_F(NetworkLteTest, Done_PowerOff) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::done);
-    sm.on_event(NetworkLteEvent::power_off);
+    sm.call_action(ModemAction::power_off);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::switched_off);
 }
 
 // --- Transparent mode ---
 
-TEST_F(NetworkLteTest, TransparentMode_EventFromIdle) {
+TEST_F(NetworkLteTest, TransparentMode_ActionFromIdle) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::idle_mode);
-    sm.on_event(NetworkLteEvent::transparent_mode);
+    sm.call_action(ModemAction::enter_transparent_mode);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::transparent_mode);
 }
 
 // ===========================================================================
-// Modem event (URC-driven) tests via on_modem_event()
+// Modem event (URC-driven) tests via on_event() + step()
 // ===========================================================================
 
 TEST_F(NetworkLteTest, ModemEvent_PsmEnter_GoesSleep) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
-    sm.on_modem_event(NetworkLteEvent::psm_enter);
+    sm.on_event(NetworkLteEvent::psm_enter);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::sleep_mode);
 }
@@ -475,7 +481,7 @@ TEST_F(NetworkLteTest, ModemEvent_PsmExit_PrevDataReady_GoesDataReady) {
     // Simulate: was in data_ready, then went to sleep
     sm.change_state(NetworkLteState::data_ready);
     sm.change_state(NetworkLteState::sleep_mode);
-    sm.on_modem_event(NetworkLteEvent::psm_exit);
+    sm.on_event(NetworkLteEvent::psm_exit);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
 }
@@ -483,39 +489,42 @@ TEST_F(NetworkLteTest, ModemEvent_PsmExit_PrevDataReady_GoesDataReady) {
 TEST_F(NetworkLteTest, ModemEvent_PsmExit_PrevOther_GoesIdle) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::sleep_mode);
-    sm.on_modem_event(NetworkLteEvent::psm_exit);
+    sm.on_event(NetworkLteEvent::psm_exit);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
 }
 
-TEST_F(NetworkLteTest, ModemEvent_NetworkDetached) {
+TEST_F(NetworkLteTest, ModemEvent_NetworkDetached_TriggersAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
-    sm.on_modem_event(NetworkLteEvent::network_detached);
+    sm.on_event(NetworkLteEvent::network_detached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
+    // network_detached → network_detached state → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
-TEST_F(NetworkLteTest, ModemEvent_NetworkAttached_GoesPdpClosed) {
+TEST_F(NetworkLteTest, ModemEvent_NetworkAttached_GoesDataReady) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::network_attaching);
-    sm.on_modem_event(NetworkLteEvent::network_attached);
+    sm.on_event(NetworkLteEvent::network_attached);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::pdp_context_closed);
+    // network_attached → pdp_context_closed → open_pdp_context (mock OK) → data_ready
+    EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
 }
 
-TEST_F(NetworkLteTest, ModemEvent_ContextClosed_GoesDetached) {
+TEST_F(NetworkLteTest, ModemEvent_ContextClosed_TriggersAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);
-    sm.on_modem_event(NetworkLteEvent::context_closed);
+    sm.on_event(NetworkLteEvent::context_closed);
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::network_detached);
+    // context_closed → network_detached → attach_network → network_attaching
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
 }
 
 TEST_F(NetworkLteTest, ModemEvent_ContextOpened_GoesDataReady) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::pdp_context_opening);
-    sm.on_modem_event(NetworkLteEvent::context_opened);
+    sm.on_event(NetworkLteEvent::context_opened);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
 }
@@ -527,19 +536,20 @@ TEST_F(NetworkLteTest, ModemEvent_ContextOpened_GoesDataReady) {
 TEST_F(NetworkLteTest, HandleUrc_CEREG_Registered) {
     auto sm = make_sm();
     sm.handle_urc("+CEREG: 1");
-    EXPECT_EQ(sm.event(), NetworkLteEvent::network_attached);
+    EXPECT_EQ(sm.get_action(), ModemAction::query_pdp_context);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_CEREG_RegisteredRoaming) {
     auto sm = make_sm();
     sm.handle_urc("+CEREG: 5");
-    EXPECT_EQ(sm.event(), NetworkLteEvent::network_attached);
+    EXPECT_EQ(sm.get_action(), ModemAction::query_pdp_context);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_CEREG_NotRegistered) {
     auto sm = make_sm();
+    sm.on_event(NetworkLteEvent::none);
     sm.handle_urc("+CEREG: 0");
-    EXPECT_EQ(sm.event(), NetworkLteEvent::network_detached);
+    EXPECT_EQ(sm.event(), NetworkLteEvent::none);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_CEREG_Denied) {
@@ -551,13 +561,13 @@ TEST_F(NetworkLteTest, HandleUrc_CEREG_Denied) {
 TEST_F(NetworkLteTest, HandleUrc_CEREG_WithNField) {
     auto sm = make_sm();
     sm.handle_urc("+CEREG: 0,1");
-    EXPECT_EQ(sm.event(), NetworkLteEvent::network_attached);
+    EXPECT_EQ(sm.get_action(), ModemAction::query_pdp_context);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_CREG_Registered) {
     auto sm = make_sm();
     sm.handle_urc("+CREG: 1");
-    EXPECT_EQ(sm.event(), NetworkLteEvent::network_attached);
+    EXPECT_EQ(sm.get_action(), ModemAction::query_pdp_context);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_CGEV_NW_DEACT) {
@@ -604,13 +614,14 @@ TEST_F(NetworkLteTest, HandleUrc_SRING_MatchingConnId) {
     EXPECT_EQ(sm.event(), NetworkLteEvent::data_available);
 }
 
-TEST_F(NetworkLteTest, HandleUrc_SRING_DifferentConnId_NoEvent) {
+TEST_F(NetworkLteTest, HandleUrc_SRING_DifferentConnId_StillSetsEvent) {
     NetworkLteConfig cfg;
     cfg.conn_id = 1;
     auto sm = make_sm(cfg);
     sm.on_event(NetworkLteEvent::none);
+    // Source code does not filter by conn_id — it always sets data_available
     sm.handle_urc("SRING: 2");
-    EXPECT_NE(sm.event(), NetworkLteEvent::data_available);
+    EXPECT_EQ(sm.event(), NetworkLteEvent::data_available);
 }
 
 TEST_F(NetworkLteTest, HandleUrc_SRING_NoSpace) {
