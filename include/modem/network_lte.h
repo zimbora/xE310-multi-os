@@ -15,7 +15,8 @@
 #define MAX_SERVER_CONNECTIONS 5
 
 // Choose one MVNO
-#define TELENOR_PUBLIC 
+#define IDEMIA_PUBLIC
+//#define TELENOR_PUBLIC 
 //#define ONET_PUBLIC 
 // --- --- ---
 #define COUNTRY_CODE 268
@@ -30,6 +31,9 @@
     #define FALLBACK_APN "anova.apn"
 #elif defined(TELENOR_PUBLIC)
     #define DEFAULT_APN "connect.cxn"
+    #define FALLBACK_APN "anova.apn"
+#elif defined(IDEMIA_PUBLIC)
+    #define DEFAULT_APN "lpwa.vodafone.iot"
     #define FALLBACK_APN "anova.apn"
 #else
     #define DEFAULT_APN "anova.apn"
