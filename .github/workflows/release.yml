@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure library
+        run: cmake -B build-lib -G Ninja -DCMAKE_BUILD_TYPE=Release -DMODEM_BUILD_TESTS=OFF
+
+      - name: Build library
+        run: cmake --build build-lib
+
+      - name: Configure with executable
+        run: cmake -B build-app -G Ninja -DCMAKE_BUILD_TYPE=Release -DMODEM_BUILD_TESTS=OFF
+
+      - name: Build executable
+        run: cmake --build build-app
+
+      - name: Upload library
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-library
+          path: build-lib/libmodem_xe310.a
+
+      - name: Upload executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-executables
+          path: |
+            build-app/modem_app
+            build-app/test_xe310
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -DMODEM_BUILD_TESTS=OFF
+
+      - name: Build library
+        run: cmake --build build --config Release --target modem_xe310
+
+      - name: Build executables
+        run: cmake --build build --config Release
+
+      - name: Upload library
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-library
+          path: build/Release/modem_xe310.lib
+
+      - name: Upload executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executables
+          path: |
+            build/Release/modem_app.exe
+            build/Release/test_xe310.exe
+
+  build-zephyr:
+    name: Build Zephyr (nRF54L15)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.27.4
+    env:
+      ZEPHYR_SDK_INSTALL_DIR: /opt/toolchains/zephyr-sdk-0.16.8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install west and dependencies
+        run: |
+          pip3 install west
+
+      - name: Initialize west workspace
+        run: |
+          west init -l .
+          west update --narrow --fetch-opt=--depth=1
+
+      - name: Build Zephyr firmware
+        run: |
+          west build -b nrf54l15dk/nrf54l15/cpuapp . --pristine
+
+      - name: Upload Zephyr artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zephyr-firmware
+          path: |
+            build/zephyr/zephyr.hex
+            build/zephyr/zephyr.bin
+            build/zephyr/zephyr.elf
