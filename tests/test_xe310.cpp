@@ -1,6 +1,7 @@
 #include "modem/xe310.h"
 #include "modem/modem_controller.h"
 
+#include <cstring>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -290,14 +291,14 @@ TEST_F(Xe310Test, SetTelitPsmWithVersion) {
     cfg.has_active_time   = true;
     cfg.req_active_time   = 120;
     cfg.has_psm_version   = true;
-    cfg.psm_version       = 4;
+    cfg.psm_version       = PsmVersion::rel12_retain;
     cfg.has_psm_threshold = true;
     cfg.psm_threshold     = 60;
     EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, DisableTelitPsm) {
-    expect_command_ok("AT#CPSMS=", "");
+    expect_command_ok("AT#CPSMS=0", "");
     EXPECT_EQ(modem_->disable_telit_psm(), ModemStatus::ok);
 }
 
@@ -384,7 +385,7 @@ TEST_F(Xe310Test, NetworkSurvey2gBcch) {
     EXPECT_EQ(c0.cell_id,   14887u);
     EXPECT_EQ(c0.cell_stat, "CELL_SUITABLE");
 
-    EXPECT_FALSE(result.has_summary);
+    EXPECT_TRUE(result.has_summary);
 }
 
 TEST_F(Xe310Test, NetworkSurvey4g) {
@@ -440,27 +441,29 @@ TEST_F(Xe310Test, NetworkSurveyError) {
 
 TEST_F(Xe310Test, SetIotTechCatM1) {
     expect_command_ok("AT#WS46=0,0", "");
-    EXPECT_EQ(modem_->set_iot_tech(0, 0), ModemStatus::ok);
+    EXPECT_EQ(modem_->set_iot_tech(RadioTech::cat_m1, 0), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, SetIotTechNbIotGsmPriority) {
-    expect_command_ok("AT#WS46=1,1", "");
-    EXPECT_EQ(modem_->set_iot_tech(1, 1), ModemStatus::ok);
+    expect_command_ok("AT#WS46=1,0", "");
+    EXPECT_EQ(modem_->set_iot_tech(RadioTech::nb_iot, 1), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, GetIotTech) {
     expect_command_ok("AT#WS46?", "#WS46: 2,0");
-    uint8_t n = 0xff, gsm_p = 0xff;
-    EXPECT_EQ(modem_->get_iot_tech(n, gsm_p), ModemStatus::ok);
-    EXPECT_EQ(n,     2);
+    RadioTech tech = RadioTech::gsm;
+    uint8_t gsm_p = 0xff;
+    EXPECT_EQ(modem_->get_iot_tech(tech, gsm_p), ModemStatus::ok);
+    EXPECT_EQ(tech,  RadioTech::unknown);
     EXPECT_EQ(gsm_p, 0);
 }
 
 TEST_F(Xe310Test, GetIotTechGsmPriority) {
     expect_command_ok("AT#WS46?", "#WS46: 1,1");
-    uint8_t n = 0, gsm_p = 0;
-    EXPECT_EQ(modem_->get_iot_tech(n, gsm_p), ModemStatus::ok);
-    EXPECT_EQ(n,     1);
+    RadioTech tech = RadioTech::gsm;
+    uint8_t gsm_p = 0;
+    EXPECT_EQ(modem_->get_iot_tech(tech, gsm_p), ModemStatus::ok);
+    EXPECT_EQ(tech,  RadioTech::nb_iot);
     EXPECT_EQ(gsm_p, 1);
 }
 
@@ -496,7 +499,7 @@ TEST_F(Xe310Test, DeleteMruListNbIot) {
 TEST_F(Xe310Test, GetRegistrationStatusHome) {
     expect_command_ok("AT+CEREG?", "+CEREG: 0,1");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::registered_home);
     EXPECT_FALSE(info.has_location);
@@ -505,7 +508,7 @@ TEST_F(Xe310Test, GetRegistrationStatusHome) {
 TEST_F(Xe310Test, GetRegistrationStatusSearching) {
     expect_command_ok("AT+CEREG?", "+CEREG: 0,2");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::searching);
     EXPECT_FALSE(info.has_location);
@@ -514,28 +517,28 @@ TEST_F(Xe310Test, GetRegistrationStatusSearching) {
 TEST_F(Xe310Test, GetRegistrationStatusRoaming) {
     expect_command_ok("AT+CEREG?", "+CEREG: 2,5,\"0001\",\"0000A1B2\",7");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_roaming);
     EXPECT_TRUE(info.has_location);
     EXPECT_EQ(info.lac, "0001");
     EXPECT_EQ(info.ci, "0000A1B2");
-    EXPECT_EQ(info.act, RadioTech::lte);
+    EXPECT_EQ(info.act, RadioTech::cat_m1);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusDenied) {
     expect_command_ok("AT+CEREG?", "+CEREG: 0,3");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::denied);
     EXPECT_FALSE(info.has_location);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusWithLocationCatM1) {
-    expect_command_ok("AT+CEREG?", "+CEREG: 2,1,\"00FF\",\"01234ABC\",8");
+    expect_command_ok("AT+CEREG?", "+CEREG: 2,1,\"00FF\",\"01234ABC\",7");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_home);
     EXPECT_TRUE(info.has_location);
@@ -547,7 +550,7 @@ TEST_F(Xe310Test, GetRegistrationStatusWithLocationCatM1) {
 TEST_F(Xe310Test, GetRegistrationStatusWithLocationNbIot) {
     expect_command_ok("AT+CEREG?", "+CEREG: 2,5,\"1A2B\",\"DEADBEEF\",9");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_roaming);
     EXPECT_TRUE(info.has_location);
@@ -559,7 +562,7 @@ TEST_F(Xe310Test, GetRegistrationStatusWithLocationNbIot) {
 TEST_F(Xe310Test, GetRegistrationStatusNotRegistered) {
     expect_command_ok("AT+CEREG?", "+CEREG: 0,0");
     RegistrationInfo info;
-    EXPECT_EQ(modem_->get_registration_status(info), ModemStatus::ok);
+    EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::not_registered);
     EXPECT_FALSE(info.has_location);
@@ -601,12 +604,12 @@ TEST_F(Xe310Test, GetSignalQuality) {
 }
 
 TEST_F(Xe310Test, SetRadioTechLte) {
-    expect_command_ok("AT+COPS=0,,,7", "");
+    expect_command_ok("AT+COPS=0,,,6", "");
     EXPECT_EQ(modem_->set_radio_tech(RadioTech::lte), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, SetRadioTechCatM1) {
-    expect_command_ok("AT+COPS=0,,,8", "");
+    expect_command_ok("AT+COPS=0,,,7", "");
     EXPECT_EQ(modem_->set_radio_tech(RadioTech::cat_m1), ModemStatus::ok);
 }
 
@@ -616,7 +619,7 @@ TEST_F(Xe310Test, SetRadioTechNbIot) {
 }
 
 TEST_F(Xe310Test, SetOperatorManual) {
-    expect_command_ok("AT+COPS=1,2,\"21401\",8", "");
+    expect_command_ok("AT+COPS=1,2,\"21401\",7", "");
     EXPECT_EQ(modem_->set_operator_manual("21401", RadioTech::cat_m1), ModemStatus::ok);
 }
 
@@ -647,24 +650,24 @@ TEST_F(Xe310Test, GetApn) {
 }
 
 TEST_F(Xe310Test, ActivatePdp) {
-    expect_command_ok("AT+CGACT=1,1", "");
+    expect_command_ok("AT#SGACT=1,1", "");
     EXPECT_EQ(modem_->activate_pdp(1), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, DeactivatePdp) {
-    expect_command_ok("AT+CGACT=0,1", "");
+    expect_command_ok("AT#SGACT=0,1", "");
     EXPECT_EQ(modem_->deactivate_pdp(1), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, GetPdpStateActive) {
-    expect_command_ok("AT+CGACT?", "+CGACT: 1,1");
+    expect_command_ok("AT#SGACT?", "#SGACT: 1,1");
     bool active = false;
     EXPECT_EQ(modem_->get_pdp_state(1, active), ModemStatus::ok);
     EXPECT_TRUE(active);
 }
 
 TEST_F(Xe310Test, GetPdpStateInactive) {
-    expect_command_ok("AT+CGACT?", "+CGACT: 1,0");
+    expect_command_ok("AT#SGACT?", "#SGACT: 1,0");
     bool active = true;
     EXPECT_EQ(modem_->get_pdp_state(1, active), ModemStatus::ok);
     EXPECT_FALSE(active);
@@ -689,19 +692,19 @@ TEST_F(Xe310Test, GetPdpInfo) {
 }
 
 TEST_F(Xe310Test, ActivatePdpError) {
-    expect_command_error("AT+CGACT=1,1");
+    expect_command_error("AT#SGACT=1,1");
     EXPECT_EQ(modem_->activate_pdp(1), ModemStatus::at_error);
 }
 
 // --- UDP Connection ---
 
 TEST_F(Xe310Test, UdpOpen) {
-    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,4000,1", "");
+    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,4000,1,0,1", "");
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000, 4000), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, UdpOpenDefaultParams) {
-    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,0,1", "");
+    expect_command_ok("AT#SD=1,1,5000,\"192.168.1.100\",0,5000,1,0,1", "");
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::ok);
 }
 
