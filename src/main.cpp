@@ -185,12 +185,13 @@ int main(int argc, char* argv[]) {
                 std::string arg = sub.size() > 10 ? sub.substr(11) : "";
                 const auto* arr = network.server_info_array();
                 if (!arg.empty()) {
-                    try {
-                        int n = std::stoi(arg);
-                        if (n >= 1 && n <= MAX_SERVER_CONNECTIONS)
-                            return rpc::to_json(arr[n - 1]);
-                        return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
-                    } catch (...) { return "ERROR: invalid conn_id"; }
+                    int n = 0;
+                    bool valid = !arg.empty();
+                    for (char c : arg) { if (c < '0' || c > '9') { valid = false; break; } n = n * 10 + (c - '0'); }
+                    if (!valid) return "ERROR: invalid conn_id";
+                    if (n >= 1 && n <= MAX_SERVER_CONNECTIONS)
+                        return rpc::to_json(arr[n - 1]);
+                    return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
                 }
                 std::string r = "[";
                 for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
@@ -240,11 +241,10 @@ int main(int argc, char* argv[]) {
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
                 int conn_id = lteConfig.conn_id;
                 if (!args.empty()) {
-                    try {
-                        conn_id = std::stoi(args);
-                    } catch (...) {
-                        return "ERROR: invalid conn_id";
-                    }
+                    bool valid = true;
+                    conn_id = 0;
+                    for (char c : args) { if (c < '0' || c > '9') { valid = false; break; } conn_id = conn_id * 10 + (c - '0'); }
+                    if (!valid) return "ERROR: invalid conn_id";
                     if (conn_id < 1 || conn_id > MAX_SERVER_CONNECTIONS) {
                         return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
                     }
