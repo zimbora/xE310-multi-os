@@ -107,6 +107,7 @@ private:
         while (!cancelled_) {
             auto snap   = deadline_;
             auto status = cv_.wait_until(lock, snap);
+            // cppcheck-suppress knownConditionTrueFalse
             if (cancelled_) {
                 break;
             }

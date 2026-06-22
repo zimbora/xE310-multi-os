@@ -84,11 +84,11 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
         const uint32_t remaining_ms = total_ms - elapsed;
 
         memset(buffer, 0, sizeof(buffer));
-        auto err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, remaining_ms);
-        if (err == UartError::timeout) {
+        auto read_err = uart_->read(buffer, sizeof(buffer) - 1, bytes_read, remaining_ms);
+        if (read_err == UartError::timeout) {
             return ModemStatus::timeout;
         }
-        if (err != UartError::ok) {
+        if (read_err != UartError::ok) {
             return ModemStatus::uart_error;
         }
 
@@ -153,6 +153,7 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
         hex += byte_buf;
     }
     MODEM_LOG_DBG(">>: [binary %zu bytes]: %s", data.size(), hex.c_str());
+    (void)hex;
 
     // Read response (expect OK or ERROR after binary payload)
     uint8_t buffer[512];

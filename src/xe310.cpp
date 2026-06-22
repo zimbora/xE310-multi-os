@@ -61,7 +61,8 @@ ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
     // Body contains 4 lines joined by AT_TERMINATOR
     std::string_view body = response.body;
     std::string_view terminator = AT_TERMINATOR;
-    std::string* fields[] = { &ver.package_version, &ver.modem_version,
+    // cppcheck-suppress constVariable
+    std::string* const fields[] = { &ver.package_version, &ver.modem_version,
                                &ver.prod_params_version, &ver.app_version };
     std::string_view::size_type start = 0;
     for (auto* field : fields) {

@@ -178,11 +178,11 @@ enum class ServerState : int8_t {
 };
 
 struct ServerInfo {
-    uint8_t conn_id;
+    uint8_t conn_id = 0;
     ServerState state = ServerState::disconnected;
     std::string protocol;
     std::string address;
-    uint16_t port;
+    uint16_t port = 0;
     bool fHasData = false; // flag to indicate if we have data to send to the server, used to trigger data send flow when we get to data ready state    
 };
 
@@ -190,7 +190,7 @@ struct ServerInfo {
 /// LTE network state machine — drives modem attach, PDP activation and server registration.
 class NetworkLte {
 public:
-    using DataReceivedCallback = std::function<void(uint8_t cid, std::string& data, uint16_t n_bytes)>;
+    using DataReceivedCallback = std::function<void(uint8_t cid, const std::string& data, uint16_t n_bytes)>;
 
     explicit NetworkLte(xE310& modem, const NetworkLteConfig& config = {},
                         DataReceivedCallback on_data_received = nullptr,
@@ -260,10 +260,10 @@ public:
     /// @param response The response from the modem.
     /// @param timeout_ms The timeout for the AT command in milliseconds.
     /// @return True if the command was successful, false otherwise.
-    bool send_at_command(std::string command, std::string& response, uint32_t timeout_ms);
+    bool send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms);
     /// @brief Update the modem firmware or configuration.
     /// @return True if the update was successful, false otherwise.
-    bool update_modem(std::string firmware_url);
+    bool update_modem(const std::string& firmware_url);
 
     // --- Cached modem state accessors ---
 

@@ -2,6 +2,7 @@
 #include "modem/log.h"
 #include "modem/timer_factory.h"
 #include "modem/message_queue_factory.h"
+#include <algorithm>
 
 namespace modem {
 
@@ -11,9 +12,8 @@ static const char* action_to_str(ModemAction a);
 NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
                        std::unique_ptr<TimerInterface> timer)
     : modem_(modem), lteConfig(config), on_data_received_(std::move(on_data_received)),
-      timer_(std::move(timer)) {
-        st_timer = modem::create_platform_timer();
-        message_queue_ = modem::create_platform_message_queue();
+      timer_(std::move(timer)), st_timer(modem::create_platform_timer()),
+      message_queue_(modem::create_platform_message_queue()) {
     }
 
 // --- Accessors ---
@@ -99,10 +99,10 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
 
     NETWORK_LOG_DBG("Attempting to connect to server with CID %d, protocol %s, IP %s, port %d", conn_id, protocol.c_str(), ip.c_str(), port); 
     if(state_ == NetworkLteState::data_ready ){
-        uint8_t state = 0;
+        uint8_t conn_state = 0;
         NETWORK_LOG_DBG("Checking current connection state for CID %d before connecting to server", conn_id);
-        modem_.udp_status(conn_id, state);
-        serverInfo[conn_id-1].state = static_cast<ServerState>(state);
+        modem_.udp_status(conn_id, conn_state);
+        serverInfo[conn_id-1].state = static_cast<ServerState>(conn_state);
         if( serverInfo[conn_id-1].state == ServerState::connected){
             NETWORK_LOG_INF("Already connected to a server, cannot connect to a different one without disconnecting first");
             return true; // already connected to a server, cannot connect to a different one without disconnecting first
@@ -217,9 +217,9 @@ bool NetworkLte::force_PSM(){
 
     bool psmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
-    std::vector<Operator> operatorList;
-    auto status = modem_.get_available_operators(operatorList);
-    for(const auto& op : operatorList){
+    std::vector<Operator> availableOperators;
+    auto status = modem_.get_available_operators(availableOperators);
+    for(const auto& op : availableOperators){
         NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
         if(op.act == RadioTech::cat_m1 || op.act == RadioTech::nb_iot)
             NETWORK_LOG_INF("Operator %s supports tech with PSM, trying to register to it", op.long_name.c_str());
@@ -234,7 +234,7 @@ bool NetworkLte::force_PSM(){
                 NETWORK_LOG_ERR("Failed to get PSM configuration");
                 continue; // try next operator
             }
-            NETWORK_LOG_INF("PSM status for operator %s: status=%d, mode=%d, t3412=%d, t3324=%d psm_version=%d, psm_threshold=%d", op.long_name.c_str(), tCpsmsStatus.status, static_cast<int>(tCpsmsStatus.mode), tCpsmsStatus.t3412, tCpsmsStatus.t3324, static_cast<int>(tCpsmsStatus.psm_version), tCpsmsStatus.psm_threshold);
+            NETWORK_LOG_INF("PSM status for operator %s: status=%d, mode=%d, t3412=%u, t3324=%u psm_version=%d, psm_threshold=%u", op.long_name.c_str(), tCpsmsStatus.status, static_cast<int>(tCpsmsStatus.mode), tCpsmsStatus.t3412, tCpsmsStatus.t3324, static_cast<int>(tCpsmsStatus.psm_version), tCpsmsStatus.psm_threshold);
             if(tCpsmsStatus.mode == PsmMode::disable){
                 NETWORK_LOG_WRN("PSM is disabled for this operator, cannot enter PSM mode");
                 continue; // try next operator
@@ -325,7 +325,7 @@ bool NetworkLte::leave_transparent_mode() {
     return state_ != NetworkLteState::transparent_mode;
 }
 
-bool NetworkLte::send_at_command(std::string command, std::string& response, uint32_t timeout_ms) {
+bool NetworkLte::send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms) {
     // send command
     if(state_ != NetworkLteState::transparent_mode){
         NETWORK_LOG_ERR("Modem is not in transparent mode, cannot send AT command");
@@ -349,7 +349,7 @@ bool NetworkLte::send_at_command(std::string command, std::string& response, uin
     return true;
 }
 
-bool NetworkLte::update_modem(std::string firmware_url){
+bool NetworkLte::update_modem(const std::string& firmware_url){
     if(state_ != NetworkLteState::modem_fota) {
         go_to_state(NetworkLteState::modem_fota);
     }
@@ -552,7 +552,6 @@ void NetworkLte::execute_actions() {
         case ModemAction::check_responsiveness:
             {
                 // check if modem is responsive by sending an AT command
-                std::string response;
                 while(true){
                     auto status = modem_.at_ok();
                     if(status != ModemStatus::ok){
@@ -678,7 +677,7 @@ void NetworkLte::execute_actions() {
                     bool fReboot = false;
                     if(fChangeBands){
                         fChangeBands = false;
-                        auto status = modem_.set_lte_bands(lteConfig.default_lte_bands);
+                        status = modem_.set_lte_bands(lteConfig.default_lte_bands);
                         if (status != ModemStatus::ok) {
                             NETWORK_LOG_ERR("Failed to set LTE bands");
                             // flag error
@@ -686,7 +685,7 @@ void NetworkLte::execute_actions() {
                     }
                     if(fChangeRAT){
                         fChangeRAT = false;
-                        auto status = modem_.set_iot_tech(lteConfig.default_iot_tech);
+                        status = modem_.set_iot_tech(lteConfig.default_iot_tech);
                         if (status != ModemStatus::ok) {
                             NETWORK_LOG_ERR("Failed to set IoT technology");
                             // flag error
@@ -788,7 +787,7 @@ void NetworkLte::execute_actions() {
                     if(status == ModemStatus::ok){
                         if(regInfo.apn != lteConfig.default_apn){
                             NETWORK_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
-                            auto status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
+                            status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
                             if (status != ModemStatus::ok) {
                                 NETWORK_LOG_ERR("Failed to set APN");
                                 // flag error
@@ -866,11 +865,13 @@ void NetworkLte::execute_actions() {
             {
                 bool pdp_active = false;
                 auto status = modem_.get_pdp_state(lteConfig.cid, pdp_active);
-                if(!pdp_active){
+                if(status != ModemStatus::ok){
+                    NETWORK_LOG_ERR("Failed to query PDP context state");
+                } else if(!pdp_active){
                     change_state(NetworkLteState::pdp_context_closed); // if context is inactive, we can consider it closed and trigger PDP activation flow
                     call_action(ModemAction::open_pdp_context); // trigger PDP activation flow
                 } else {
-                    auto status = modem_.get_ip_address(lteConfig.cid, networkInfo.ip_address);
+                    status = modem_.get_ip_address(lteConfig.cid, networkInfo.ip_address);
                     if(status != ModemStatus::ok){
                         NETWORK_LOG_ERR("Failed to get IP address");
                         // flag error and stay in the same state to retry later
@@ -991,28 +992,28 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         case NetworkLteState::network_attaching:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                NETWORK_LOG_INF("Time spent in network_attaching state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in network_attaching state: %u ms", elasped);
             }
             st_timer->stop(); // stop attach timer if running
             break;
         case NetworkLteState::pdp_context_opening:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                NETWORK_LOG_INF("Time spent in pdp_context_opening state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in pdp_context_opening state: %u ms", elasped);
             }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::data_ready:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                NETWORK_LOG_INF("Time spent in data_ready state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in data_ready state: %u ms", elasped);
             }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::transparent_mode:
             {
                 uint32_t elasped = st_timer->elapsed_ms();
-                NETWORK_LOG_INF("Time spent in transparent_mode state: %d ms", elasped);
+                NETWORK_LOG_INF("Time spent in transparent_mode state: %u ms", elasped);
             }
             st_timer->stop(); // stop any timers related to transparent mode if needed
             break;
@@ -1038,22 +1039,22 @@ void NetworkLte::change_state(NetworkLteState new_state) {
                 modem_.get_apn(lteConfig.cid, regInfo.apn); // parse +CGDCONT? into regInfo.apn and regInfo.ip_address
                 //modem_.get_pdp_state(lteConfig.cid, regInfo.pdp_active); // update PDP state in info struct after applying it to modem
                 
-                TelitCpsmsStatus state;
-                auto status = modem_.get_telit_psm(state); // update PSM config in info struct after applying it to modem
+                TelitCpsmsStatus psm_state;
+                auto status = modem_.get_telit_psm(psm_state); // update PSM config in info struct after applying it to modem
                 if(status == ModemStatus::ok){
                     /*
-                    networkInfo.psm_mode = state.mode;
-                    networkInfo.psm_t3324 = state.t3324;
-                    networkInfo.psm_t3412 = state.t3412;
-                    networkInfo.psm_version = state.psm_version;
-                    networkInfo.psm_threshold = state.psm_threshold;
+                    networkInfo.psm_mode = psm_state.mode;
+                    networkInfo.psm_t3324 = psm_state.t3324;
+                    networkInfo.psm_t3412 = psm_state.t3412;
+                    networkInfo.psm_version = psm_state.psm_version;
+                    networkInfo.psm_threshold = psm_state.psm_threshold;
                     */
-                    NETWORK_LOG_INF("PSM state: %d", state.mode);
-                    NETWORK_LOG_INF("PSM t3324: %d", state.t3324);
-                    NETWORK_LOG_INF("PSM t3412: %d", state.t3412);
-                    NETWORK_LOG_INF("PSM psm_version: %d", state.psm_version);
-                    NETWORK_LOG_INF("PSM psm_threshold: %d", state.psm_threshold);
-                    NETWORK_LOG_INF("PSM mode: %d", state.mode);
+                    NETWORK_LOG_INF("PSM state: %u", static_cast<unsigned>(psm_state.mode));
+                    NETWORK_LOG_INF("PSM t3324: %u", psm_state.t3324);
+                    NETWORK_LOG_INF("PSM t3412: %u", psm_state.t3412);
+                    NETWORK_LOG_INF("PSM psm_version: %u", static_cast<unsigned>(psm_state.psm_version));
+                    NETWORK_LOG_INF("PSM psm_threshold: %u", psm_state.psm_threshold);
+                    NETWORK_LOG_INF("PSM mode: %u", static_cast<unsigned>(psm_state.mode));
                 } else {
                     NETWORK_LOG_ERR("Failed to get PSM status");
                 }
@@ -1115,10 +1116,9 @@ void NetworkLte::handle_urc(const std::string& urc) {
 
         auto is_uint = [](const std::string& s) {
             if (s.empty()) return false;
-            for (char c : s) {
-                if (c < '0' || c > '9') return false;
-            }
-            return true;
+            return std::all_of(s.begin(), s.end(), [](char c) {
+                return c >= '0' && c <= '9';
+            });
         };
 
         std::string payload = urc.substr(colon + 1);
@@ -1204,9 +1204,9 @@ void NetworkLte::on_event(NetworkLteEvent event) {
 }
 
 NetworkLteEvent NetworkLte::get_event() {
-    NetworkLteEvent event = event_;
+    NetworkLteEvent current_event = event_;
     event_ = NetworkLteEvent::none; // reset event after reading it to avoid processing the same event multiple times, if we want to keep a history of events, we can store them in a vector instead of resetting it
-    return event;
+    return current_event;
 }
 
 void NetworkLte::call_action(ModemAction action){
