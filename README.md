@@ -88,20 +88,19 @@ cmake --build build --config Release
 Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
 
 ```bash
-cppcheck --std=c++17 --enable=warning,style,performance,portability,information --suppress=missingIncludeSystem --error-exitcode=1 -I include src/ include/
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --error-exitcode=1
 ```
 
 To generate a detailed checkers report:
 
 ### Desktop (Windows)
 ```bash
-cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information 
---checkers-report=checkers.txt
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --checkers-report=checkers.txt
 ```
 
 ### Embedded (Zephyr)
 ```bash
-cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
+cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr
 ```
 
 ## Testing
