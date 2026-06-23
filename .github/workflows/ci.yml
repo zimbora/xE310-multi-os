@@ -21,6 +21,8 @@ jobs:
           cppcheck --enable=all \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
+            --suppress=normalCheckLevelMaxBranches \
+            --suppress=checkersReport \
             --inline-suppr \
             --error-exitcode=1 \
             --std=c++17 \

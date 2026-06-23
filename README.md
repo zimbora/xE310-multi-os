@@ -88,7 +88,7 @@ cmake --build build --config Release
 Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
 
 ```bash
-cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --error-exitcode=1
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1
 ```
 
 To generate a detailed checkers report:
