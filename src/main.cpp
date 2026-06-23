@@ -32,14 +32,6 @@ int main(int argc, char* argv[]) {
     modemController.connect(port.c_str(), modem::UartConfig{});
 
     modem::xE310 modem(modemController);
-    auto status = modem.at_ok();
-    if (status != modem::ModemStatus::ok) {
-        MODEM_LOG_ERR("Modem not responsive");
-        modemController.disconnect();
-        return 1;
-    }
-
-    MODEM_LOG_INF("Modem initialized successfully");
 
     modem::NetworkLteConfig lteConfig;
 
