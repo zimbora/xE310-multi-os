@@ -1309,12 +1309,10 @@ static const char* action_to_str(ModemAction a) {
     }
 }
 
-// cppcheck-suppress functionStatic
 void NetworkLte::log_state() const {
     NETWORK_LOG_DBG("new state: %s", state_to_str(state_));
 }
 
-// cppcheck-suppress functionStatic
 void NetworkLte::log_event() const {
     NETWORK_LOG_DBG("new event: %s", event_to_str(event_));
 }
