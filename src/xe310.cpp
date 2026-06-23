@@ -337,7 +337,10 @@ ModemStatus xE310::power_off_radio() {
 
 ModemStatus xE310::shutdown() {
     AtResponse response;
-    return controller_.send_raw("AT#SHDN", response);
+    // go to DH0 mode
+    controller_.send_raw("AT+CFUN=4", response, 15000);
+    return controller_.send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
+    //return controller_.send_raw("AT#SHDN", response); // use on/off
 }
 
 ModemStatus xE310::reboot() {
@@ -728,6 +731,7 @@ ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) 
     if(oper.empty()) {
         return set_operator_auto();
     } else {
+        // lock call
         auto cmd = "AT+COPS=1,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
 
         return controller_.send_raw(cmd, response, 210000); // manual registration can take a long time, allow up to 30s

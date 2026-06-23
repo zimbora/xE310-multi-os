@@ -619,8 +619,8 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::switch_off_radio:
             {
-                //modem_.shutdown();
-                NETWORK_LOG_INF("Fake shutdown!!");
+                modem_.shutdown();
+                //NETWORK_LOG_INF("Fake shutdown!!");
                 change_state(NetworkLteState::off_mode);
             }
             break;
@@ -757,6 +757,7 @@ void NetworkLte::execute_actions() {
             break;      
         case ModemAction::attach_network:
             {
+                modem_.power_radio();
                 //modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
                 //modem_.network_attach();
                 if(nAttachRetries == 0){
