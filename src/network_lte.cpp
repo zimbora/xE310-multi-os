@@ -401,7 +401,11 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                 while(i < MAX_SERVER_CONNECTIONS){
                     serverInfo[i++].state = ServerState::disconnected;
                 }
-                change_state(NetworkLteState::network_detached);
+                if( state_ != NetworkLteState::switched_off && 
+                    state_ != NetworkLteState::off_mode &&
+                    state_ != NetworkLteState::sleep_mode){
+                    change_state(NetworkLteState::network_detached);
+                }
             }
             break;
         case NetworkLteEvent::network_attached:
