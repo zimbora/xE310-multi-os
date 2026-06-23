@@ -18,8 +18,9 @@ jobs:
 
       - name: Run cppcheck
         run: |
-          cppcheck --enable=warning,style,performance,portability \
+          cppcheck --enable=all \
             --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
             --inline-suppr \
             --error-exitcode=1 \
             --std=c++17 \
