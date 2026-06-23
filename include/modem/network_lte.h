@@ -15,8 +15,8 @@
 #define MAX_SERVER_CONNECTIONS 5
 
 // Choose one MVNO
-#define IDEMIA_PUBLIC
-//#define TELENOR_PUBLIC 
+//#define IDEMIA_PUBLIC
+#define TELENOR_PUBLIC 
 //#define ONET_PUBLIC 
 // --- --- ---
 #define COUNTRY_CODE 268
