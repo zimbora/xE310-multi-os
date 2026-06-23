@@ -37,9 +37,11 @@ All code must compile and run correctly on every target platform.
 ### Desktop (Windows)
 ```bash
 .\build_vs.ps1
-.\build_vs.ps1 -Clean
-.\build_vs.ps1 -Clean -Config Debug -Test
-.\build_vs.ps1 -NoTests -Clean
+.\build_vs.ps1 -Clean # clean build
+.\build_vs.ps1 -Clean -Test # build and run tests
+.\build_vs.ps1 -Clean -Config Debug -Test # clean, debug build, tests
+.\build_vs.ps1  -Clean -NoTests
+.\build_vs.ps1 -DTEST=OFF
 ```
 
 ### Linux
@@ -86,19 +88,19 @@ cmake --build build --config Release
 Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
 
 ```bash
-cppcheck --project=cppcheck.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1
 ```
 
 To generate a detailed checkers report:
 
 ### Desktop (Windows)
 ```bash
-cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --checkers-report=checkers.txt
+cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --checkers-report=checkers.txt
 ```
 
 ### Embedded (Zephyr)
 ```bash
-cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information
+cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr
 ```
 
 ## Testing

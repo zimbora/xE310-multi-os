@@ -32,7 +32,7 @@ int main(void) {
 
     modem::NetworkLteConfig lteConfig;
 
-    auto on_data_received = [&](uint8_t cid, std::string& data, uint16_t n_bytes) {
+    auto on_data_received = [&](uint8_t cid, const std::string& data, uint16_t n_bytes) {
         MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
     };
 

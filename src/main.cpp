@@ -9,6 +9,7 @@
 #include "modem/timer_interface.h"
 #include "modem/timer_factory.h"
 #include <memory>
+#include <algorithm>
 
 #include <thread>
 #include <chrono>
@@ -52,7 +53,7 @@ int main(int argc, char* argv[]) {
     IpcServer coap_ipc(9001, nullptr, IpcServer::Mode::framed);
 
     // on_data_received is a lambda so it can capture ipc and forward replies.
-    auto on_data_received = [&](uint8_t cid, std::string& data, uint16_t n_bytes) {
+    auto on_data_received = [&](uint8_t cid, const std::string& data, uint16_t n_bytes) {
         MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
         //ipc.send(reinterpret_cast<const uint8_t*>(data.data()),static_cast<uint16_t>(n_bytes));
     };
@@ -153,7 +154,8 @@ int main(int argc, char* argv[]) {
 
     auto handle_rpc = [&](const std::string& req) -> std::string {
         auto to_upper = [](std::string s) {
-            for (auto& c : s) c = (char)toupper((unsigned char)c);
+            std::transform(s.begin(), s.end(), s.begin(),
+                           [](unsigned char c) { return (char)toupper(c); });
             return s;
         };
         auto sp   = req.find(' ');
@@ -318,7 +320,6 @@ int main(int argc, char* argv[]) {
         //forcePSMMode = true;
     });
     
-    uint32_t count = 0;
     while(true){
         network.loop();
 
@@ -330,6 +331,7 @@ int main(int argc, char* argv[]) {
             ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
         }
       
+        // cppcheck-suppress knownConditionTrueFalse
         if(forcePSMMode){
             MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
             forcePSMMode = false;
