@@ -315,11 +315,13 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
 
 // --- Power ---
 
+// cppcheck-suppress functionStatic
 void xE310::power_on() {
     // TODO: assert power-enable GPIO
 
 }
 
+// cppcheck-suppress functionStatic
 void xE310::power_off() {
     // TODO: de-assert power-enable GPIO
 }
@@ -722,6 +724,7 @@ ModemStatus xE310::set_radio_tech(RadioTech tech) {
 }
 
 ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
+    // cppcheck-suppress variableScope
     AtResponse response;
     // AT+COPS=1,2,"oper",<act> — manual selection, numeric format
     // Mode 4 (manual with auto fallback) is not supported by xE310; use mode 1.
