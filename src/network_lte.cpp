@@ -595,6 +595,7 @@ void NetworkLte::execute_actions() {
                         change_state(NetworkLteState::switched_off);
                         break;
                     }
+                    modem_.set_echo(false);
                     NETWORK_LOG_INF("Modem powered on and responsive");
                     change_state(NetworkLteState::idle_mode);
                     call_action(ModemAction::setup_radio); // trigger radio setup to start attach flow
