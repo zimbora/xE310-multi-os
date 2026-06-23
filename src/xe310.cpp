@@ -13,24 +13,34 @@ namespace modem {
 xE310::xE310(ModemController& controller)
     : controller_(controller) {}
 
+ModemStatus xE310::last_status() const {
+    return last_status_;
+}
+
+ModemStatus xE310::send_raw(const std::string& command, AtResponse& response,
+                            uint32_t timeout_ms, bool retry) {
+    last_status_ = controller_.send_raw(command, response, timeout_ms, retry);
+    return last_status_;
+}
+
 ModemStatus xE310::set_baudrate(uint32_t baudrate) {
     AtResponse response;
-    return controller_.send_raw("AT+IPR=" + std::to_string(baudrate), response);
+    return send_raw("AT+IPR=" + std::to_string(baudrate), response);
 }
 
 ModemStatus xE310::set_echo(bool enable) {
     AtResponse response;
-    return controller_.send_raw(enable ? "ATE1" : "ATE0", response);
+    return send_raw(enable ? "ATE1" : "ATE0", response);
 }
 
 ModemStatus xE310::at_ok() {
     AtResponse response;
-    return controller_.send_raw("AT", response);
+    return send_raw("AT", response);
 }
 
 ModemStatus xE310::request_imei_sv(std::string& imei_sv) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+IMEISV", response);
+    auto status = send_raw("AT+IMEISV", response);
     if (status == ModemStatus::ok) {
         imei_sv = response.body;
     }
@@ -39,7 +49,7 @@ ModemStatus xE310::request_imei_sv(std::string& imei_sv) {
 
 ModemStatus xE310::request_model_id(std::string& model) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#CGMM", response);
+    auto status = send_raw("AT#CGMM", response);
     if (status == ModemStatus::ok) {
         constexpr std::string_view prefix = "#CGMM: ";
         if (response.body.rfind(prefix, 0) == 0) {
@@ -53,7 +63,7 @@ ModemStatus xE310::request_model_id(std::string& model) {
 
 ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#SWPKGV", response);
+    auto status = send_raw("AT#SWPKGV", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -79,7 +89,7 @@ ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
 
 ModemStatus xE310::request_telit_id(std::string& tid) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#TID", response);
+    auto status = send_raw("AT#TID", response);
     if (status == ModemStatus::ok) {
         tid = response.body;
     }
@@ -88,7 +98,7 @@ ModemStatus xE310::request_telit_id(std::string& tid) {
 
 ModemStatus xE310::request_identification(std::string& info) {
     AtResponse response;
-    auto status = controller_.send_raw("ATI", response);
+    auto status = send_raw("ATI", response);
     if (status == ModemStatus::ok) {
         info = response.body;
     }
@@ -97,7 +107,7 @@ ModemStatus xE310::request_identification(std::string& info) {
 
 ModemStatus xE310::get_imei(std::string& imei) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CGSN", response);
+    auto status = send_raw("AT+CGSN", response);
     if (status == ModemStatus::ok) {
         imei = response.body;
     }
@@ -108,7 +118,7 @@ ModemStatus xE310::get_imei(std::string& imei) {
 
 ModemStatus xE310::read_iccid(std::string& iccid) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#CCID", response);
+    auto status = send_raw("AT#CCID", response);
     if (status == ModemStatus::ok) {
         constexpr std::string_view prefix = "#CCID: ";
         if (response.body.rfind(prefix, 0) == 0) {
@@ -122,7 +132,7 @@ ModemStatus xE310::read_iccid(std::string& iccid) {
 
 ModemStatus xE310::read_imsi(std::string& imsi) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CIMI", response);
+    auto status = send_raw("AT+CIMI", response);
     if (status == ModemStatus::ok) {
         imsi = response.body;
     }
@@ -131,12 +141,12 @@ ModemStatus xE310::read_imsi(std::string& imsi) {
 
 ModemStatus xE310::set_sim_detection(SimDetMode mode) {
     AtResponse response;
-    return controller_.send_raw("AT#SIMDET=" + std::to_string(static_cast<int>(mode)), response);
+    return send_raw("AT#SIMDET=" + std::to_string(static_cast<int>(mode)), response);
 }
 
 ModemStatus xE310::query_sim_status(SimStatus& status) {
     AtResponse response;
-    auto result = controller_.send_raw("AT#QSS?", response);
+    auto result = send_raw("AT#QSS?", response);
     if (result == ModemStatus::ok) {
         // Response body: "#QSS: <mode>,<status>"
         auto comma_pos = response.body.find(',');
@@ -150,7 +160,7 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
 ModemStatus xE310::send_sim_command(const std::string& command, std::string& sim_response) {
     AtResponse response;
     auto cmd = "AT+CSIM=" + std::to_string(command.size()) + ",\"" + command + "\"";
-    auto status = controller_.send_raw(cmd, response);
+    auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         sim_response = response.body;
     }
@@ -175,12 +185,12 @@ ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
         cmd += ",";
         if (!cfg.req_active_time.empty())       cmd += "\"" + cfg.req_active_time + "\"";
     }
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CPSMS?", response);
+    auto status = send_raw("AT+CPSMS?", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -222,7 +232,7 @@ ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
 
 ModemStatus xE310::disable_psm() {
     AtResponse response;
-    return controller_.send_raw("AT+CPSMS=0", response);
+    return send_raw("AT+CPSMS=0", response);
 }
 
 ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
@@ -253,12 +263,12 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
     append_opt(5, cfg.has_psm_version,     static_cast<uint32_t>(cfg.psm_version));
     append_opt(6, cfg.has_psm_threshold,   cfg.psm_threshold);
 
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
     AtResponse response;
-    auto result = controller_.send_raw("AT#CPSMS?", response);
+    auto result = send_raw("AT#CPSMS?", response);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -292,17 +302,17 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
 
 ModemStatus xE310::disable_telit_psm() {
     AtResponse response;
-    return controller_.send_raw("AT#CPSMS=0", response);
+    return send_raw("AT#CPSMS=0", response);
 }
 
 ModemStatus xE310::set_psm_urc(bool enable) {
     AtResponse response;
-    return controller_.send_raw(std::string("AT#PSMURC=") + (enable ? "1" : "0"), response);
+    return send_raw(std::string("AT#PSMURC=") + (enable ? "1" : "0"), response);
 }
 
 ModemStatus xE310::get_psm_urc(bool& enabled) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#PSMURC?", response);
+    auto status = send_raw("AT#PSMURC?", response);
     if (status == ModemStatus::ok) {
         // Response body: "#PSMURC: <en>"
         auto colon = response.body.find(':');
@@ -327,25 +337,25 @@ void xE310::power_off() {
 ModemStatus xE310::power_radio() {
     AtResponse response;
     // GPIO -> wake0
-    return controller_.send_raw("AT+CFUN=1", response, 15000);
+    return send_raw("AT+CFUN=1", response, 15000);
 }
 
 ModemStatus xE310::power_off_radio() {
     AtResponse response;
-    return controller_.send_raw("AT+CFUN=0", response, 15000);
+    return send_raw("AT+CFUN=0", response, 15000);
 }
 
 ModemStatus xE310::shutdown() {
     AtResponse response;
     // go to DH0 mode
-    controller_.send_raw("AT+CFUN=4", response, 15000);
-    return controller_.send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
-    //return controller_.send_raw("AT#SHDN", response); // use on/off
+    send_raw("AT+CFUN=4", response, 15000);
+    return send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
+    //return send_raw("AT#SHDN", response); // use on/off
 }
 
 ModemStatus xE310::reboot() {
     AtResponse response;
-    return controller_.send_raw("AT#REBOOT", response);
+    return send_raw("AT#REBOOT", response);
 }
 
 // --- Network Registration ---
@@ -420,7 +430,7 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
     } else {
         cmd = "AT#CSURVC=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
     }
-    auto status = controller_.send_raw(cmd, response,120000); // network survey can take a long time, allow up to 60s
+    auto status = send_raw(cmd, response,120000); // network survey can take a long time, allow up to 60s
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -480,12 +490,12 @@ ModemStatus xE310::set_iot_tech(RadioTech tech, uint8_t gsm_priority) {
     #endif
     
     auto cmd = "AT#WS46=" + std::to_string(n) + "," + std::to_string(gsm_priority);
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#WS46?", response,5000);
+    auto status = send_raw("AT#WS46?", response,5000);
     if (status == ModemStatus::ok) {
         // Response body: "#WS46: <n>,<GSM_P>"
         auto colon = response.body.find(':');
@@ -523,13 +533,13 @@ ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte
              + std::to_string(lte_mask) + ","
              + std::to_string(tdscdma_mask) + ","
              + std::to_string(lte_mask_over_64);
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_bands(BandConfig& bands) {
     AtResponse response;
     // Response: #BND: <band>,<UMTS_band>,<LTE_band>,<TDSCDMA_band>,<LTE_band_over_64>
-    auto status = controller_.send_raw("AT#BND?", response);
+    auto status = send_raw("AT#BND?", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -589,12 +599,12 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
 
 ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
-    auto result = controller_.send_raw(std::string("AT+CEREG=") + (enable ? "4" : "0"), response);
+    auto result = send_raw(std::string("AT+CEREG=") + (enable ? "4" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
     /*
-    result = controller_.send_raw(std::string("AT+CEREG=") + (enable ? "2" : "0"), response);
+    result = send_raw(std::string("AT+CEREG=") + (enable ? "2" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -607,13 +617,13 @@ ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
     auto cmd = "AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\"," +
                std::to_string(static_cast<unsigned int>(rat));
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tech) {
     AtResponse response;
     std::string cmd = (tech == RadioTech::gsm) ? "AT+CREG?" : "AT+CEREG?";
-    auto result = controller_.send_raw(cmd, response,5000);
+    auto result = send_raw(cmd, response, 5000);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -668,17 +678,17 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
 
 ModemStatus xE310::network_attach() {
     AtResponse response;
-    return controller_.send_raw("AT+CGATT=1", response, 30000);
+    return send_raw("AT+CGATT=1", response, 30000);
 }
 
 ModemStatus xE310::network_detach() {
     AtResponse response;
-    return controller_.send_raw("AT+CGATT=0", response, 30000);
+    return send_raw("AT+CGATT=0", response, 30000);
 }
 
 ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CESQ", response);
+    auto status = send_raw("AT+CESQ", response);
     if (status == ModemStatus::ok) {
         // Response: +CESQ: <rxlev>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp>
         // rscp and ecno are WCDMA-only — ignored here.
@@ -721,7 +731,7 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
 ModemStatus xE310::set_radio_tech(RadioTech tech) {
     AtResponse response;
     // AT+COPS=0,,,<act> — automatic selection with specific access technology
-    return controller_.send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response,45000); // registration can take a long time, allow up to 30s
+    return send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response,45000); // registration can take a long time, allow up to 30s
 }
 
 ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
@@ -734,18 +744,18 @@ ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) 
         // lock call
         auto cmd = "AT+COPS=1,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
 
-        return controller_.send_raw(cmd, response, 210000); // manual registration can take a long time, allow up to 30s
+        return send_raw(cmd, response, 210000); // manual registration can take a long time, allow up to 30s
     }
 }
 
 ModemStatus xE310::set_operator_auto() {
     AtResponse response;
-    return controller_.send_raw("AT+COPS=0", response,210000); // registration can take a long time, allow up to 30s 
+    return send_raw("AT+COPS=0", response,210000); // registration can take a long time, allow up to 30s 
 }
 
 ModemStatus xE310::get_operator(std::string& oper) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+COPS?", response);
+    auto status = send_raw("AT+COPS?", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -783,7 +793,7 @@ ModemStatus xE310::get_operator(std::string& oper) {
 ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
     AtResponse response;
     // AT+COPS=? can take up to 3 minutes to complete a full scan
-    auto status = controller_.send_raw("AT+COPS=?", response, 210000);
+    auto status = send_raw("AT+COPS=?", response, 210000);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -854,7 +864,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
     AtResponse response;
 
     // Set numeric output format and enable summary line (Carrier/BCCh counts).
-    auto status = controller_.send_raw("AT#CSURVF=2", response);
+    auto status = send_raw("AT#CSURVF=2", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -866,7 +876,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
     } else {
         cmd = "AT#CSURV=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
     }
-    status = controller_.send_raw(cmd, response, 120000);
+    status = send_raw(cmd, response, 120000);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -942,12 +952,12 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
 ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
     AtResponse response;
     auto cmd = "AT+CGDCONT=" + std::to_string(cid) + ",\"IP\",\"" + apn + "\"";
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CGDCONT?", response);
+    auto status = send_raw("AT+CGDCONT?", response);
     if (status != ModemStatus::ok) {
         return status;
     }
@@ -1014,7 +1024,7 @@ ModemStatus xE310::set_pdp_urc(bool enable) {
     them directly to the TE.
     */
     AtResponse response;
-    auto result = controller_.send_raw(std::string("AT+CGEREP=") + (enable ? "1" : "0"), response);
+    auto result = send_raw(std::string("AT+CGEREP=") + (enable ? "1" : "0"), response);
     if (result != ModemStatus::ok) {
         return result;
     }
@@ -1024,17 +1034,17 @@ ModemStatus xE310::set_pdp_urc(bool enable) {
 
 ModemStatus xE310::activate_pdp(uint8_t cid) {
     AtResponse response;
-    return controller_.send_raw("AT#SGACT=1," + std::to_string(cid), response);
+    return send_raw("AT#SGACT=1," + std::to_string(cid), response);
 }
 
 ModemStatus xE310::deactivate_pdp(uint8_t cid) {
     AtResponse response;
-    return controller_.send_raw("AT#SGACT=0," + std::to_string(cid), response);
+    return send_raw("AT#SGACT=0," + std::to_string(cid), response);
 }
 
 ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#SGACT?", response);
+    auto status = send_raw("AT#SGACT?", response);
     if (status == ModemStatus::ok) {
         // Response: +CGACT: <cid>,<state>
         auto pos = response.body.find(std::to_string(cid) + ",");
@@ -1049,7 +1059,7 @@ ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
 
 ModemStatus xE310::get_ip_address(uint8_t cid, std::string& ip_addr) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CGPADDR=" + std::to_string(cid), response);
+    auto status = send_raw("AT+CGPADDR=" + std::to_string(cid), response);
     if (status == ModemStatus::ok) {
         // Response: +CGPADDR: <cid>,"<ip_addr>"
         auto start = response.body.find('"');
@@ -1064,7 +1074,7 @@ ModemStatus xE310::get_ip_address(uint8_t cid, std::string& ip_addr) {
 ModemStatus xE310::get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
                                  std::string& dns_primary, std::string& dns_secondary) {
     AtResponse response;
-    auto status = controller_.send_raw("AT+CGCONTRDP=" + std::to_string(cid), response);
+    auto status = send_raw("AT+CGCONTRDP=" + std::to_string(cid), response);
     if (status == ModemStatus::ok) {
         // Response: +CGCONTRDP: <cid>,<bearer_id>,"<apn>","<ip>","<gw>","<dns1>","<dns2>"
         // Extract quoted fields
@@ -1103,7 +1113,7 @@ ModemStatus xE310::udp_open(uint8_t conn_id, const std::string& host, uint16_t r
              + std::to_string(remote_port) + ",\""
              + host + "\",0,"
              + std::to_string(local_port) + ",1" + ",0" + ",1";
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid) {
@@ -1113,7 +1123,7 @@ ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid)
     auto cmd = "AT#SL=" + std::to_string(conn_id) + ",1,"
              + std::to_string(local_port) + ",255,"
              + std::to_string(cid);
-    return controller_.send_raw(cmd, response);
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::udp_send(uint8_t conn_id, const std::vector<uint8_t>& data) {
@@ -1129,7 +1139,7 @@ ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint
     AtResponse response;
     // AT#SRECV=<connId>,<maxBytes>
     auto cmd = "AT#SRECV=" + std::to_string(conn_id) + "," + std::to_string(max_bytes);
-    auto status = controller_.send_raw(cmd, response);
+    auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         // Response: #SRECV: <connId>,<recvDataLen>\r\n<data>
         // Find the data after the first \n
@@ -1146,12 +1156,12 @@ ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint
 
 ModemStatus xE310::udp_close(uint8_t conn_id) {
     AtResponse response;
-    return controller_.send_raw("AT#SH=" + std::to_string(conn_id), response);
+    return send_raw("AT#SH=" + std::to_string(conn_id), response);
 }
 
 ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     AtResponse response;
-    auto status = controller_.send_raw("AT#SS=" + std::to_string(conn_id), response);
+    auto status = send_raw("AT#SS=" + std::to_string(conn_id), response);
     if (status == ModemStatus::ok) {
         // Response: #SS: <connId>,<state>
         auto comma_pos = response.body.find(',');
@@ -1164,7 +1174,7 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
 
 ModemStatus xE310::send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms) {
     AtResponse at_response;
-    auto status = controller_.send_raw(command, at_response, timeout_ms);
+    auto status = send_raw(command, at_response, timeout_ms);
     if (status == ModemStatus::ok) {
         response = at_response.body;
     }

@@ -125,9 +125,19 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
 }
 
 ModemStatus ModemController::send_raw(const std::string& command, AtResponse& response,
-                                      uint32_t timeout_ms) {
+                                      uint32_t timeout_ms, bool retry) {
     AtCommand cmd(command, timeout_ms);
-    return send_command(cmd, response);
+    ModemStatus status = send_command(cmd, response);
+
+    if (retry && status != ModemStatus::ok) {
+        for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status != ModemStatus::ok; ++attempt) {
+            MODEM_LOG_DBG("Retrying AT command (%u/%u): %s", attempt, MAX_AT_RETRIES - 1, command.c_str());
+            AtCommand retry_cmd(command, timeout_ms);
+            status = send_command(retry_cmd, response);
+        }
+    }
+
+    return status;
 }
 
 ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,

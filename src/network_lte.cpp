@@ -379,6 +379,12 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
         }
     }
 
+    // Check if the last AT command resulted in a timeout error and trigger recovery.
+    if (modem_.last_status() == ModemStatus::timeout) {
+        NETWORK_LOG_ERR("AT command timeout detected, triggering recovery");
+        on_event(NetworkLteEvent::at_command_no_response);
+    }
+
     // !! only last event is processed for now!!
     // modem events change state without further action, actions are forbidden here for now!!
     switch(get_event()){
