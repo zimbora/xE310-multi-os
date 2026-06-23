@@ -320,7 +320,6 @@ int main(int argc, char* argv[]) {
         //forcePSMMode = true;
     });
     
-    uint32_t count = 0;
     while(true){
         network.loop();
 
