@@ -1,6 +1,7 @@
 #include "modem/xe310.h"
 #include "modem/at_command.h"
 #include "modem/log.h"
+#include "modem/timer_factory.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -355,7 +356,9 @@ ModemStatus xE310::shutdown() {
 
 ModemStatus xE310::reboot() {
     AtResponse response;
-    return send_raw("AT#REBOOT", response);
+    auto status = send_raw("AT#REBOOT", response);
+    delay_ms(2000);
+    return status;
 }
 
 // --- Network Registration ---
