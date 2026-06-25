@@ -351,12 +351,48 @@ TEST_F(Xe310Test, GetPsmUrcDisabled) {
 // --- Power ---
 
 TEST_F(Xe310Test, Shutdown) {
-    expect_command_ok("AT#SHDN", "");
+    // shutdown() sends AT+CFUN=4 then AT+CFUN=11
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(UartError::ok));
+
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
     EXPECT_EQ(modem_->shutdown(), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, ShutdownError) {
-    expect_command_error("AT#SHDN");
+    // shutdown() sends AT+CFUN=4 (succeeds) then AT+CFUN=11 (fails)
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(UartError::ok));
+
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nERROR\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
     EXPECT_EQ(modem_->shutdown(), ModemStatus::at_error);
 }
 

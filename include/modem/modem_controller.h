@@ -46,7 +46,7 @@ public:
     ModemStatus send_command(const AtCommand& cmd, AtResponse& response);
 
     /// Convenience: send raw AT command string.
-    /// When retry is true, the command is retried up to MAX_AT_RETRIES times on failure.
+    /// When retry is true, the command is retried up to MAX_AT_RETRIES times on timeout.
     ModemStatus send_raw(const std::string& command, AtResponse& response,
                          uint32_t timeout_ms = 5000, bool retry = false);
 
