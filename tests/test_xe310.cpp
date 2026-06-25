@@ -60,12 +60,10 @@ protected:
 
     void expect_command_error(const std::string& expected_cmd) {
         EXPECT_CALL(*mock_uart_, write(_, _))
-            .Times(MAX_AT_RETRIES)
-            .WillRepeatedly(Return(UartError::ok));
+            .WillOnce(Return(UartError::ok));
 
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-            .Times(MAX_AT_RETRIES)
-            .WillRepeatedly(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
                 std::string resp = "\r\nERROR\r\n";
                 std::memcpy(buffer, resp.c_str(), resp.size());
                 bytes_read = resp.size();
@@ -920,14 +918,12 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
 
 TEST_F(Xe310Test, CommandWhenNotConnected) {
     EXPECT_CALL(*mock_uart_, is_open())
-    .Times(MAX_AT_RETRIES)
-    .WillRepeatedly(Return(false));
+    .WillOnce(Return(false));
     EXPECT_EQ(modem_->at_ok(), ModemStatus::not_connected);
 }
 
 TEST_F(Xe310Test, UdpOpenWhenNotConnected) {
     EXPECT_CALL(*mock_uart_, is_open())
-    .Times(MAX_AT_RETRIES)
-    .WillRepeatedly(Return(false));
+    .WillOnce(Return(false));
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::not_connected);
 }
