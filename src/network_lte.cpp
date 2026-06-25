@@ -465,6 +465,11 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                 change_state(NetworkLteState::done);
             }
             break;
+        case NetworkLteEvent::attach_error:
+            {
+                call_action(ModemAction::enter_sleep); // Couldn't attach, force sleep mode
+            }
+            break;
         case NetworkLteEvent::at_command_no_response:
             call_action(ModemAction::check_responsiveness); // if we receive an AT command error, we can check if the modem is still responsive, if not, we can trigger a reboot to try to recover
             break;
