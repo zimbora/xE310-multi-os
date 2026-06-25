@@ -277,12 +277,17 @@ TEST_F(NetworkLteTest, NetworkDetached_AttachSecondAttempt_GoesAttaching) {
     EXPECT_EQ(sm.get_attach_retries(), 2u);
 }
 
-TEST_F(NetworkLteTest, NetworkDetached_AttachMaxRetries_GoesDone) {
+TEST_F(NetworkLteTest, NetworkDetached_AttachMaxRetries_GoesOffMode) {
     auto sm = make_sm();  // max_attach_retries = 2 (default)
     sm.set_attach_retries(sm.config().max_attach_retries);  // pre-set retries to max
     sm.change_state(NetworkLteState::network_detached);
+    // step 1: attach_network sees max retries → fires attach_error event
     sm.step();
-    EXPECT_EQ(sm.state(), NetworkLteState::done);
+    // step 2: attach_error event → enter_sleep action → switch_off_radio action queued
+    sm.step();
+    // step 3: switch_off_radio action → shutdown() → off_mode
+    sm.step();
+    EXPECT_EQ(sm.state(), NetworkLteState::off_mode);
 }
 
 // --- Network attaching ---
