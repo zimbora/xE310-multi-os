@@ -129,8 +129,8 @@ ModemStatus ModemController::send_raw(const std::string& command, AtResponse& re
     AtCommand cmd(command, timeout_ms);
     ModemStatus status = send_command(cmd, response);
 
-    if (retry && status != ModemStatus::ok) {
-        for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status != ModemStatus::ok; ++attempt) {
+    if (retry && status == ModemStatus::timeout) {
+        for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status == ModemStatus::timeout; ++attempt) {
             MODEM_LOG_DBG("Retrying AT command (%u/%u): %s", attempt, MAX_AT_RETRIES - 1, command.c_str());
             AtCommand retry_cmd(command, timeout_ms);
             status = send_command(retry_cmd, response);
