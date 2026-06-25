@@ -73,10 +73,12 @@ protected:
 
     void expect_command_timeout() {
         EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+            .Times(MAX_AT_RETRIES)
+            .WillRepeatedly(Return(UartError::ok));
 
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-            .WillOnce(Return(UartError::timeout));
+            .Times(MAX_AT_RETRIES)
+            .WillRepeatedly(Return(UartError::timeout));
     }
 
     MockUart* mock_uart_ = nullptr;
@@ -90,24 +92,20 @@ TEST_F(Xe310Test, AtOkSuccess) {
     expect_command_ok("AT", "");
     EXPECT_EQ(modem_->at_ok(), ModemStatus::ok);
 }
-
 TEST_F(Xe310Test, AtOkTimeout) {
     expect_command_timeout();
     EXPECT_EQ(modem_->at_ok(), ModemStatus::timeout);
 }
-
 TEST_F(Xe310Test, LastStatus_StoresOkAfterSuccess) {
     expect_command_ok("AT", "");
     modem_->at_ok();
     EXPECT_EQ(modem_->last_status(), ModemStatus::ok);
 }
-
 TEST_F(Xe310Test, LastStatus_StoresTimeoutAfterFailure) {
     expect_command_timeout();
     modem_->at_ok();
     EXPECT_EQ(modem_->last_status(), ModemStatus::timeout);
 }
-
 TEST_F(Xe310Test, SetBaudrate) {
     expect_command_ok("AT+IPR=115200", "");
     EXPECT_EQ(modem_->set_baudrate(115200), ModemStatus::ok);
