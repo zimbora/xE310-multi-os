@@ -463,6 +463,9 @@ public:
     /// Returns the last registration info populated by parse_urc_handler or get_registration_status.
     const RegistrationInfo& registration_info() const;
 
+    /// Returns the last ModemStatus stored after a command execution.
+    ModemStatus last_status() const;
+
     /// Poll the UART for any pending URC lines (non-blocking, max timeout_ms wait).
     std::vector<std::string> poll_urc(uint32_t timeout_ms = 10);
 private:
@@ -470,6 +473,12 @@ private:
 
     RegistrationInfo     info;
     TelitCpsmsStatus     psm_status;
+
+    ModemStatus          last_status_ = ModemStatus::ok; ///< Last AT command status
+
+    /// Internal helper: sends a raw AT command, stores the result in last_status_, and returns it.
+    ModemStatus send_raw(const std::string& command, AtResponse& response,
+                         uint32_t timeout_ms = 5000, bool retry = true);
 
     std::unique_ptr<TimerInterface> cmd_timer_;   ///< Timer for at commands responses
 };

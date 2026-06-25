@@ -73,10 +73,12 @@ protected:
 
     void expect_command_timeout() {
         EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+            .Times(MAX_AT_RETRIES)
+            .WillRepeatedly(Return(UartError::ok));
 
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-            .WillOnce(Return(UartError::timeout));
+            .Times(MAX_AT_RETRIES)
+            .WillRepeatedly(Return(UartError::timeout));
     }
 
     MockUart* mock_uart_ = nullptr;
@@ -90,12 +92,20 @@ TEST_F(Xe310Test, AtOkSuccess) {
     expect_command_ok("AT", "");
     EXPECT_EQ(modem_->at_ok(), ModemStatus::ok);
 }
-
 TEST_F(Xe310Test, AtOkTimeout) {
     expect_command_timeout();
     EXPECT_EQ(modem_->at_ok(), ModemStatus::timeout);
 }
-
+TEST_F(Xe310Test, LastStatus_StoresOkAfterSuccess) {
+    expect_command_ok("AT", "");
+    modem_->at_ok();
+    EXPECT_EQ(modem_->last_status(), ModemStatus::ok);
+}
+TEST_F(Xe310Test, LastStatus_StoresTimeoutAfterFailure) {
+    expect_command_timeout();
+    modem_->at_ok();
+    EXPECT_EQ(modem_->last_status(), ModemStatus::timeout);
+}
 TEST_F(Xe310Test, SetBaudrate) {
     expect_command_ok("AT+IPR=115200", "");
     EXPECT_EQ(modem_->set_baudrate(115200), ModemStatus::ok);
@@ -341,12 +351,48 @@ TEST_F(Xe310Test, GetPsmUrcDisabled) {
 // --- Power ---
 
 TEST_F(Xe310Test, Shutdown) {
-    expect_command_ok("AT#SHDN", "");
+    // shutdown() sends AT+CFUN=4 then AT+CFUN=11
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(UartError::ok));
+
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
     EXPECT_EQ(modem_->shutdown(), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, ShutdownError) {
-    expect_command_error("AT#SHDN");
+    // shutdown() sends AT+CFUN=4 (succeeds) then AT+CFUN=11 (fails)
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(UartError::ok));
+
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nERROR\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
     EXPECT_EQ(modem_->shutdown(), ModemStatus::at_error);
 }
 
@@ -871,11 +917,13 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
 // --- Not Connected ---
 
 TEST_F(Xe310Test, CommandWhenNotConnected) {
-    EXPECT_CALL(*mock_uart_, is_open()).WillOnce(Return(false));
+    EXPECT_CALL(*mock_uart_, is_open())
+    .WillOnce(Return(false));
     EXPECT_EQ(modem_->at_ok(), ModemStatus::not_connected);
 }
 
 TEST_F(Xe310Test, UdpOpenWhenNotConnected) {
-    EXPECT_CALL(*mock_uart_, is_open()).WillOnce(Return(false));
+    EXPECT_CALL(*mock_uart_, is_open())
+    .WillOnce(Return(false));
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::not_connected);
 }

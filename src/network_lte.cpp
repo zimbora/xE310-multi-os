@@ -379,6 +379,12 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
         }
     }
 
+    // Check if the last AT command resulted in a timeout error and trigger recovery.
+    if (modem_.last_status() == ModemStatus::timeout) {
+        NETWORK_LOG_ERR("AT command timeout detected, triggering recovery");
+        on_event(NetworkLteEvent::at_command_no_response);
+    }
+
     // !! only last event is processed for now!!
     // modem events change state without further action, actions are forbidden here for now!!
     switch(get_event()){
@@ -457,6 +463,11 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                     call_action(ModemAction::attach_network);
                 }
                 change_state(NetworkLteState::done);
+            }
+            break;
+        case NetworkLteEvent::attach_error:
+            {
+                call_action(ModemAction::enter_sleep); // Couldn't attach, force sleep mode
             }
             break;
         case NetworkLteEvent::at_command_no_response:
@@ -682,7 +693,11 @@ void NetworkLte::execute_actions() {
                     bool fReboot = false;
                     if(fChangeBands){
                         fChangeBands = false;
-                        status = modem_.set_lte_bands(lteConfig.default_lte_bands);
+                        if( nAttachRetries == 0)
+                            status = modem_.set_lte_bands(lteConfig.default_lte_bands);
+                        else
+                            status = modem_.set_lte_bands(lteConfig.fallback_lte_bands);
+
                         if (status != ModemStatus::ok) {
                             NETWORK_LOG_ERR("Failed to set LTE bands");
                             // flag error
@@ -690,7 +705,11 @@ void NetworkLte::execute_actions() {
                     }
                     if(fChangeRAT){
                         fChangeRAT = false;
-                        status = modem_.set_iot_tech(lteConfig.default_iot_tech);
+                        if( nAttachRetries == 0)
+                            status = modem_.set_iot_tech(lteConfig.default_iot_tech);
+                        else 
+                            status = modem_.set_iot_tech(lteConfig.fallback_iot_tech);
+
                         if (status != ModemStatus::ok) {
                             NETWORK_LOG_ERR("Failed to set IoT technology");
                             // flag error
@@ -861,7 +880,6 @@ void NetworkLte::execute_actions() {
 
                 }else{
                     NETWORK_LOG_ERR("Max attach retries reached, giving up");
-                    change_state(NetworkLteState::done);
                     on_event(NetworkLteEvent::attach_error); // flag attach error to trigger power off in the next step
                 }
                 nAttachRetries++;
@@ -1157,6 +1175,7 @@ void NetworkLte::handle_urc(const std::string& urc) {
         if (stat == 1 || stat == 5) {          // registered home / roaming
             call_action(ModemAction::query_pdp_context); // trigger PDP activation flow
         } else if (stat == 3) {   // denied
+            // COPS finished and no connection was possible
             on_event(NetworkLteEvent::network_detached);
         }
         return;

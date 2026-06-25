@@ -17,6 +17,9 @@
 
 namespace modem {
 
+/// Maximum number of retry attempts for AT commands when retry is enabled.
+static constexpr uint8_t MAX_AT_RETRIES = 3;
+
 enum class ModemStatus {
     ok = 0,
     busy,
@@ -43,8 +46,9 @@ public:
     ModemStatus send_command(const AtCommand& cmd, AtResponse& response);
 
     /// Convenience: send raw AT command string.
+    /// When retry is true, the command is retried up to MAX_AT_RETRIES times on timeout.
     ModemStatus send_raw(const std::string& command, AtResponse& response,
-                         uint32_t timeout_ms = 5000);
+                         uint32_t timeout_ms = 5000, bool retry = false);
 
     /// Send binary data.
     ModemStatus send_binary(const std::vector<uint8_t>& data, AtResponse& response,
