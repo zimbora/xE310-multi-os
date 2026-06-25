@@ -285,13 +285,14 @@ int main(int argc, char* argv[]) {
         MODEM_LOG_INF("RPC IPC server listening on localhost:9003 (RPC get/set)");
     }
 
+    
     bool net_res = network.network_connect();
     if(!net_res){
         MODEM_LOG_ERR("Failed to connect to network");
-        modemController.disconnect();
-        return 1;
+        //modemController.disconnect();
+        //return 1;
     }
-        
+    
     bool res = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
     if(res){
         MODEM_LOG_INF("Connected to server successfully");
@@ -302,9 +303,9 @@ int main(int argc, char* argv[]) {
         MODEM_LOG_INF("Initial message queued for TX");
     }else{
         MODEM_LOG_ERR("Failed to connect to server");
-        return 1;
+        //return 1;
     }
-
+    
     auto timer = modem::create_platform_timer();
 
     bool forcePSMMode = false;
