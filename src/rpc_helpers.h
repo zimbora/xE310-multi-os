@@ -97,7 +97,7 @@ inline const char* to_str(modem::SurvCellType v) {
 
 // ── JSON string escaping ──────────────────────────────────────────────────────
 
-inline std::string json_str(const std::string& s) {
+inline std::string json_str(std::string_view s) {
     std::string out;
     out.reserve(s.size() + 2);
     out += '"';

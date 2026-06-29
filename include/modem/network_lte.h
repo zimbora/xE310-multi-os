@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string>
+#include <string_view>
 #include <vector>
 
 #define MAX_SERVER_CONNECTIONS 5
@@ -150,13 +150,13 @@ struct NetworkLteConfig {
 
     uint64_t    default_lte_bands        = DEFAULT_LTE_BANDS;
     RadioTech   default_iot_tech         = DEFAULT_IOT_TECH;
-    std::string default_apn              = DEFAULT_APN; // 1oT
+    FixedString<MODEM_MEDIUM_STR> default_apn{DEFAULT_APN}; // 1oT
 
     uint64_t    fallback_lte_bands       = FALLBACK_LTE_BANDS;
     RadioTech   fallback_iot_tech        = FALLBACK_IOT_TECH;
-    std::string fallback_apn             = FALLBACK_APN; // telenor private;  connect.cxn telenor public
+    FixedString<MODEM_MEDIUM_STR> fallback_apn{FALLBACK_APN}; // telenor private;  connect.cxn telenor public
 
-    std::string plmn                     = DEFAULT_PLMN; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
+    FixedString<MODEM_SHORT_STR> plmn{DEFAULT_PLMN}; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
 
     bool        psm_enable               = true; ///< Whether to use PSM if available on the network  
     uint32_t    psm_t3412                = 3600; ///< Sleep time in PSM mode, in seconds
@@ -180,8 +180,8 @@ enum class ServerState : int8_t {
 struct ServerInfo {
     uint8_t conn_id = 0;
     ServerState state = ServerState::disconnected;
-    std::string protocol;
-    std::string address;
+    FixedString<MODEM_SHORT_STR> protocol;
+    FixedString<MODEM_IP_STR> address;
     uint16_t port = 0;
     bool fHasData = false; // flag to indicate if we have data to send to the server, used to trigger data send flow when we get to data ready state    
 };
@@ -190,7 +190,7 @@ struct ServerInfo {
 /// LTE network state machine — drives modem attach, PDP activation and server registration.
 class NetworkLte {
 public:
-    using DataReceivedCallback = std::function<void(uint8_t cid, const std::string& data, uint16_t n_bytes)>;
+    using DataReceivedCallback = std::function<void(uint8_t cid, std::string_view data, uint16_t n_bytes)>;
 
     explicit NetworkLte(xE310& modem, const NetworkLteConfig& config = {},
                         DataReceivedCallback on_data_received = nullptr,
@@ -233,9 +233,9 @@ public:
     bool network_disconnect();
     
     /// Configure a new server connection with the given parameters. Does not trigger any state changes by itself.
-    void new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port);
+    void new_connection(uint8_t conn_id, std::string_view protocol, std::string_view ip, std::string_view port);
     /// Connect to the network and server using the current configuration. Blocks until connected or max retries reached.
-    bool server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port);
+    bool server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, const uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
     bool server_disconnect(uint8_t conn_id);
 
@@ -260,10 +260,10 @@ public:
     /// @param response The response from the modem.
     /// @param timeout_ms The timeout for the AT command in milliseconds.
     /// @return True if the command was successful, false otherwise.
-    bool send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms);
+    bool send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response, uint32_t timeout_ms);
     /// @brief Update the modem firmware or configuration.
     /// @return True if the update was successful, false otherwise.
-    bool update_modem(const std::string& firmware_url);
+    bool update_modem(std::string_view firmware_url);
 
     // --- Cached modem state accessors ---
 
@@ -274,10 +274,10 @@ public:
     const SignalQuality& signal_quality() const;
 
     /// SIM ICCID read at power-on.
-    const std::string& iccid() const;
+    const FixedString<MODEM_SHORT_STR>& iccid() const;
 
     /// SIM IMSI read at power-on.
-    const std::string& imsi() const;
+    const FixedString<MODEM_SHORT_STR>& imsi() const;
 
     /// Full modem identification info read at power-on.
     const ModemInfo& modem_info() const;
@@ -368,7 +368,7 @@ public:
     void log_action() const;
 
     /// Process a single URC line (e.g. "+CREG: 1") and update event_ if relevant.
-    void handle_urc(const std::string& urc);
+    void handle_urc(std::string_view urc);
 
     bool check_status_response(ModemStatus status);
 private:

@@ -4,6 +4,7 @@
 #include "modem/xe310.h"
 #include "modem/log.h"
 #include <memory>
+#include <string>
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
@@ -63,7 +64,7 @@ int main() {
         MODEM_LOG_INF("Echo disabled");
     }
 
-    std::string imei_sv;
+    modem::FixedString<modem::MODEM_SHORT_STR> imei_sv;
     status = modem.request_imei_sv(imei_sv);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve IMEI/SV");
@@ -72,7 +73,7 @@ int main() {
         MODEM_LOG_INF("IMEI/SV: %s", imei_sv.c_str());
     }
 
-    std::string request_model_id;
+    modem::FixedString<modem::MODEM_MEDIUM_STR> request_model_id;
     status = modem.request_model_id(request_model_id);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve model ID");
@@ -93,7 +94,7 @@ int main() {
         MODEM_LOG_INF("Application Software Version: %s", ver.app_version.c_str());
     }
 
-    std::string read_imei;
+    modem::FixedString<modem::MODEM_SHORT_STR> read_imei;
     status = modem.get_imei(read_imei);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve IMEI");
@@ -102,7 +103,7 @@ int main() {
         MODEM_LOG_INF("IMEI: %s", read_imei.c_str());
     }
 
-    std::string read_iccid;
+    modem::FixedString<modem::MODEM_SHORT_STR> read_iccid;
     status = modem.read_iccid(read_iccid);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve ICCID");
@@ -111,7 +112,7 @@ int main() {
         MODEM_LOG_INF("ICCID: %s", read_iccid.c_str());
     }
 
-    std::string read_imsi;
+    modem::FixedString<modem::MODEM_SHORT_STR> read_imsi;
     status = modem.read_imsi(read_imsi);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve IMSI");
@@ -171,7 +172,7 @@ int main() {
                       sq.rssi, sq.ber, sq.rsrq, sq.rsrp);
     }   
 
-    std::string oper;
+    modem::FixedString<modem::MODEM_MEDIUM_STR> oper;
     status = modem.get_operator(oper);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve operator");
@@ -180,7 +181,7 @@ int main() {
         MODEM_LOG_INF("Operator: %s", oper.c_str());
     }   
 
-    std::string apn;
+    modem::FixedString<modem::MODEM_MEDIUM_STR> apn;
     uint8_t cid = 1; // Example CID for PDP context
     status = modem.get_apn(cid, apn);
     if (status != modem::ModemStatus::ok) {
@@ -199,7 +200,7 @@ int main() {
         MODEM_LOG_INF("PDP Context %d is %s", cid, active ? "Active" : "Inactive");
     }
 
-    std::string ip_addr;
+    modem::FixedString<modem::MODEM_IP_STR> ip_addr;
     status = modem.get_ip_address(cid, ip_addr);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve IP address");

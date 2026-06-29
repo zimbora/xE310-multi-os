@@ -3,12 +3,18 @@
 #include "modem/modem_controller.h"
 
 #include <cstdint>
-#include <string>
+#include <string_view>
 #include <vector>
 
 #define ME310M1
 
 namespace modem {
+
+/// Buffer sizes for modem string fields.
+static constexpr size_t MODEM_SHORT_STR = 32;   ///< IMEI, ICCID, IMSI, etc.
+static constexpr size_t MODEM_MEDIUM_STR = 64;  ///< APN, operator names, etc.
+static constexpr size_t MODEM_LONG_STR = 128;   ///< Version strings, identifications
+static constexpr size_t MODEM_IP_STR = 48;      ///< IP addresses (IPv6 max)
 
 /// SIM detection mode for AT#SIMDET.
 enum class SimDetMode : uint8_t {
@@ -59,20 +65,20 @@ enum class RegStatus : uint8_t {
 struct RegistrationInfo {
     uint8_t mode = 0;
     RegStatus stat = RegStatus::not_registered;
-    std::string lac;          ///< TAC (tracking area code) for LTE / LAC for 2G
-    std::string ci;           ///< Cell identity
-    std::string operator_name;    ///< Operator name from AT+COPS?
+    FixedString<MODEM_SHORT_STR> lac;          ///< TAC (tracking area code) for LTE / LAC for 2G
+    FixedString<MODEM_SHORT_STR> ci;           ///< Cell identity
+    FixedString<MODEM_MEDIUM_STR> operator_name;    ///< Operator name from AT+COPS?
     RadioTech act = RadioTech::gsm;
-    std::string apn;              ///< APN from AT+CGDCONT?
+    FixedString<MODEM_MEDIUM_STR> apn;              ///< APN from AT+CGDCONT?
     bool has_location = false;
-    std::string ip_address;
+    FixedString<MODEM_IP_STR> ip_address;
     // Extended / reject fields (extended format)
     uint8_t cause_type   = 0; ///< Cause type for registration rejection
     uint8_t reject_cause = 0; ///< Reject cause value
     bool has_reject      = false;
     // PSM timer fields (PSM / extended PSM format)
-    std::string active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
-    std::string periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
+    FixedString<MODEM_SHORT_STR> active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
+    FixedString<MODEM_SHORT_STR> periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
     bool has_psm         = false;
 };
 
@@ -83,7 +89,7 @@ enum class ContextState : uint8_t {
 
 struct NetworkInfo {
     ContextState context_state = ContextState::inactive;
-    std::string ip_address;
+    FixedString<MODEM_IP_STR> ip_address;
 };
 
 /// Signal quality from AT+CESQ.
@@ -115,10 +121,10 @@ enum class PsmVersion : uint8_t {
 /// AT+CPSMS configuration (3GPP standard — timer values as 8-bit binary octet strings).
 struct CpsmsConfig {
     PsmMode     mode                  = PsmMode::disable;
-    std::string req_periodic_rau;      ///< T3312 octet string, e.g. "01000111" (GERAN)
-    std::string req_gprs_ready_timer;  ///< T3314 octet string (GERAN)
-    std::string req_periodic_tau;      ///< T3412 octet string, e.g. "10101100"
-    std::string req_active_time;       ///< T3324 octet string, e.g. "00100010"
+    FixedString<MODEM_SHORT_STR> req_periodic_rau;      ///< T3312 octet string, e.g. "01000111" (GERAN)
+    FixedString<MODEM_SHORT_STR> req_gprs_ready_timer;  ///< T3314 octet string (GERAN)
+    FixedString<MODEM_SHORT_STR> req_periodic_tau;      ///< T3412 octet string, e.g. "10101100"
+    FixedString<MODEM_SHORT_STR> req_active_time;       ///< T3324 octet string, e.g. "00100010"
 };
 
 /// AT#CPSMS set configuration (Telit-specific — timer values in seconds as integers).
@@ -168,7 +174,7 @@ struct SurvCell {
     uint16_t mnc         = 0;
     uint32_t lac         = 0;
     uint32_t cell_id     = 0;
-    std::string cell_stat;      ///< CELL_SUITABLE, CELL_BARRED, etc.
+    FixedString<MODEM_SHORT_STR> cell_stat;      ///< CELL_SUITABLE, CELL_BARRED, etc.
     int      num_arfcn   = 0;
 
     // --- 4G ---
@@ -190,28 +196,28 @@ struct NetworkSurveyResult {
 
 /// Software package version from AT#SWPKGV.
 struct SoftwarePackageVersion {
-    std::string package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
-    std::string modem_version;       ///< <Modem Package Version>
-    std::string prod_params_version; ///< <Production Parameters Version>
-    std::string app_version;         ///< <Application Software Version>
+    FixedString<MODEM_LONG_STR> package_version;     ///< <Telit Software Package Version>-<Production Parameters Version>
+    FixedString<MODEM_LONG_STR> modem_version;       ///< <Modem Package Version>
+    FixedString<MODEM_LONG_STR> prod_params_version; ///< <Production Parameters Version>
+    FixedString<MODEM_LONG_STR> app_version;         ///< <Application Software Version>
 };
 
 struct ModemInfo {
-    std::string imei_sv;   ///< IMEI Software Version from AT+IMEISV
-    std::string iccid;     ///< ICCID from AT+CCID
-    std::string imsi;      ///< IMSI from AT+CIMI
-    std::string model_id;
+    FixedString<MODEM_SHORT_STR> imei_sv;   ///< IMEI Software Version from AT+IMEISV
+    FixedString<MODEM_SHORT_STR> iccid;     ///< ICCID from AT+CCID
+    FixedString<MODEM_SHORT_STR> imsi;      ///< IMSI from AT+CIMI
+    FixedString<MODEM_MEDIUM_STR> model_id;
     SoftwarePackageVersion sw_package_version;
-    std::string telit_id;
-    std::string identification;
-    std::string imei;
+    FixedString<MODEM_MEDIUM_STR> telit_id;
+    FixedString<MODEM_LONG_STR> identification;
+    FixedString<MODEM_SHORT_STR> imei;
 };
 
 /// Operator info from AT+COPS?.
 struct Operator {
-    std::string long_name;
-    std::string short_name;
-    std::string numeric;
+    FixedString<MODEM_MEDIUM_STR> long_name;
+    FixedString<MODEM_MEDIUM_STR> short_name;
+    FixedString<MODEM_SHORT_STR> numeric;
     RadioTech act;
 };
 
@@ -258,30 +264,30 @@ public:
     ModemStatus at_ok();
 
     /// AT+IMEISV — Request IMEI and Software Version.
-    ModemStatus request_imei_sv(std::string& imei_sv);
+    ModemStatus request_imei_sv(FixedString<MODEM_SHORT_STR>& imei_sv);
 
     /// AT#CGMM — Request Model Identification.
-    ModemStatus request_model_id(std::string& model);
+    ModemStatus request_model_id(FixedString<MODEM_MEDIUM_STR>& model);
 
     /// AT#SWPKGV — Request Software Package Version.
     ModemStatus request_sw_package_version(SoftwarePackageVersion& ver);
 
     /// AT#TID — Request Telit ID.
-    ModemStatus request_telit_id(std::string& tid);
+    ModemStatus request_telit_id(FixedString<MODEM_MEDIUM_STR>& tid);
 
     /// ATI — Request Identification Information.
-    ModemStatus request_identification(std::string& info);
+    ModemStatus request_identification(FixedString<MODEM_LONG_STR>& info);
 
     /// AT+CGSN — Request IMEI (Product Serial Number).
-    ModemStatus get_imei(std::string& imei);
+    ModemStatus get_imei(FixedString<MODEM_SHORT_STR>& imei);
 
     // --- SIM Card ---
 
     /// AT#CCID — Read SIM ICCID.
-    ModemStatus read_iccid(std::string& iccid);
+    ModemStatus read_iccid(FixedString<MODEM_SHORT_STR>& iccid);
 
     /// AT+CIMI — Read SIM IMSI.
-    ModemStatus read_imsi(std::string& imsi);
+    ModemStatus read_imsi(FixedString<MODEM_SHORT_STR>& imsi);
 
     /// AT#SIMDET — Set SIM detection mode.
     ModemStatus set_sim_detection(SimDetMode mode);
@@ -290,7 +296,7 @@ public:
     ModemStatus query_sim_status(SimStatus& status);
 
     /// AT+CSIM — Send a command to the SIM card.
-    ModemStatus send_sim_command(const std::string& command, std::string& sim_response);
+    ModemStatus send_sim_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& sim_response);
 
     // --- PSM ---
 
@@ -387,13 +393,13 @@ public:
     ModemStatus set_radio_tech(RadioTech tech);
 
     /// AT+COPS — Manual operator selection with access technology and automatic fallback.
-    ModemStatus set_operator_manual(const std::string& oper, RadioTech tech);
+    ModemStatus set_operator_manual(std::string_view oper, RadioTech tech);
 
     /// AT+COPS=0 — Automatic operator selection.
     ModemStatus set_operator_auto();
 
     /// AT+COPS? — Read current operator. Parses +COPS: <mode>[,<format>,<oper>,<act>] into oper.
-    ModemStatus get_operator(std::string& oper);
+    ModemStatus get_operator(FixedString<MODEM_MEDIUM_STR>& oper);
 
     /// AT+COPS=? — List all available operators.
     /// Parses +COPS: (<stat>,<long>,<short>,<numeric>,<act>),... into operators.
@@ -407,11 +413,11 @@ public:
     // --- Network Attach ---
 
     /// AT+CGDCONT — Set PDP context (APN).
-    ModemStatus set_apn(uint8_t cid, const std::string& apn);
+    ModemStatus set_apn(uint8_t cid, std::string_view apn);
 
     /// AT+CGDCONT? — Read current APN and IP address for a context.
     /// Parses +CGDCONT: <cid>,<PDP_type>,<APN>,<PDP_addr>,... and gets apn.
-    ModemStatus get_apn(uint8_t cid, std::string& apn);
+    ModemStatus get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn);
     
     /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
     /// occurring in the module or in the network.
@@ -427,17 +433,17 @@ public:
     ModemStatus get_pdp_state(uint8_t cid, bool& active);
 
     /// AT+CGPADDR — Get the IP address for a PDP context.
-    ModemStatus get_ip_address(uint8_t cid, std::string& ip_addr);
+    ModemStatus get_ip_address(uint8_t cid, FixedString<MODEM_IP_STR>& ip_addr);
 
     /// AT+CGCONTRDP — Get full PDP context dynamic parameters (IP, gateway, DNS).
-    ModemStatus get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
-                             std::string& dns_primary, std::string& dns_secondary);
+    ModemStatus get_pdp_info(uint8_t cid, FixedString<MODEM_IP_STR>& ip_addr, FixedString<MODEM_IP_STR>& gw_addr,
+                             FixedString<MODEM_IP_STR>& dns_primary, FixedString<MODEM_IP_STR>& dns_secondary);
 
     // --- UDP Connection ---
 
     /// AT#SD — Open a UDP socket to a remote host.
     /// AT#SD=<connId>,1,<rPort>,"<host>",0,<lPort>,1
-    ModemStatus udp_open(uint8_t conn_id, const std::string& host, uint16_t remote_port,
+    ModemStatus udp_open(uint8_t conn_id, std::string_view host, uint16_t remote_port,
                          uint16_t local_port = 0);
 
     /// AT#SL — Listen for incoming UDP data on a local port.
@@ -456,7 +462,7 @@ public:
     ModemStatus udp_status(uint8_t conn_id, uint8_t& state);
 
     /// Send a raw AT command string and return the response body.
-    ModemStatus send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms = 5000);
+    ModemStatus send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response, uint32_t timeout_ms = 5000);
 
     // --- Event Handlers ---
 
@@ -467,7 +473,7 @@ public:
     ModemStatus last_status() const;
 
     /// Poll the UART for any pending URC lines (non-blocking, max timeout_ms wait).
-    std::vector<std::string> poll_urc(uint32_t timeout_ms = 10);
+    std::vector<FixedString<URC_LINE_MAX>> poll_urc(uint32_t timeout_ms = 10);
 private:
     ModemController& controller_;
 
@@ -477,7 +483,7 @@ private:
     ModemStatus          last_status_ = ModemStatus::ok; ///< Last AT command status
 
     /// Internal helper: sends a raw AT command, stores the result in last_status_, and returns it.
-    ModemStatus send_raw(const std::string& command, AtResponse& response,
+    ModemStatus send_raw(std::string_view command, AtResponse& response,
                          uint32_t timeout_ms = 5000, bool retry = true);
 
     std::unique_ptr<TimerInterface> cmd_timer_;   ///< Timer for at commands responses
