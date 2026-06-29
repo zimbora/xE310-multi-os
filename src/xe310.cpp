@@ -26,7 +26,9 @@ ModemStatus xE310::send_raw(const std::string& command, AtResponse& response,
 
 ModemStatus xE310::set_baudrate(uint32_t baudrate) {
     AtResponse response;
-    return send_raw("AT+IPR=" + std::to_string(baudrate), response);
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "AT+IPR=%u", static_cast<unsigned>(baudrate));
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::set_echo(bool enable) {
@@ -142,7 +144,9 @@ ModemStatus xE310::read_imsi(std::string& imsi) {
 
 ModemStatus xE310::set_sim_detection(SimDetMode mode) {
     AtResponse response;
-    return send_raw("AT#SIMDET=" + std::to_string(static_cast<int>(mode)), response);
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT#SIMDET=%d", static_cast<int>(mode));
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::query_sim_status(SimStatus& status) {
@@ -160,7 +164,13 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
 
 ModemStatus xE310::send_sim_command(const std::string& command, std::string& sim_response) {
     AtResponse response;
-    auto cmd = "AT+CSIM=" + std::to_string(command.size()) + ",\"" + command + "\"";
+    char prefix[24];
+    snprintf(prefix, sizeof(prefix), "AT+CSIM=%zu,\"", command.size());
+    std::string cmd;
+    cmd.reserve(std::strlen(prefix) + command.size() + 1);
+    cmd = prefix;
+    cmd += command;
+    cmd += "\"";
     auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         sim_response = response.body;
@@ -174,17 +184,20 @@ ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
     AtResponse response;
     // AT+CPSMS=<mode>[,<ReqPeriodicRAU>[,<ReqGPRSreadyTimer>[,<ReqPeriodicTAU>[,<ReqActiveTime>]]]]
     // Empty optional fields are left blank between commas, timer values are quoted binary strings.
-    std::string cmd = "AT+CPSMS=" + std::to_string(static_cast<int>(cfg.mode));
+    char mode_buf[16];
+    snprintf(mode_buf, sizeof(mode_buf), "AT+CPSMS=%d", static_cast<int>(cfg.mode));
+    std::string cmd = mode_buf;
     if (!cfg.req_periodic_rau.empty() || !cfg.req_gprs_ready_timer.empty() ||
         !cfg.req_periodic_tau.empty() || !cfg.req_active_time.empty()) {
+        cmd.reserve(64);
         cmd += ",";
-        if (!cfg.req_periodic_rau.empty())      cmd += "\"" + cfg.req_periodic_rau + "\"";
+        if (!cfg.req_periodic_rau.empty())      { cmd += "\""; cmd += cfg.req_periodic_rau; cmd += "\""; }
         cmd += ",";
-        if (!cfg.req_gprs_ready_timer.empty())  cmd += "\"" + cfg.req_gprs_ready_timer + "\"";
+        if (!cfg.req_gprs_ready_timer.empty())  { cmd += "\""; cmd += cfg.req_gprs_ready_timer; cmd += "\""; }
         cmd += ",";
-        if (!cfg.req_periodic_tau.empty())      cmd += "\"" + cfg.req_periodic_tau + "\"";
+        if (!cfg.req_periodic_tau.empty())      { cmd += "\""; cmd += cfg.req_periodic_tau; cmd += "\""; }
         cmd += ",";
-        if (!cfg.req_active_time.empty())       cmd += "\"" + cfg.req_active_time + "\"";
+        if (!cfg.req_active_time.empty())       { cmd += "\""; cmd += cfg.req_active_time; cmd += "\""; }
     }
     return send_raw(cmd, response);
 }
@@ -202,15 +215,16 @@ ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
     }
     std::string params = response.body.substr(colon + 1);
 
-    auto strip_quotes = [](std::string s) -> std::string {
+    auto strip_quotes = [](const std::string& s) -> std::string {
         if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
-            s = s.substr(1, s.size() - 2);
+            return s.substr(1, s.size() - 2);
         }
         return s;
     };
 
     // Tokenize on commas
     std::vector<std::string> fields;
+    fields.reserve(6);
     std::string_view sv = params;
     while (!sv.empty()) {
         auto comma = sv.find(',');
@@ -239,7 +253,10 @@ ModemStatus xE310::disable_psm() {
 ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
     AtResponse response;
     // AT#CPSMS=<mode>[,<RAU>[,<GPRSTimer>[,<TAU>[,<ActiveTime>[,<psmVersion>[,<psmThreshold>]]]]]]
-    std::string cmd = "AT#CPSMS=" + std::to_string(static_cast<int>(cfg.mode));
+    char mode_buf[16];
+    snprintf(mode_buf, sizeof(mode_buf), "AT#CPSMS=%d", static_cast<int>(cfg.mode));
+    std::string cmd = mode_buf;
+    cmd.reserve(64);
 
     // Determine last field that has a value so we know how far to extend the command
     int last = 0;
@@ -281,6 +298,7 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
     std::string params = response.body.substr(colon + 1);
 
     std::vector<std::string> fields;
+    fields.reserve(8);
     std::string_view sv = params;
     while (!sv.empty()) {
         auto comma = sv.find(',');
@@ -370,6 +388,7 @@ static SurvCell parse_surv_line(const std::string& line) {
     // 2G non-BCCH: 2 fields
     SurvCell cell;
     std::vector<std::string> fields;
+    fields.reserve(10);
     std::string_view sv = line;
     while (!sv.empty()) {
         auto comma = sv.find(',');
@@ -427,11 +446,12 @@ static SurvCell parse_surv_line(const std::string& line) {
 ModemStatus xE310::network_survey(NetworkSurveyResult& result,
                                    uint32_t start_ch, uint32_t end_ch) {
     AtResponse response;
-    std::string cmd;
+    char cmd[48];
     if (start_ch == 0 && end_ch == 0) {
-        cmd = "AT#CSURVC";
+        snprintf(cmd, sizeof(cmd), "AT#CSURVC");
     } else {
-        cmd = "AT#CSURVC=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
+        snprintf(cmd, sizeof(cmd), "AT#CSURVC=%u,%u",
+                 static_cast<unsigned>(start_ch), static_cast<unsigned>(end_ch));
     }
     auto status = send_raw(cmd, response,120000); // network survey can take a long time, allow up to 60s
     if (status != ModemStatus::ok) {
@@ -492,7 +512,9 @@ ModemStatus xE310::set_iot_tech(RadioTech tech, uint8_t gsm_priority) {
         gsm_priority = 0; // GSM is not supported on ME310M1, so priority param is ignored and set to 0
     #endif
     
-    auto cmd = "AT#WS46=" + std::to_string(n) + "," + std::to_string(gsm_priority);
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT#WS46=%u,%u",
+             static_cast<unsigned>(n), static_cast<unsigned>(gsm_priority));
     return send_raw(cmd, response);
 }
 
@@ -532,11 +554,13 @@ ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte
                               uint64_t tdscdma_mask, uint64_t lte_mask_over_64) {
     AtResponse response;
     // AT#BND=<band>,<UMTS_band>,<LTE_band>,<TDSCDMA_band>,<LTE_band_over_64>
-    auto cmd = "AT#BND=" + std::to_string(gsm_mask) + ","
-             + std::to_string(umts_mask) + ","
-             + std::to_string(lte_mask) + ","
-             + std::to_string(tdscdma_mask) + ","
-             + std::to_string(lte_mask_over_64);
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "AT#BND=%llu,%llu,%llu,%llu,%llu",
+             static_cast<unsigned long long>(gsm_mask),
+             static_cast<unsigned long long>(umts_mask),
+             static_cast<unsigned long long>(lte_mask),
+             static_cast<unsigned long long>(tdscdma_mask),
+             static_cast<unsigned long long>(lte_mask_over_64));
     return send_raw(cmd, response);
 }
 
@@ -555,6 +579,7 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
 
     std::string params = response.body.substr(colon + 1);
     std::vector<std::string> fields;
+    fields.reserve(5);
     size_t pos = 0;
     while (pos <= params.size()) {
         auto comma = params.find(',', pos);
@@ -619,8 +644,9 @@ ModemStatus xE310::set_registration_urc(bool enable) {
 
 ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
-    auto cmd = R"(AT%TRSHCMD="BSPFILE","ERASE_LTEPP",)" +
-               std::to_string(static_cast<unsigned int>(rat));
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), R"(AT%%TRSHCMD="BSPFILE","ERASE_LTEPP",%u)",
+             static_cast<unsigned>(rat));
     return send_raw(cmd, response);
 }
 
@@ -643,6 +669,7 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
 
     // Parse comma-separated fields
     std::vector<std::string> fields;
+    fields.reserve(6);
     size_t pos = 0;
     while (pos < params.size()) {
         auto comma = params.find(',', pos);
@@ -700,6 +727,7 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
         if (pos != std::string::npos) {
             std::string values = response.body.substr(pos + 1);
             std::vector<int> parsed;
+            parsed.reserve(6);
             size_t start = 0;
             while (start <= values.size()) {
                 auto comma = values.find(',', start);
@@ -735,7 +763,9 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
 ModemStatus xE310::set_radio_tech(RadioTech tech) {
     AtResponse response;
     // AT+COPS=0,,,<act> — automatic selection with specific access technology
-    return send_raw("AT+COPS=0,,," + std::to_string(static_cast<int>(tech)), response,45000); // registration can take a long time, allow up to 30s
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT+COPS=0,,,%d", static_cast<int>(tech));
+    return send_raw(cmd, response,45000); // registration can take a long time, allow up to 30s
 }
 
 ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) {
@@ -746,8 +776,9 @@ ModemStatus xE310::set_operator_manual(const std::string& oper, RadioTech tech) 
         return set_operator_auto();
     } else {
         // lock call
-        auto cmd = "AT+COPS=1,2,\"" + oper + "\"," + std::to_string(static_cast<int>(tech));
-
+        char cmd[64];
+        snprintf(cmd, sizeof(cmd), "AT+COPS=1,2,\"%s\",%d",
+                 oper.c_str(), static_cast<int>(tech));
         return send_raw(cmd, response, 210000); // manual registration can take a long time, allow up to 30s
     }
 }
@@ -773,6 +804,7 @@ ModemStatus xE310::get_operator(std::string& oper) {
 
     std::string params = response.body.substr(colon + 1);
     std::vector<std::string> fields;
+    fields.reserve(4);
     size_t pos = 0;
     while (pos <= params.size()) {
         auto comma = params.find(',', pos);
@@ -820,6 +852,7 @@ ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
 
         // Tokenize comma-separated fields, respecting quoted strings
         std::vector<std::string> fields;
+        fields.reserve(5);
         size_t fp = 0;
         while (fp <= entry.size()) {
             // skip whitespace
@@ -874,11 +907,12 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
     }
 
     // Build survey command (optional channel range).
-    std::string cmd;
+    char cmd[48];
     if (start_ch == 0 && end_ch == 0) {
-        cmd = "AT#CSURV";
+        snprintf(cmd, sizeof(cmd), "AT#CSURV");
     } else {
-        cmd = "AT#CSURV=" + std::to_string(start_ch) + "," + std::to_string(end_ch);
+        snprintf(cmd, sizeof(cmd), "AT#CSURV=%u,%u",
+                 static_cast<unsigned>(start_ch), static_cast<unsigned>(end_ch));
     }
     status = send_raw(cmd, response, 120000);
     if (status != ModemStatus::ok) {
@@ -955,7 +989,9 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
 
 ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
     AtResponse response;
-    auto cmd = R"(AT+CGDCONT=)" + std::to_string(cid) + R"(,"IP",")" + apn + R"(")";
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "AT+CGDCONT=%u,\"IP\",\"%s\"",
+             static_cast<unsigned>(cid), apn.c_str());
     return send_raw(cmd, response);
 }
 
@@ -987,6 +1023,7 @@ ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
         // Tokenize comma-separated fields after the colon
         std::string params = line.substr(p + prefix.size());
         std::vector<std::string> fields;
+        fields.reserve(8);
         size_t pos = 0;
         while (pos <= params.size()) {
             auto comma = params.find(',', pos);
@@ -1038,12 +1075,16 @@ ModemStatus xE310::set_pdp_urc(bool enable) {
 
 ModemStatus xE310::activate_pdp(uint8_t cid) {
     AtResponse response;
-    return send_raw("AT#SGACT=1," + std::to_string(cid), response);
+    char cmd[16];
+    snprintf(cmd, sizeof(cmd), "AT#SGACT=1,%u", static_cast<unsigned>(cid));
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::deactivate_pdp(uint8_t cid) {
     AtResponse response;
-    return send_raw("AT#SGACT=0," + std::to_string(cid), response);
+    char cmd[16];
+    snprintf(cmd, sizeof(cmd), "AT#SGACT=0,%u", static_cast<unsigned>(cid));
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
@@ -1051,7 +1092,9 @@ ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
     auto status = send_raw("AT#SGACT?", response);
     if (status == ModemStatus::ok) {
         // Response: +CGACT: <cid>,<state>
-        auto pos = response.body.find(std::to_string(cid) + ",");
+        char needle[8];
+        snprintf(needle, sizeof(needle), "%u,", static_cast<unsigned>(cid));
+        auto pos = response.body.find(needle);
         if (pos != std::string::npos) {
             active = (response.body[pos + 2] == '1');
         } else {
@@ -1063,7 +1106,9 @@ ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
 
 ModemStatus xE310::get_ip_address(uint8_t cid, std::string& ip_addr) {
     AtResponse response;
-    auto status = send_raw("AT+CGPADDR=" + std::to_string(cid), response);
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT+CGPADDR=%u", static_cast<unsigned>(cid));
+    auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         // Response: +CGPADDR: <cid>,"<ip_addr>"
         auto start = response.body.find('"');
@@ -1078,7 +1123,9 @@ ModemStatus xE310::get_ip_address(uint8_t cid, std::string& ip_addr) {
 ModemStatus xE310::get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& gw_addr,
                                  std::string& dns_primary, std::string& dns_secondary) {
     AtResponse response;
-    auto status = send_raw("AT+CGCONTRDP=" + std::to_string(cid), response);
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT+CGCONTRDP=%u", static_cast<unsigned>(cid));
+    auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         // Response: +CGCONTRDP: <cid>,<bearer_id>,"<apn>","<ip>","<gw>","<dns1>","<dns2>"
         // Extract quoted fields
@@ -1114,10 +1161,10 @@ ModemStatus xE310::udp_open(uint8_t conn_id, const std::string& host, uint16_t r
     AtResponse response;
     // AT#SD=<connId>,<txProt>,<rPort>,"<IPaddr>",<closureType>,<lPort>,<connMode>
     // txProt=1 (UDP), closureType=0 (not applicable for UDP), connMode=1 (command mode)
-    auto cmd = "AT#SD=" + std::to_string(conn_id) + ",1,"
-             + std::to_string(remote_port) + ",\""
-             + host + "\",0,"
-             + std::to_string(local_port) + ",1" + ",0" + ",1";
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "AT#SD=%u,1,%u,\"%s\",0,%u,1,0,1",
+             static_cast<unsigned>(conn_id), static_cast<unsigned>(remote_port),
+             host.c_str(), static_cast<unsigned>(local_port));
     return send_raw(cmd, response);
 }
 
@@ -1125,9 +1172,10 @@ ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid)
     AtResponse response;
     // AT#SL=<connId>,1,<listenPort>,255,<cid>
     // State 1 = enable listening, 255 = accept from any IP
-    auto cmd = "AT#SL=" + std::to_string(conn_id) + ",1,"
-             + std::to_string(local_port) + ",255,"
-             + std::to_string(cid);
+    char cmd[48];
+    snprintf(cmd, sizeof(cmd), "AT#SL=%u,1,%u,255,%u",
+             static_cast<unsigned>(conn_id), static_cast<unsigned>(local_port),
+             static_cast<unsigned>(cid));
     return send_raw(cmd, response);
 }
 
@@ -1136,14 +1184,18 @@ ModemStatus xE310::udp_send(uint8_t conn_id, const std::vector<uint8_t>& data) {
     // AT#SSENDEXT=<connId>,<bytesToSend>
     // Modem returns "\r\n> " prompt, then we send raw bytes.
     // After <bytesToSend> bytes are received, modem returns OK.
-    auto cmd = "AT#SSENDEXT=" + std::to_string(conn_id) + "," + std::to_string(data.size());
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "AT#SSENDEXT=%u,%zu",
+             static_cast<unsigned>(conn_id), data.size());
     return controller_.send_with_prompt(cmd, data, response);
 }
 
 ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes) {
     AtResponse response;
     // AT#SRECV=<connId>,<maxBytes>
-    auto cmd = "AT#SRECV=" + std::to_string(conn_id) + "," + std::to_string(max_bytes);
+    char cmd[32];
+    snprintf(cmd, sizeof(cmd), "AT#SRECV=%u,%u",
+             static_cast<unsigned>(conn_id), static_cast<unsigned>(max_bytes));
     auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         // Response: #SRECV: <connId>,<recvDataLen>\r\n<data>
@@ -1161,12 +1213,16 @@ ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint
 
 ModemStatus xE310::udp_close(uint8_t conn_id) {
     AtResponse response;
-    return send_raw("AT#SH=" + std::to_string(conn_id), response);
+    char cmd[16];
+    snprintf(cmd, sizeof(cmd), "AT#SH=%u", static_cast<unsigned>(conn_id));
+    return send_raw(cmd, response);
 }
 
 ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     AtResponse response;
-    auto status = send_raw("AT#SS=" + std::to_string(conn_id), response);
+    char cmd[16];
+    snprintf(cmd, sizeof(cmd), "AT#SS=%u", static_cast<unsigned>(conn_id));
+    auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         // Response: #SS: <connId>,<state>
         auto comma_pos = response.body.find(',');

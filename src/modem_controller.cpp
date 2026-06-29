@@ -56,7 +56,10 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     }
 
     const auto& cmd_str = cmd.command_string();
-    std::string full_cmd = cmd_str + "\r\n";
+    std::string full_cmd;
+    full_cmd.reserve(cmd_str.size() + 2);
+    full_cmd = cmd_str;
+    full_cmd += "\r\n";
 
     auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()),
                             full_cmd.size());
@@ -75,6 +78,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     uint8_t buffer[512];
     size_t bytes_read = 0;
     std::string accumulated;
+    accumulated.reserve(512);
 
     while (true) {
         const uint32_t elapsed = cmd_timer_->elapsed_ms();
@@ -113,7 +117,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
                         status_end += 2; // skip the \r\n
                         // Anything after the status line goes to the URC buffer
                         if (status_end < accumulated.size()) {
-                            urc_rx_buffer_ += accumulated.substr(status_end);
+                            urc_rx_buffer_.append(accumulated, status_end, std::string::npos);
                         }
                     }
                 }
@@ -205,7 +209,10 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
     }
 
     // Step 1: Send the AT command
-    std::string full_cmd = command + "\r\n";
+    std::string full_cmd;
+    full_cmd.reserve(command.size() + 2);
+    full_cmd = command;
+    full_cmd += "\r\n";
     auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()),
                             full_cmd.size());
     if (err != UartError::ok) {
@@ -265,6 +272,7 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
 
 std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     std::vector<std::string> urcs;
+    urcs.reserve(8);
     IoLockGuard lock(io_mutex_);
     if (!lock) {
         return urcs;
