@@ -54,6 +54,8 @@ void NetworkLte::set_attach_retries(uint8_t n) { nAttachRetries = n; }
 void NetworkLte::set_pdp_retries(uint8_t n) { nPdpRetries = n; }
 
 bool NetworkLte::network_connect() {
+    if(fWarmBoot)
+        modem_.network_detach();
     if(state_ == NetworkLteState::data_ready){
         NETWORK_LOG_INF("Already connected to network");
         return true; // already connected to network
@@ -1175,6 +1177,7 @@ void NetworkLte::handle_urc(const std::string& urc) {
 
         if (stat == 1 || stat == 5) {          // registered home / roaming
             call_action(ModemAction::query_pdp_context); // trigger PDP activation flow
+            nAttachRetries = 0;
         } else if (stat == 3) {   // denied
             //on_event(NetworkLteEvent::network_detached);
         }
