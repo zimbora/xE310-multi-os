@@ -22,11 +22,39 @@ All code must compile and run correctly on every target platform.
 ## Code Style
 
 - C++17 standard (compatible with Zephyr's toolchain)
-- Use `snake_case` for functions and variables, `PascalCase` for classes and structs
 - Use `#pragma once` for include guards
 - Keep headers minimal — forward-declare where possible
 - No exceptions on embedded targets — use error codes or `std::expected`-style patterns
 - No dynamic memory allocation in hot paths on embedded targets
+
+### Naming Conventions
+
+| Entity             | Convention                                                              |
+|--------------------|-------------------------------------------------------------------------|
+| Functions          | `snake_case` (e.g. `read_sensor_value`, `process_frame`)               |
+| Variables          | `camelCase` (e.g. `sampleCount`, `rxBuffer`)                           |
+| Bool variables     | `fPascalCase` (e.g. `fIsConnected`, `fHasData`, `fEnabled`)            |
+| Global variables   | `g_` prefix + `camelCase` (e.g. `g_sensorState`, `g_txBuffer`)         |
+| Static variables   | `s_` prefix + `camelCase` (e.g. `s_instanceCount`, `s_cachedValue`)    |
+| Types (class/struct) | `PascalCase` (e.g. `SensorDriver`, `FrameHeader`)                    |
+| Enums              | `PascalCase` for type, `PascalCase` for values (e.g. `Error::HardwareFault`) |
+| Constants / macros | `UPPER_SNAKE_CASE` (e.g. `MAX_FRAME_SIZE`, `DEFAULT_TIMEOUT_MS`)       |
+| Namespaces         | `snake_case` (e.g. `anova::sensor_driver`)                             |
+| Template params    | `PascalCase` (e.g. `template <typename ValueType>`)                    |
+
+### Style Checker
+
+Run the naming convention checker:
+
+```bash
+python3 scripts/check_code_style.py
+```
+
+With verbose output and summary:
+
+```bash
+python3 scripts/check_code_style.py --verbose --summary
+```
 
 ## Build System
 
