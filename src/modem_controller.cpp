@@ -99,8 +99,13 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             if (response.status == AtStatus::ok || response.status == AtStatus::error || response.status == AtStatus::busy) {
                 // Extract any URCs that arrived after the status line and buffer them for poll_urc().
                 // This prevents URCs in the response window from corrupting the payload.
-                size_t status_end = accumulated.find(response.status == AtStatus::ok ? "OK" : 
-                                                     response.status == AtStatus::error ? "ERROR" : "BUSY");
+                const char* status_text = "BUSY";
+                if (response.status == AtStatus::ok) {
+                    status_text = "OK";
+                } else if (response.status == AtStatus::error) {
+                    status_text = "ERROR";
+                }
+                size_t status_end = accumulated.find(status_text);
                 if (status_end != std::string::npos) {
                     // Find the end of the status line (OK\r\n or ERROR\r\n)
                     status_end = accumulated.find("\r\n", status_end);
@@ -308,7 +313,7 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
         if (line.empty()) {
             continue;
         }
-        for (const char* const* p = kPrefixes; *p; ++p) {
+        for (const char* const* p = kPrefixes; *p != nullptr; ++p) {
             if (line.rfind(*p, 0) == 0) {
                 //MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
                 urcs.push_back(line);

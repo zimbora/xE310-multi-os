@@ -135,7 +135,7 @@ private:
     Callback                        cb_;
     bool                            running_   = false;
     bool                            cancelled_ = false;
-    std::chrono::steady_clock::time_point start_{};
+    std::chrono::steady_clock::time_point start_;
     std::chrono::steady_clock::time_point deadline_;
 };
 

@@ -235,7 +235,7 @@ public:
     /// Configure a new server connection with the given parameters. Does not trigger any state changes by itself.
     void new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port);
     /// Connect to the network and server using the current configuration. Blocks until connected or max retries reached.
-    bool server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port);
+    bool server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
     bool server_disconnect(uint8_t conn_id);
 
@@ -359,10 +359,10 @@ public:
     };
 
     /// Log current state and event using MODEM_LOG_DBG.
-    void log_state() const;
+    static void log_state(NetworkLteState state);
     
     /// Log current event using MODEM_LOG_DBG.
-    void log_event() const;
+    static void log_event(NetworkLteEvent event);
 
     /// Log current action using MODEM_LOG_DBG.
     void log_action() const;

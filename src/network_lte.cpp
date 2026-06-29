@@ -69,18 +69,12 @@ bool NetworkLte::network_connect() {
 }
 
 bool NetworkLte::network_disconnect() {
-    
-    if(true || state_ == NetworkLteState::data_ready){
-        auto status = modem_.network_detach();
-        if(status == ModemStatus::ok)
-            change_state(NetworkLteState::network_detached);
-        else
-            NETWORK_LOG_ERR("Failed to detach from network");
-        return true; // already connected to network
-    }else{
-        NETWORK_LOG_ERR("Not currently connected to network, cannot disconnect");
-        return true;
-    }
+    auto status = modem_.network_detach();
+    if(status == ModemStatus::ok)
+        change_state(NetworkLteState::network_detached);
+    else
+        NETWORK_LOG_ERR("Failed to detach from network");
+    return true; // already connected to network
 }
 
 void NetworkLte::new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port){
@@ -219,6 +213,20 @@ bool NetworkLte::force_PSM(){
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
     std::vector<Operator> availableOperators;
     auto status = modem_.get_available_operators(availableOperators);
+    if (status != ModemStatus::ok) {
+        NETWORK_LOG_ERR("Failed to get available operators");
+        change_state(NetworkLteState::idle_mode);
+
+        if (st_timer) {
+            st_timer->start(lteConfig.data_ready_timeout_sec * 1000, [this]() { on_timer_expired(); });
+        }
+
+        modem_.set_psm_urc(true);
+        modem_.set_registration_urc(true);
+        modem_.set_pdp_urc(true);
+        return false;
+    }
+
     for(const auto& op : availableOperators){
         NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
         if(op.act == RadioTech::cat_m1 || op.act == RadioTech::nb_iot)
@@ -661,32 +669,6 @@ void NetworkLte::execute_actions() {
             {
                 // get modem info
                 modem::ModemStatus status;
-                if(false){
-                    status = modem_.request_imei_sv(modemInfo.imei_sv);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                    status = modem_.request_model_id(modemInfo.model_id);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                    status = modem_.request_sw_package_version(modemInfo.sw_package_version);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                    status = modem_.request_telit_id(modemInfo.telit_id);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                    status = modem_.request_identification(modemInfo.identification);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                    status = modem_.get_imei(modemInfo.imei);
-                    if (status != ModemStatus::ok) {
-                        // flag error
-                    }
-                }
                 // get modem configuration (bands, iot tech, apn) and apply it
                 
                 if(fChangeBands || fChangeRAT){
@@ -1008,7 +990,7 @@ void NetworkLte::change_state(NetworkLteState new_state) {
 
     prev_state_ = state_;
     state_ = new_state;
-    log_state();
+    log_state(state_);
 
     // stop any timers that are running for the previous state, and log elapsed time for debugging/analytics purposes
     switch(prev_state_){
@@ -1222,7 +1204,7 @@ void NetworkLte::handle_urc(const std::string& urc) {
 // replace all occurrences of event_ = with on_event(event) to ensure that all events go through the on_event handler for better tracking and debugging
 void NetworkLte::on_event(NetworkLteEvent event) {    
     event_ = event;
-    log_event();
+    log_event(event_);
     // record uptime and event history for debugging/analytics
 }
 
@@ -1333,12 +1315,12 @@ static const char* action_to_str(ModemAction a) {
     }
 }
 
-void NetworkLte::log_state() const {
-    NETWORK_LOG_DBG("new state: %s", state_to_str(state_));
+void NetworkLte::log_state(NetworkLteState state) {
+    NETWORK_LOG_DBG("new state: %s", state_to_str(state));
 }
 
-void NetworkLte::log_event() const {
-    NETWORK_LOG_DBG("new event: %s", event_to_str(event_));
+void NetworkLte::log_event(NetworkLteEvent event) {
+    NETWORK_LOG_DBG("new event: %s", event_to_str(event));
 }
 
 void NetworkLte::log_action() const {
@@ -1377,7 +1359,7 @@ uint32_t NetworkLte::timer_elapsed_seconds() const {
     if (!timer_) {
         return 0;
     }
-    return timer_->elapsed_ms() / 1000u;
+    return timer_->elapsed_ms() / 1000U;
 }
 
 void NetworkLte::on_timer_expired() {

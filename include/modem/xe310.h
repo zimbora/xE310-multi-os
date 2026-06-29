@@ -57,22 +57,22 @@ enum class RegStatus : uint8_t {
 
 /// Full registration info from AT+CEREG?
 struct RegistrationInfo {
-    uint8_t mode = 0;
-    RegStatus stat = RegStatus::not_registered;
     std::string lac;          ///< TAC (tracking area code) for LTE / LAC for 2G
     std::string ci;           ///< Cell identity
     std::string operator_name;    ///< Operator name from AT+COPS?
-    RadioTech act = RadioTech::gsm;
     std::string apn;              ///< APN from AT+CGDCONT?
-    bool has_location = false;
     std::string ip_address;
+    // PSM timer fields (PSM / extended PSM format)
+    std::string active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
+    std::string periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
+    uint8_t mode = 0;
+    RegStatus stat = RegStatus::not_registered;
+    RadioTech act = RadioTech::gsm;
+    bool has_location = false;
     // Extended / reject fields (extended format)
     uint8_t cause_type   = 0; ///< Cause type for registration rejection
     uint8_t reject_cause = 0; ///< Reject cause value
     bool has_reject      = false;
-    // PSM timer fields (PSM / extended PSM format)
-    std::string active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
-    std::string periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
     bool has_psm         = false;
 };
 
@@ -176,8 +176,8 @@ struct SurvCell {
     uint32_t tac         = 0;
     uint32_t phys_cell_id = 0;
     uint64_t cell_identity = 0;
-    float    rsrp        = 0.0f;
-    float    rsrq        = 0.0f;
+    float    rsrp        = 0.0F;
+    float    rsrq        = 0.0F;
 };
 
 /// Result of AT#CSURVC.
@@ -341,7 +341,7 @@ public:
     // --- Network Registration ---
 
     // AT+CEREG=2 — Enable network registration URC with location info and IP address.
-    ModemStatus set_registration_urc(bool);
+    ModemStatus set_registration_urc(bool enable);
 
     /// AT%TRSHCMD="BSPFILE","ERASE_LTEPP",<param> — Delete MRU list for selected RAT.
     ModemStatus delete_mru_list(MruListRat rat);
@@ -415,7 +415,7 @@ public:
     
     /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
     /// occurring in the module or in the network.
-    ModemStatus set_pdp_urc(bool);
+    ModemStatus set_pdp_urc(bool enable);
 
     /// AT+CGACT=1 — Activate PDP context.
     ModemStatus activate_pdp(uint8_t cid);

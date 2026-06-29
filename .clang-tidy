@@ -1,0 +1,27 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-else-after-return,
+  -modernize-macro-to-enum,
+  -modernize-avoid-c-arrays,
+  -readability-braces-around-statements,
+  -performance-enum-size,
+  -modernize-use-nodiscard,
+  -modernize-pass-by-value,
+  -bugprone-easily-swappable-parameters,
+  -readability-function-cognitive-complexity
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: 'include/modem/.*'
+
+FormatStyle: file

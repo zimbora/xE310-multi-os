@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(MODEM_BUILD_TESTS "Build unit tests" ON)
 option(MODEM_BUILD_SHARED "Build shared library" OFF)
+option(MODEM_ENABLE_CLANG_TIDY "Enable clang-tidy static analysis" OFF)
 
 set(MODEM_LOG_LEVEL "3" CACHE STRING "Compile-time modem log level (0=none,1=err,2=wrn,3=inf,4=dbg)")
 set_property(CACHE MODEM_LOG_LEVEL PROPERTY STRINGS 0 1 2 3 4)
@@ -47,6 +48,20 @@ else()
 endif()
 
 message(STATUS "Modem xE310 — platform: ${MODEM_PLATFORM}")
+
+# --- clang-tidy integration ---
+if(MODEM_ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        set(CMAKE_CXX_CLANG_TIDY
+            "${CLANG_TIDY_EXE}"
+            "--header-filter=include/modem/.*"
+        )
+        message(STATUS "clang-tidy enabled: ${CLANG_TIDY_EXE}")
+    else()
+        message(WARNING "MODEM_ENABLE_CLANG_TIDY is ON but clang-tidy was not found")
+    endif()
+endif()
 
 # --- Core sources (platform-independent) ---
 set(MODEM_CORE_SOURCES

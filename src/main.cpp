@@ -228,8 +228,8 @@ int main(int argc, char* argv[]) {
             if (res == "NETWORKCONNECT" || res == "CONNECT") {
                 bool ok = network.network_connect();
                 return std::string("{")
-                    + "\"resource\":\"NETWORKCONNECT\","
-                    + "\"network_connect\":" + (ok ? "true" : "false")
+                    + R"("resource":"NETWORKCONNECT",)"
+                    + R"("network_connect":)" + (ok ? "true" : "false")
                     + "}";
             }
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
@@ -248,10 +248,10 @@ int main(int argc, char* argv[]) {
                 bool network_ok = network.network_disconnect();
 
                 return std::string("{")
-                    + "\"resource\":\"NETWORKDISCONNECT\"," 
-                    + "\"conn_id\":" + std::to_string(conn_id) + ","
-                    + "\"server_disconnect\":" + (server_ok ? "true" : "false") + ","
-                    + "\"network_disconnect\":" + (network_ok ? "true" : "false")
+                    + R"("resource":"NETWORKDISCONNECT",)" 
+                    + R"("conn_id":)" + std::to_string(conn_id) + ","
+                    + R"("server_disconnect":)" + (server_ok ? "true" : "false") + ","
+                    + R"("network_disconnect":)" + (network_ok ? "true" : "false")
                     + "}";
             }
             if (res == "CONFIG") {
@@ -264,7 +264,7 @@ int main(int argc, char* argv[]) {
             }
             if (res == "FORCEPSM") {
                 network.force_PSM();
-                return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
+                return R"({"resource":"FORCEPSM","status":"ok"})";
             }
             return "ERROR: unknown SET resource";
         }

@@ -150,7 +150,7 @@ public:
 
         struct timeval tv;
         tv.tv_sec  = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(timeout_ms % 1000) * 1000;
 
         int ret = select(fd_ + 1, &read_fds, nullptr, nullptr, &tv);
         if (ret < 0) {

@@ -222,7 +222,7 @@ ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
         sv = sv.substr(comma + 1);
     }
 
-    if (fields.size() >= 1) cfg.mode = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
+    if (!fields.empty()) cfg.mode = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
     if (fields.size() >= 2) cfg.req_periodic_rau         = strip_quotes(fields[1]);
     if (fields.size() >= 3) cfg.req_gprs_ready_timer      = strip_quotes(fields[2]);
     if (fields.size() >= 4) cfg.req_periodic_tau          = strip_quotes(fields[3]);
@@ -291,7 +291,7 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
         sv = sv.substr(comma + 1);
     }
 
-    if (fields.size() >= 1) st.status        = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
+    if (!fields.empty()) st.status        = static_cast<uint8_t>(std::atoi(fields[0].c_str()));
     if (fields.size() >= 2 && !fields[1].empty()) st.t3324 = static_cast<uint32_t>(std::atol(fields[1].c_str()));
     if (fields.size() >= 3 && !fields[2].empty()) st.t3412 = static_cast<uint32_t>(std::atol(fields[2].c_str()));
     if (fields.size() >= 4) st.psm_version   = static_cast<uint8_t>(std::atoi(fields[3].c_str()));
@@ -374,7 +374,7 @@ static SurvCell parse_surv_line(const std::string& line) {
     while (!sv.empty()) {
         auto comma = sv.find(',');
         auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
-        fields.push_back(std::string(token));
+        fields.emplace_back(token);
         if (comma == std::string_view::npos) break;
         sv = sv.substr(comma + 1);
     }
@@ -503,7 +503,8 @@ ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
         // Response body: "#WS46: <n>,<GSM_P>"
         auto colon = response.body.find(':');
         if (colon != std::string::npos) {
-            unsigned int nv = 0, gp = 0;
+            unsigned int nv = 0;
+            unsigned int gp = 0;
             std::string params = response.body.substr(colon + 1);
             auto comma = params.find(',');
             if (comma != std::string::npos) {
@@ -618,7 +619,7 @@ ModemStatus xE310::set_registration_urc(bool enable) {
 
 ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
-    auto cmd = "AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\"," +
+    auto cmd = R"(AT%TRSHCMD="BSPFILE","ERASE_LTEPP",)" +
                std::to_string(static_cast<unsigned int>(rat));
     return send_raw(cmd, response);
 }
@@ -944,7 +945,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         cell.tac           = static_cast<uint32_t>(std::strtoul(extract_value(line, "tac:").c_str(),         nullptr, 16));
         cell.cell_identity = static_cast<uint64_t>(std::strtoull(extract_value(line, "cellIdentity:").c_str(), nullptr, 16));
 
-        result.cells.push_back(std::move(cell));
+        result.cells.push_back(cell);
     }
 
     return ModemStatus::ok;
@@ -954,7 +955,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
 
 ModemStatus xE310::set_apn(uint8_t cid, const std::string& apn) {
     AtResponse response;
-    auto cmd = "AT+CGDCONT=" + std::to_string(cid) + ",\"IP\",\"" + apn + "\"";
+    auto cmd = R"(AT+CGDCONT=)" + std::to_string(cid) + R"(,"IP",")" + apn + R"(")";
     return send_raw(cmd, response);
 }
 
@@ -1095,6 +1096,7 @@ ModemStatus xE310::get_pdp_info(uint8_t cid, std::string& ip_addr, std::string& 
                 case 2: gw_addr = value; break;
                 case 3: dns_primary = value; break;
                 case 4: dns_secondary = value; break;
+                default: break;
             }
             ++field;
             pos = end + 1;
