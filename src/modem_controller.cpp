@@ -8,8 +8,8 @@ namespace modem {
 
 ModemController::ModemController(std::unique_ptr<UartInterface> uart,
                                  std::unique_ptr<TimerInterface> timer)
-    : uart_(std::move(uart)),
-      cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
+    : uart_(std::move(uart))
+    , cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
     IoLockGuard lock(io_mutex_);
@@ -58,8 +58,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     const auto& cmd_str = cmd.command_string();
     std::string full_cmd = cmd_str + "\r\n";
 
-    auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()),
-                            full_cmd.size());
+    auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()), full_cmd.size());
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
@@ -96,11 +95,14 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             accumulated.append(reinterpret_cast<const char*>(buffer), bytes_read);
             response = AtCommand::parse_response(accumulated);
 
-            if (response.status == AtStatus::ok || response.status == AtStatus::error || response.status == AtStatus::busy) {
-                // Extract any URCs that arrived after the status line and buffer them for poll_urc().
-                // This prevents URCs in the response window from corrupting the payload.
-                size_t status_end = accumulated.find(response.status == AtStatus::ok ? "OK" : 
-                                                     response.status == AtStatus::error ? "ERROR" : "BUSY");
+            if (response.status == AtStatus::ok || response.status == AtStatus::error ||
+                response.status == AtStatus::busy) {
+                // Extract any URCs that arrived after the status line and buffer them for
+                // poll_urc(). This prevents URCs in the response window from corrupting the
+                // payload.
+                size_t status_end = accumulated.find(response.status == AtStatus::ok      ? "OK"
+                                                     : response.status == AtStatus::error ? "ERROR"
+                                                                                          : "BUSY");
                 if (status_end != std::string::npos) {
                     // Find the end of the status line (OK\r\n or ERROR\r\n)
                     status_end = accumulated.find("\r\n", status_end);
@@ -112,7 +114,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
                         }
                     }
                 }
-                
+
                 if (response.status == AtStatus::ok) {
                     return ModemStatus::ok;
                 }
@@ -124,14 +126,18 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     }
 }
 
-ModemStatus ModemController::send_raw(const std::string& command, AtResponse& response,
-                                      uint32_t timeout_ms, bool retry) {
+ModemStatus ModemController::send_raw(const std::string& command,
+                                      AtResponse& response,
+                                      uint32_t timeout_ms,
+                                      bool retry) {
     AtCommand cmd(command, timeout_ms);
     ModemStatus status = send_command(cmd, response);
 
     if (retry && status == ModemStatus::timeout) {
-        for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status == ModemStatus::timeout; ++attempt) {
-            MODEM_LOG_DBG("Retrying AT command (%u/%u): %s", attempt, MAX_AT_RETRIES - 1, command.c_str());
+        for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status == ModemStatus::timeout;
+             ++attempt) {
+            MODEM_LOG_DBG(
+                "Retrying AT command (%u/%u): %s", attempt, MAX_AT_RETRIES - 1, command.c_str());
             AtCommand retry_cmd(command, timeout_ms);
             status = send_command(retry_cmd, response);
         }
@@ -140,7 +146,8 @@ ModemStatus ModemController::send_raw(const std::string& command, AtResponse& re
     return status;
 }
 
-ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data,
+                                         AtResponse& response,
                                          uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
     if (!lock) {
@@ -188,9 +195,9 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
 }
 
 ModemStatus ModemController::send_with_prompt(const std::string& command,
-                                               const std::vector<uint8_t>& data,
-                                               AtResponse& response,
-                                               uint32_t timeout_ms) {
+                                              const std::vector<uint8_t>& data,
+                                              AtResponse& response,
+                                              uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
     if (!lock) {
         return ModemStatus::busy;
@@ -201,8 +208,7 @@ ModemStatus ModemController::send_with_prompt(const std::string& command,
 
     // Step 1: Send the AT command
     std::string full_cmd = command + "\r\n";
-    auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()),
-                            full_cmd.size());
+    auto err = uart_->write(reinterpret_cast<const uint8_t*>(full_cmd.c_str()), full_cmd.size());
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
@@ -269,19 +275,20 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
     }
 
     // Known URC prefixes to recognise
-    static const char* const kPrefixes[] = {
-        "+CREG:",  "+CGREG:", "+CEREG:",  // registration
-        "+CGEV:",                           // PDP context events
-        "#PSMURC:",                         // PSM entry
-        "+CME ERROR:", "+CMS ERROR:",       // async errors
-        "#CSURV:",                          // survey URC
-        "SRING:",                           // socket data available
-        "RING",                             // incoming call (can be "RING" or "RING: N")
-        "NO CARRIER",                       // connection terminated
-        "BUSY",                             // line busy
-        "NO DIALTONE",                      // no dial tone
-        nullptr
-    };
+    static const char* const kPrefixes[] = {"+CREG:",
+                                            "+CGREG:",
+                                            "+CEREG:",  // registration
+                                            "+CGEV:",   // PDP context events
+                                            "#PSMURC:", // PSM entry
+                                            "+CME ERROR:",
+                                            "+CMS ERROR:", // async errors
+                                            "#CSURV:",     // survey URC
+                                            "SRING:",      // socket data available
+                                            "RING", // incoming call (can be "RING" or "RING: N")
+                                            "NO CARRIER",  // connection terminated
+                                            "BUSY",        // line busy
+                                            "NO DIALTONE", // no dial tone
+                                            nullptr};
 
     uint8_t buffer[512];
     size_t bytes_read = 0;
@@ -310,7 +317,7 @@ std::vector<std::string> ModemController::poll_urc(uint32_t timeout_ms) {
         }
         for (const char* const* p = kPrefixes; *p; ++p) {
             if (line.rfind(*p, 0) == 0) {
-                //MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
+                // MODEM_LOG_DBG("URC (extracted): %s", line.c_str());
                 urcs.push_back(line);
                 break;
             }

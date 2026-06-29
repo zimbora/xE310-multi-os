@@ -7,7 +7,8 @@
 namespace modem {
 
 AtCommand::AtCommand(const std::string& command, uint32_t timeout_ms)
-    : command_(command), timeout_ms_(timeout_ms) {}
+    : command_(command)
+    , timeout_ms_(timeout_ms) {}
 
 const std::string& AtCommand::command_string() const {
     return command_;
@@ -32,9 +33,8 @@ AtResponse AtCommand::parse_response(const std::string& raw) {
     std::string::size_type start = 0;
     while (start < raw.size()) {
         auto end = raw.find(AT_TERMINATOR, start);
-        std::string line = (end == std::string::npos)
-                           ? raw.substr(start)
-                           : raw.substr(start, end - start);
+        std::string line =
+            (end == std::string::npos) ? raw.substr(start) : raw.substr(start, end - start);
         start = (end == std::string::npos) ? raw.size() : end + terminator.size();
 
         if (line.empty()) {
@@ -43,7 +43,8 @@ AtResponse AtCommand::parse_response(const std::string& raw) {
 
         if (line == "OK") {
             response.status = AtStatus::ok;
-        } else if (line == "ERROR" || line.rfind("+CME ERROR:", 0) == 0 || line.rfind("+CMS ERROR:", 0) == 0) {
+        } else if (line == "ERROR" || line.rfind("+CME ERROR:", 0) == 0 ||
+                   line.rfind("+CMS ERROR:", 0) == 0) {
             response.status = AtStatus::error;
         } else if (line == "BUSY") {
             response.status = AtStatus::busy;

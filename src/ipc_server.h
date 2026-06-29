@@ -19,8 +19,8 @@ public:
     enum class Mode { line, framed };
 
     /// Called from the background thread for each complete received message.
-    using MessageCallback   = std::function<void(const uint8_t* data, uint16_t length)>;
-    using ConnectCallback   = std::function<void()>;
+    using MessageCallback = std::function<void(const uint8_t* data, uint16_t length)>;
+    using ConnectCallback = std::function<void()>;
     using DisconnectCallback = std::function<void()>;
 
     explicit IpcServer(uint16_t port, MessageCallback on_message, Mode mode = Mode::line);
@@ -60,11 +60,11 @@ private:
 
     uint16_t port_;
     Mode mode_;
-    MessageCallback    on_message_;
-    ConnectCallback    on_connect_;
+    MessageCallback on_message_;
+    ConnectCallback on_connect_;
     DisconnectCallback on_disconnect_;
 
-    int server_fd_  = -1;
-    int client_fd_  = -1;
-    bool running_   = false;
+    int server_fd_ = -1;
+    int client_fd_ = -1;
+    bool running_ = false;
 };

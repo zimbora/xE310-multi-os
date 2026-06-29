@@ -8,9 +8,9 @@
 using namespace modem;
 using ::testing::_;
 using ::testing::DoAll;
+using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArrayArgument;
-using ::testing::Invoke;
 
 class MockUart : public UartInterface {
 public:
@@ -18,8 +18,9 @@ public:
     MOCK_METHOD(void, close, (), (override));
     MOCK_METHOD(bool, is_open, (), (const, override));
     MOCK_METHOD(UartError, write, (const uint8_t* data, size_t length), (override));
-    MOCK_METHOD(UartError, read,
-                (uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
+    MOCK_METHOD(UartError,
+                read,
+                (uint8_t * buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
                 (override));
 };
 
@@ -44,23 +45,22 @@ protected:
             }));
 
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-            .WillOnce(Invoke([response_str](uint8_t* buffer, size_t buffer_size,
-                                             size_t& bytes_read, uint32_t) {
-                std::string resp;
-                if (response_str.empty()) {
-                    resp = "\r\nOK\r\n";
-                } else {
-                    resp = "\r\n" + response_str + "\r\n\r\nOK\r\n";
-                }
-                std::memcpy(buffer, resp.c_str(), resp.size());
-                bytes_read = resp.size();
-                return UartError::ok;
-            }));
+            .WillOnce(Invoke(
+                [response_str](uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t) {
+                    std::string resp;
+                    if (response_str.empty()) {
+                        resp = "\r\nOK\r\n";
+                    } else {
+                        resp = "\r\n" + response_str + "\r\n\r\nOK\r\n";
+                    }
+                    std::memcpy(buffer, resp.c_str(), resp.size());
+                    bytes_read = resp.size();
+                    return UartError::ok;
+                }));
     }
 
     void expect_command_error(const std::string& expected_cmd) {
-        EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+        EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
 
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
             .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
@@ -171,8 +171,7 @@ TEST_F(Xe310Test, GetImeiError) {
 }
 
 TEST_F(Xe310Test, RequestSwPackageVersion) {
-    expect_command_ok("AT#SWPKGV",
-                      "17.00.xx4-B006\r\n17.00.xx4\r\nB006\r\nSW_V001");
+    expect_command_ok("AT#SWPKGV", "17.00.xx4-B006\r\n17.00.xx4\r\nB006\r\nSW_V001");
     SoftwarePackageVersion ver;
     auto status = modem_->request_sw_package_version(ver);
     EXPECT_EQ(status, ModemStatus::ok);
@@ -250,9 +249,9 @@ TEST_F(Xe310Test, SetPsmEnable) {
     // AT+CPSMS=1,,,"10101100","00100010"
     expect_command_ok("AT+CPSMS=1,,,\"10101100\",\"00100010\"", "");
     CpsmsConfig cfg;
-    cfg.mode             = PsmMode::enable;
+    cfg.mode = PsmMode::enable;
     cfg.req_periodic_tau = "10101100";
-    cfg.req_active_time  = "00100010";
+    cfg.req_active_time = "00100010";
     EXPECT_EQ(modem_->set_psm(cfg), ModemStatus::ok);
 }
 
@@ -283,11 +282,11 @@ TEST_F(Xe310Test, SetTelitPsm) {
     // AT#CPSMS=1,,,720,120
     expect_command_ok("AT#CPSMS=1,,,720,120", "");
     TelitCpsmsConfig cfg;
-    cfg.mode             = PsmMode::enable;
+    cfg.mode = PsmMode::enable;
     cfg.has_periodic_tau = true;
     cfg.req_periodic_tau = 720;
-    cfg.has_active_time  = true;
-    cfg.req_active_time  = 120;
+    cfg.has_active_time = true;
+    cfg.req_active_time = 120;
     EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
 }
 
@@ -295,15 +294,15 @@ TEST_F(Xe310Test, SetTelitPsmWithVersion) {
     // AT#CPSMS=1,,,720,120,4,60
     expect_command_ok("AT#CPSMS=1,,,720,120,4,60", "");
     TelitCpsmsConfig cfg;
-    cfg.mode              = PsmMode::enable;
-    cfg.has_periodic_tau  = true;
-    cfg.req_periodic_tau  = 720;
-    cfg.has_active_time   = true;
-    cfg.req_active_time   = 120;
-    cfg.has_psm_version   = true;
-    cfg.psm_version       = PsmVersion::rel12_retain;
+    cfg.mode = PsmMode::enable;
+    cfg.has_periodic_tau = true;
+    cfg.req_periodic_tau = 720;
+    cfg.has_active_time = true;
+    cfg.req_active_time = 120;
+    cfg.has_psm_version = true;
+    cfg.psm_version = PsmVersion::rel12_retain;
     cfg.has_psm_threshold = true;
-    cfg.psm_threshold     = 60;
+    cfg.psm_threshold = 60;
     EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
 }
 
@@ -316,12 +315,12 @@ TEST_F(Xe310Test, GetTelitPsm) {
     expect_command_ok("AT#CPSMS?", "#CPSMS: 0,120,720,4,60,1");
     TelitCpsmsStatus st;
     EXPECT_EQ(modem_->get_telit_psm(st), ModemStatus::ok);
-    EXPECT_EQ(st.status,        0);
-    EXPECT_EQ(st.t3324,         120u);
-    EXPECT_EQ(st.t3412,         720u);
-    EXPECT_EQ(st.psm_version,   4);
+    EXPECT_EQ(st.status, 0);
+    EXPECT_EQ(st.t3324, 120u);
+    EXPECT_EQ(st.t3412, 720u);
+    EXPECT_EQ(st.psm_version, 4);
     EXPECT_EQ(st.psm_threshold, 60u);
-    EXPECT_EQ(st.mode,          PsmMode::enable);
+    EXPECT_EQ(st.mode, PsmMode::enable);
 }
 
 TEST_F(Xe310Test, SetPsmUrcEnable) {
@@ -352,9 +351,7 @@ TEST_F(Xe310Test, GetPsmUrcDisabled) {
 
 TEST_F(Xe310Test, Shutdown) {
     // shutdown() sends AT+CFUN=4 then AT+CFUN=11
-    EXPECT_CALL(*mock_uart_, write(_, _))
-        .Times(2)
-        .WillRepeatedly(Return(UartError::ok));
+    EXPECT_CALL(*mock_uart_, write(_, _)).Times(2).WillRepeatedly(Return(UartError::ok));
 
     EXPECT_CALL(*mock_uart_, read(_, _, _, _))
         .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
@@ -375,9 +372,7 @@ TEST_F(Xe310Test, Shutdown) {
 
 TEST_F(Xe310Test, ShutdownError) {
     // shutdown() sends AT+CFUN=4 (succeeds) then AT+CFUN=11 (fails)
-    EXPECT_CALL(*mock_uart_, write(_, _))
-        .Times(2)
-        .WillRepeatedly(Return(UartError::ok));
+    EXPECT_CALL(*mock_uart_, write(_, _)).Times(2).WillRepeatedly(Return(UartError::ok));
 
     EXPECT_CALL(*mock_uart_, read(_, _, _, _))
         .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
@@ -409,11 +404,10 @@ TEST_F(Xe310Test, RebootError) {
 // --- Network Registration ---
 
 TEST_F(Xe310Test, NetworkSurvey2gBcch) {
-    const std::string body =
-        "Network survey started ...\r\n"
-        "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
-        "1023,50,-78,0,222,01,54717,14886,CELL_SUITABLE,0\r\n"
-        "Network survey ended";
+    const std::string body = "Network survey started ...\r\n"
+                             "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
+                             "1023,50,-78,0,222,01,54717,14886,CELL_SUITABLE,0\r\n"
+                             "Network survey ended";
     expect_command_ok("AT#CSURVC", body);
 
     NetworkSurveyResult result;
@@ -421,25 +415,24 @@ TEST_F(Xe310Test, NetworkSurvey2gBcch) {
     ASSERT_EQ(result.cells.size(), 2u);
 
     const auto& c0 = result.cells[0];
-    EXPECT_EQ(c0.type,      SurvCellType::cell_2g_bcch);
-    EXPECT_EQ(c0.arfcn,     1018);
-    EXPECT_EQ(c0.bsic,      21);
-    EXPECT_EQ(c0.rx_lev,    -73);
-    EXPECT_EQ(c0.mcc,       0x222);
-    EXPECT_EQ(c0.mnc,       0x01);
-    EXPECT_EQ(c0.lac,       54717u);
-    EXPECT_EQ(c0.cell_id,   14887u);
+    EXPECT_EQ(c0.type, SurvCellType::cell_2g_bcch);
+    EXPECT_EQ(c0.arfcn, 1018);
+    EXPECT_EQ(c0.bsic, 21);
+    EXPECT_EQ(c0.rx_lev, -73);
+    EXPECT_EQ(c0.mcc, 0x222);
+    EXPECT_EQ(c0.mnc, 0x01);
+    EXPECT_EQ(c0.lac, 54717u);
+    EXPECT_EQ(c0.cell_id, 14887u);
     EXPECT_EQ(c0.cell_stat, "CELL_SUITABLE");
 
     EXPECT_TRUE(result.has_summary);
 }
 
 TEST_F(Xe310Test, NetworkSurvey4g) {
-    const std::string body =
-        "Network survey started ...\r\n"
-        "5110,-95,136,19A,10D,2700,BBA7211,0.00,0.00\r\n"
-        "675,-98,136,104,1BE,7B71,1F4A90E,0.00,0.00\r\n"
-        "Network survey ended";
+    const std::string body = "Network survey started ...\r\n"
+                             "5110,-95,136,19A,10D,2700,BBA7211,0.00,0.00\r\n"
+                             "675,-98,136,104,1BE,7B71,1F4A90E,0.00,0.00\r\n"
+                             "Network survey ended";
     expect_command_ok("AT#CSURVC", body);
 
     NetworkSurveyResult result;
@@ -447,13 +440,13 @@ TEST_F(Xe310Test, NetworkSurvey4g) {
     ASSERT_EQ(result.cells.size(), 2u);
 
     const auto& c0 = result.cells[0];
-    EXPECT_EQ(c0.type,          SurvCellType::cell_4g);
-    EXPECT_EQ(c0.earfcn,        5110);
-    EXPECT_EQ(c0.rx_lev,        -95);
-    EXPECT_EQ(c0.mcc,           0x136);
-    EXPECT_EQ(c0.mnc,           0x19A);
-    EXPECT_EQ(c0.phys_cell_id,  0x10Du);
-    EXPECT_EQ(c0.tac,           0x2700u);
+    EXPECT_EQ(c0.type, SurvCellType::cell_4g);
+    EXPECT_EQ(c0.earfcn, 5110);
+    EXPECT_EQ(c0.rx_lev, -95);
+    EXPECT_EQ(c0.mcc, 0x136);
+    EXPECT_EQ(c0.mnc, 0x19A);
+    EXPECT_EQ(c0.phys_cell_id, 0x10Du);
+    EXPECT_EQ(c0.tac, 0x2700u);
     EXPECT_EQ(c0.cell_identity, 0xBBA7211u);
 }
 
@@ -465,10 +458,9 @@ TEST_F(Xe310Test, NetworkSurveyWithChannelRange) {
 }
 
 TEST_F(Xe310Test, NetworkSurveyWithSummary) {
-    const std::string body =
-        "Network survey started ...\r\n"
-        "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
-        "Network survey ended (Carrier: 10 BCCh: 3)";
+    const std::string body = "Network survey started ...\r\n"
+                             "1018,21,-73,0,222,01,54717,14887,CELL_SUITABLE,0\r\n"
+                             "Network survey ended (Carrier: 10 BCCh: 3)";
     expect_command_ok("AT#CSURVC", body);
 
     NetworkSurveyResult result;
@@ -476,7 +468,7 @@ TEST_F(Xe310Test, NetworkSurveyWithSummary) {
     ASSERT_EQ(result.cells.size(), 1u);
     EXPECT_TRUE(result.has_summary);
     EXPECT_EQ(result.no_arfcn, 10);
-    EXPECT_EQ(result.no_bcch,  3);
+    EXPECT_EQ(result.no_bcch, 3);
 }
 
 TEST_F(Xe310Test, NetworkSurveyError) {
@@ -500,7 +492,7 @@ TEST_F(Xe310Test, GetIotTech) {
     RadioTech tech = RadioTech::gsm;
     uint8_t gsm_p = 0xff;
     EXPECT_EQ(modem_->get_iot_tech(tech, gsm_p), ModemStatus::ok);
-    EXPECT_EQ(tech,  RadioTech::unknown);
+    EXPECT_EQ(tech, RadioTech::unknown);
     EXPECT_EQ(gsm_p, 0);
 }
 
@@ -509,7 +501,7 @@ TEST_F(Xe310Test, GetIotTechGsmPriority) {
     RadioTech tech = RadioTech::gsm;
     uint8_t gsm_p = 0;
     EXPECT_EQ(modem_->get_iot_tech(tech, gsm_p), ModemStatus::ok);
-    EXPECT_EQ(tech,  RadioTech::nb_iot);
+    EXPECT_EQ(tech, RadioTech::nb_iot);
     EXPECT_EQ(gsm_p, 1);
 }
 
@@ -727,8 +719,9 @@ TEST_F(Xe310Test, GetIpAddress) {
 }
 
 TEST_F(Xe310Test, GetPdpInfo) {
-    expect_command_ok("AT+CGCONTRDP=1",
-                      "+CGCONTRDP: 1,5,\"internet\",\"10.0.0.1\",\"10.0.0.254\",\"8.8.8.8\",\"8.8.4.4\"");
+    expect_command_ok(
+        "AT+CGCONTRDP=1",
+        "+CGCONTRDP: 1,5,\"internet\",\"10.0.0.1\",\"10.0.0.254\",\"8.8.8.8\",\"8.8.4.4\"");
     std::string ip, gw, dns1, dns2;
     EXPECT_EQ(modem_->get_pdp_info(1, ip, gw, dns1, dns2), ModemStatus::ok);
     EXPECT_EQ(ip, "10.0.0.1");
@@ -811,12 +804,10 @@ TEST_F(Xe310Test, UdpSendPromptTimeout) {
     {
         testing::InSequence seq;
 
-        EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+        EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
 
         // Modem never sends the prompt
-        EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-            .WillOnce(Return(UartError::timeout));
+        EXPECT_CALL(*mock_uart_, read(_, _, _, _)).WillOnce(Return(UartError::timeout));
     }
 
     std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
@@ -827,8 +818,7 @@ TEST_F(Xe310Test, UdpSendNoPrompt) {
     {
         testing::InSequence seq;
 
-        EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+        EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
 
         // Modem responds with ERROR instead of prompt
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
@@ -849,8 +839,7 @@ TEST_F(Xe310Test, UdpSendWritePayloadFails) {
         testing::InSequence seq;
 
         // Command sent OK
-        EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::ok));
+        EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
 
         // Prompt received
         EXPECT_CALL(*mock_uart_, read(_, _, _, _))
@@ -862,8 +851,7 @@ TEST_F(Xe310Test, UdpSendWritePayloadFails) {
             }));
 
         // Payload write fails
-        EXPECT_CALL(*mock_uart_, write(_, _))
-            .WillOnce(Return(UartError::write_failed));
+        EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::write_failed));
     }
 
     std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
@@ -917,13 +905,11 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
 // --- Not Connected ---
 
 TEST_F(Xe310Test, CommandWhenNotConnected) {
-    EXPECT_CALL(*mock_uart_, is_open())
-    .WillOnce(Return(false));
+    EXPECT_CALL(*mock_uart_, is_open()).WillOnce(Return(false));
     EXPECT_EQ(modem_->at_ok(), ModemStatus::not_connected);
 }
 
 TEST_F(Xe310Test, UdpOpenWhenNotConnected) {
-    EXPECT_CALL(*mock_uart_, is_open())
-    .WillOnce(Return(false));
+    EXPECT_CALL(*mock_uart_, is_open()).WillOnce(Return(false));
     EXPECT_EQ(modem_->udp_open(1, "192.168.1.100", 5000), ModemStatus::not_connected);
 }

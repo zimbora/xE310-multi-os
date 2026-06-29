@@ -7,11 +7,11 @@
 
 using namespace modem;
 using ::testing::_;
-using ::testing::Return;
-using ::testing::Invoke;
-using ::testing::InSequence;
-using ::testing::Le;
 using ::testing::Gt;
+using ::testing::InSequence;
+using ::testing::Invoke;
+using ::testing::Le;
+using ::testing::Return;
 
 // ---------------------------------------------------------------------------
 // Mock UART
@@ -22,8 +22,9 @@ public:
     MOCK_METHOD(void, close, (), (override));
     MOCK_METHOD(bool, is_open, (), (const, override));
     MOCK_METHOD(UartError, write, (const uint8_t* data, size_t length), (override));
-    MOCK_METHOD(UartError, read,
-                (uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
+    MOCK_METHOD(UartError,
+                read,
+                (uint8_t * buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
                 (override));
 };
 
@@ -81,14 +82,12 @@ protected:
     }
 
     /// Create a NetworkLte with default config.
-    NetworkLte make_sm(const NetworkLteConfig& cfg = {}) {
-        return NetworkLte(*modem_, cfg);
-    }
+    NetworkLte make_sm(const NetworkLteConfig& cfg = {}) { return NetworkLte(*modem_, cfg); }
 
     MockUart* mock_uart_ = nullptr;
     std::unique_ptr<ModemController> controller_;
     std::unique_ptr<xE310> modem_;
-    std::string last_written_cmd_;  ///< Last AT command written to mock UART
+    std::string last_written_cmd_; ///< Last AT command written to mock UART
 };
 
 // ===========================================================================
@@ -115,7 +114,7 @@ TEST_F(NetworkLteTest, OffMode_TurnOnRadio_GoesIdle) {
 
 TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevDataReady_GoesDataReady) {
     auto sm = make_sm();
-    sm.change_state(NetworkLteState::data_ready);  // prev_state_ = data_ready
+    sm.change_state(NetworkLteState::data_ready); // prev_state_ = data_ready
     sm.change_state(NetworkLteState::sleep_mode);
     sm.call_action(ModemAction::wake_up);
     sm.step();
@@ -124,7 +123,7 @@ TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevDataReady_GoesDataReady) {
 
 TEST_F(NetworkLteTest, SleepMode_WakeUp_PrevOther_GoesIdle) {
     auto sm = make_sm();
-    sm.change_state(NetworkLteState::sleep_mode);  // prev_state_ = switched_off
+    sm.change_state(NetworkLteState::sleep_mode); // prev_state_ = switched_off
     sm.call_action(ModemAction::wake_up);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
@@ -250,11 +249,11 @@ TEST_F(NetworkLteTest, IdleMode_QueryPdpContext_Active_GoesDataReady) {
 // so step() processes the attach flow in the same cycle.
 
 TEST_F(NetworkLteTest, NetworkDetached_AttachFirstAttempt_GoesAttaching) {
-    auto sm = make_sm();  // max_attach_retries = 2 (default)
+    auto sm = make_sm(); // max_attach_retries = 2 (default)
     sm.change_state(NetworkLteState::network_detached);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
-    EXPECT_EQ(sm.get_attach_retries(), 1u);  // incremented once on first attempt
+    EXPECT_EQ(sm.get_attach_retries(), 1u); // incremented once on first attempt
 }
 
 TEST_F(NetworkLteTest, NetworkDetached_AttachSecondAttempt_GoesAttaching) {
@@ -278,8 +277,8 @@ TEST_F(NetworkLteTest, NetworkDetached_AttachSecondAttempt_GoesAttaching) {
 }
 
 TEST_F(NetworkLteTest, NetworkDetached_AttachMaxRetries_GoesOffMode) {
-    auto sm = make_sm();  // max_attach_retries = 2 (default)
-    sm.set_attach_retries(sm.config().max_attach_retries);  // pre-set retries to max
+    auto sm = make_sm();                                   // max_attach_retries = 2 (default)
+    sm.set_attach_retries(sm.config().max_attach_retries); // pre-set retries to max
     sm.change_state(NetworkLteState::network_detached);
     // step 1: attach_network sees max retries → fires attach_error event
     sm.step();
@@ -294,7 +293,7 @@ TEST_F(NetworkLteTest, NetworkDetached_AttachMaxRetries_GoesOffMode) {
 
 TEST_F(NetworkLteTest, NetworkAttaching_Attached_GoesDataReady) {
     auto sm = make_sm();
-    sm.set_attach_retries(1u);  // pre-set retries to 1
+    sm.set_attach_retries(1u); // pre-set retries to 1
     sm.change_state(NetworkLteState::network_attaching);
     sm.on_event(NetworkLteEvent::network_attached);
     sm.step();

@@ -18,13 +18,15 @@ public:
         std::thread t;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            if (!running_) return;
-            running_   = false;
+            if (!running_)
+                return;
+            running_ = false;
             cancelled_ = true;
             cv_.notify_all();
             t = std::move(thread_);
         }
-        if (t.joinable()) t.join();
+        if (t.joinable())
+            t.join();
     }
 
     Win32Timer(const Win32Timer&) = delete;
@@ -35,12 +37,12 @@ public:
         if (running_) {
             return TimerError::already_running;
         }
-        cb_        = std::move(cb);
-        running_   = true;
+        cb_ = std::move(cb);
+        running_ = true;
         cancelled_ = false;
-        start_     = std::chrono::steady_clock::now();
-        deadline_  = start_ + std::chrono::milliseconds(timeout_ms);
-        thread_    = std::thread(&Win32Timer::run, this);
+        start_ = std::chrono::steady_clock::now();
+        deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
+        thread_ = std::thread(&Win32Timer::run, this);
         return TimerError::ok;
     }
 
@@ -51,7 +53,7 @@ public:
             if (!running_) {
                 return TimerError::not_running;
             }
-            running_   = false;
+            running_ = false;
             cancelled_ = true;
             cv_.notify_all();
             t = std::move(thread_);
@@ -69,7 +71,7 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         if (running_) {
             // Timer is active — shift the deadline and wake the thread to re-wait
-            start_    = std::chrono::steady_clock::now();
+            start_ = std::chrono::steady_clock::now();
             deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
             cv_.notify_all();
             return TimerError::ok;
@@ -78,11 +80,11 @@ public:
         if (!cb_) {
             return TimerError::not_running;
         }
-        running_   = true;
+        running_ = true;
         cancelled_ = false;
-        start_     = std::chrono::steady_clock::now();
-        deadline_  = start_ + std::chrono::milliseconds(timeout_ms);
-        thread_    = std::thread(&Win32Timer::run, this);
+        start_ = std::chrono::steady_clock::now();
+        deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
+        thread_ = std::thread(&Win32Timer::run, this);
         return TimerError::ok;
     }
 
@@ -97,7 +99,8 @@ public:
             return 0;
         }
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start_).count();
+                      std::chrono::steady_clock::now() - start_)
+                      .count();
         return static_cast<uint32_t>(ms < 0 ? 0 : ms);
     }
 
@@ -105,7 +108,7 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(mutex_);
         while (!cancelled_) {
-            auto snap   = deadline_;
+            auto snap = deadline_;
             auto status = cv_.wait_until(lock, snap);
             // cppcheck-suppress knownConditionTrueFalse
             if (cancelled_) {
@@ -119,7 +122,7 @@ private:
                 Callback cb = cb_;
                 std::thread self = std::move(thread_); // thread_ is now empty
                 lock.unlock();
-                self.detach();                          // safe: run() is about to return
+                self.detach(); // safe: run() is about to return
                 if (cb) {
                     cb();
                 }
@@ -129,12 +132,12 @@ private:
         }
     }
 
-    mutable std::mutex              mutex_;
-    std::condition_variable         cv_;
-    std::thread                     thread_;
-    Callback                        cb_;
-    bool                            running_   = false;
-    bool                            cancelled_ = false;
+    mutable std::mutex mutex_;
+    std::condition_variable cv_;
+    std::thread thread_;
+    Callback cb_;
+    bool running_ = false;
+    bool cancelled_ = false;
     std::chrono::steady_clock::time_point start_{};
     std::chrono::steady_clock::time_point deadline_;
 };

@@ -54,7 +54,9 @@ int main(void) {
         while (network.rx_read(lteConfig.conn_id, rx_msg) == modem::QueueError::ok) {
             std::string payload(rx_msg.data.begin(), rx_msg.data.end());
             MODEM_LOG_INF("RX [conn %d]: %s (%zu bytes)",
-                          lteConfig.conn_id, payload.c_str(), rx_msg.data.size());
+                          lteConfig.conn_id,
+                          payload.c_str(),
+                          rx_msg.data.size());
         }
     }
 

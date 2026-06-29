@@ -13,10 +13,11 @@ namespace modem {
 /// Each slot stores a raw byte buffer; the message length is prepended as a uint16_t header.
 class ZephyrMessageQueue : public MessageQueueInterface {
 public:
-    static constexpr size_t max_msg_size = 256; // max payload per message
+    static constexpr size_t max_msg_size = 256;                          // max payload per message
     static constexpr size_t slot_size = max_msg_size + sizeof(uint16_t); // header + payload
 
-    explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity) {
+    explicit ZephyrMessageQueue(size_t capacity)
+        : capacity_(capacity) {
         for (uint8_t i = 0; i < max_connections; ++i) {
             tx_bufs_[i].resize(slot_size * capacity);
             rx_bufs_[i].resize(slot_size * capacity);
@@ -27,7 +28,8 @@ public:
 
     ~ZephyrMessageQueue() override = default;
 
-    QueueError tx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
+    QueueError
+    tx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
         return push_to(tx_queues_, conn_id, data, length, timeout_ms);
     }
 
@@ -36,11 +38,13 @@ public:
     }
 
     size_t tx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > max_connections)
+            return 0;
         return k_msgq_num_used_get(const_cast<struct k_msgq*>(&tx_queues_[conn_id - 1]));
     }
 
-    QueueError rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
+    QueueError
+    rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
         return push_to(rx_queues_, conn_id, data, length, timeout_ms);
     }
 
@@ -49,15 +53,21 @@ public:
     }
 
     size_t rx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > max_connections)
+            return 0;
         return k_msgq_num_used_get(const_cast<struct k_msgq*>(&rx_queues_[conn_id - 1]));
     }
 
 private:
     QueueError push_to(std::array<struct k_msgq, max_connections>& queues,
-                       uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
-        if (length > max_msg_size) return QueueError::full;
+                       uint8_t conn_id,
+                       const uint8_t* data,
+                       size_t length,
+                       uint32_t timeout_ms) {
+        if (conn_id < 1 || conn_id > max_connections)
+            return QueueError::invalid_id;
+        if (length > max_msg_size)
+            return QueueError::full;
 
         uint8_t slot[slot_size];
         auto len16 = static_cast<uint16_t>(length);
@@ -66,19 +76,25 @@ private:
 
         k_timeout_t tout = (timeout_ms == 0) ? K_NO_WAIT : K_MSEC(timeout_ms);
         int ret = k_msgq_put(&queues[conn_id - 1], slot, tout);
-        if (ret == -ENOMSG || ret == -EAGAIN) return QueueError::full;
-        if (ret == -EAGAIN) return QueueError::timeout;
+        if (ret == -ENOMSG || ret == -EAGAIN)
+            return QueueError::full;
+        if (ret == -EAGAIN)
+            return QueueError::timeout;
         return QueueError::ok;
     }
 
     QueueError pop_from(std::array<struct k_msgq, max_connections>& queues,
-                        uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
+                        uint8_t conn_id,
+                        QueueMessage& msg,
+                        uint32_t timeout_ms) {
+        if (conn_id < 1 || conn_id > max_connections)
+            return QueueError::invalid_id;
 
         uint8_t slot[slot_size];
         k_timeout_t tout = (timeout_ms == 0) ? K_NO_WAIT : K_MSEC(timeout_ms);
         int ret = k_msgq_get(&queues[conn_id - 1], slot, tout);
-        if (ret == -ENOMSG || ret == -EAGAIN) return QueueError::empty;
+        if (ret == -ENOMSG || ret == -EAGAIN)
+            return QueueError::empty;
 
         uint16_t len16 = 0;
         std::memcpy(&len16, slot, sizeof(len16));

@@ -12,8 +12,9 @@ public:
     MOCK_METHOD(void, close, (), (override));
     MOCK_METHOD(bool, is_open, (), (const, override));
     MOCK_METHOD(UartError, write, (const uint8_t* data, size_t length), (override));
-    MOCK_METHOD(UartError, read,
-                (uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
+    MOCK_METHOD(UartError,
+                read,
+                (uint8_t * buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms),
                 (override));
 };
 
@@ -21,8 +22,7 @@ TEST(ModemControllerTest, ConnectSuccess) {
     auto mock = std::make_unique<MockUart>();
     auto* raw = mock.get();
 
-    EXPECT_CALL(*raw, open(testing::_, testing::_))
-        .WillOnce(testing::Return(UartError::ok));
+    EXPECT_CALL(*raw, open(testing::_, testing::_)).WillOnce(testing::Return(UartError::ok));
 
     ModemController ctrl(std::move(mock));
     EXPECT_EQ(ctrl.connect("COM1"), ModemStatus::ok);
@@ -58,8 +58,7 @@ TEST(ModemControllerTest, SendRawNoRetry_FailsOnce) {
     ON_CALL(*raw, is_open()).WillByDefault(testing::Return(true));
 
     // Expect exactly one write and one read (no retry)
-    EXPECT_CALL(*raw, write(testing::_, testing::_))
-        .WillOnce(testing::Return(UartError::ok));
+    EXPECT_CALL(*raw, write(testing::_, testing::_)).WillOnce(testing::Return(UartError::ok));
     EXPECT_CALL(*raw, read(testing::_, testing::_, testing::_, testing::_))
         .WillOnce(testing::Return(UartError::timeout));
 

@@ -27,18 +27,26 @@ public:
             return UartError::invalid_config;
         }
 
-        struct uart_config uart_cfg{};
-        uart_cfg.baudrate  = config.baud_rate;
+        struct uart_config uart_cfg {};
+        uart_cfg.baudrate = config.baud_rate;
         uart_cfg.data_bits = UART_CFG_DATA_BITS_8;
         uart_cfg.stop_bits = (config.stop_bits == 2) ? UART_CFG_STOP_BITS_2 : UART_CFG_STOP_BITS_1;
-        uart_cfg.parity    = UART_CFG_PARITY_NONE;
+        uart_cfg.parity = UART_CFG_PARITY_NONE;
         uart_cfg.flow_ctrl = UART_CFG_FLOW_CTRL_NONE;
 
         switch (config.data_bits) {
-            case 5: uart_cfg.data_bits = UART_CFG_DATA_BITS_5; break;
-            case 6: uart_cfg.data_bits = UART_CFG_DATA_BITS_6; break;
-            case 7: uart_cfg.data_bits = UART_CFG_DATA_BITS_7; break;
-            default: uart_cfg.data_bits = UART_CFG_DATA_BITS_8; break;
+        case 5:
+            uart_cfg.data_bits = UART_CFG_DATA_BITS_5;
+            break;
+        case 6:
+            uart_cfg.data_bits = UART_CFG_DATA_BITS_6;
+            break;
+        case 7:
+            uart_cfg.data_bits = UART_CFG_DATA_BITS_7;
+            break;
+        default:
+            uart_cfg.data_bits = UART_CFG_DATA_BITS_8;
+            break;
         }
 
         if (uart_configure(dev_, &uart_cfg) != 0) {
@@ -49,13 +57,9 @@ public:
         return UartError::ok;
     }
 
-    void close() override {
-        dev_ = nullptr;
-    }
+    void close() override { dev_ = nullptr; }
 
-    bool is_open() const override {
-        return dev_ != nullptr;
-    }
+    bool is_open() const override { return dev_ != nullptr; }
 
     UartError write(const uint8_t* data, size_t length) override {
         if (dev_ == nullptr) {
@@ -69,8 +73,8 @@ public:
         return UartError::ok;
     }
 
-    UartError read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read,
-                   uint32_t timeout_ms) override {
+    UartError
+    read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms) override {
         if (dev_ == nullptr) {
             return UartError::port_not_open;
         }

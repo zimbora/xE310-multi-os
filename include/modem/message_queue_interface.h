@@ -24,12 +24,13 @@ struct QueueMessage {
 class MessageQueueInterface {
 public:
     static constexpr uint8_t max_connections = 5;
-    static constexpr size_t  default_capacity = 16;
+    static constexpr size_t default_capacity = 16;
 
     virtual ~MessageQueueInterface() = default;
 
     /// Push a message onto the TX queue for the given connection ID (1-based).
-    virtual QueueError tx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms = 0) = 0;
+    virtual QueueError
+    tx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms = 0) = 0;
 
     /// Pop a message from the TX queue for the given connection ID (1-based).
     virtual QueueError tx_pop(uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms = 0) = 0;
@@ -38,7 +39,8 @@ public:
     virtual size_t tx_count(uint8_t conn_id) const = 0;
 
     /// Push a message onto the RX queue for the given connection ID (1-based).
-    virtual QueueError rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms = 0) = 0;
+    virtual QueueError
+    rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms = 0) = 0;
 
     /// Pop a message from the RX queue for the given connection ID (1-based).
     virtual QueueError rx_pop(uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms = 0) = 0;

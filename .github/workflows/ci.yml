@@ -7,6 +7,20 @@ on:
     branches: ["**"]
 
 jobs:
+  clang-format:
+    name: Clang-Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Run clang-format check
+        run: |
+          find include/ src/ tests/ -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' -o -name '*.c' \) \
+            | xargs clang-format --dry-run --Werror
+
   cppcheck:
     name: Cppcheck Static Analysis
     runs-on: ubuntu-latest
