@@ -781,10 +781,23 @@ void NetworkLte::execute_actions() {
                 //modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
                 //modem_.network_attach();
                 if(nAttachRetries == 0){
+                    
+                    auto status = modem_.get_apn(lteConfig.cid, regInfo.apn);
+                    if(status == ModemStatus::ok){
+                        if(regInfo.apn != lteConfig.default_apn){
+                            NETWORK_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
+                            status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
+                            if (status != ModemStatus::ok) {
+                                NETWORK_LOG_ERR("Failed to set APN");
+                                // flag error
+                            }
+                        }
+                    }
+
                     // check default iot_tech
                     RadioTech current_tech;
                     uint8_t gsm_priority;
-                    auto status = modem_.get_iot_tech(current_tech,gsm_priority);
+                    status = modem_.get_iot_tech(current_tech,gsm_priority);
                     if(status == ModemStatus::ok){
                         if(current_tech != lteConfig.default_iot_tech){
                             NETWORK_LOG_WRN("Current IoT technology %d is different from default config %d, changing it to default config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.default_iot_tech));
@@ -808,18 +821,6 @@ void NetworkLte::execute_actions() {
                         break;
                     }
 
-                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
-                    if(status == ModemStatus::ok){
-                        if(regInfo.apn != lteConfig.default_apn){
-                            NETWORK_LOG_WRN("Current APN %s is different from default config %s, changing it to default config", regInfo.apn.c_str(), lteConfig.default_apn.c_str());
-                            status = modem_.set_apn(lteConfig.cid, lteConfig.default_apn);
-                            if (status != ModemStatus::ok) {
-                                NETWORK_LOG_ERR("Failed to set APN");
-                                // flag error
-                            }
-                        }
-                    }
-
                     NETWORK_LOG_INF("Starting network attach with default configuration");
                     change_state(NetworkLteState::network_attaching);
                     status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
@@ -831,10 +832,22 @@ void NetworkLte::execute_actions() {
                 } else if(nAttachRetries < lteConfig.max_attach_retries){
                     NETWORK_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
                     
+                    auto status = modem_.get_apn(lteConfig.cid, regInfo.apn);
+                    if(status == ModemStatus::ok){
+                        if(regInfo.apn != lteConfig.fallback_apn){
+                            NETWORK_LOG_WRN("Current APN %s is different from fallback config %s, changing it to fallback config", regInfo.apn.c_str(), lteConfig.fallback_apn.c_str());
+                            status = modem_.set_apn(lteConfig.cid, lteConfig.fallback_apn);
+                            if (status != ModemStatus::ok) {
+                                NETWORK_LOG_ERR("Failed to set APN");
+                                // flag error
+                            }
+                        }
+                    }
+
                     // check fallback iot_tech
                     RadioTech current_tech;
                     uint8_t gsm_priority;
-                    auto status = modem_.get_iot_tech(current_tech,gsm_priority);
+                    status = modem_.get_iot_tech(current_tech,gsm_priority);
                     if(status == ModemStatus::ok){
                         if(current_tech != lteConfig.fallback_iot_tech){
                             NETWORK_LOG_WRN("Current IoT technology %d is different from fallback config %d, changing it to fallback config and rebooting to apply", static_cast<int>(current_tech), static_cast<int>(lteConfig.fallback_iot_tech));
@@ -856,18 +869,6 @@ void NetworkLte::execute_actions() {
                     if(fChangeRAT || fChangeBands){
                         call_action(ModemAction::setup_radio); // if we need to change either RAT or bands, we can just reboot once and apply both changes at the same time
                         break;
-                    }
-                    
-                    status = modem_.get_apn(lteConfig.cid, regInfo.apn);
-                    if(status == ModemStatus::ok){
-                        if(regInfo.apn != lteConfig.fallback_apn){
-                            NETWORK_LOG_WRN("Current APN %s is different from fallback config %s, changing it to fallback config", regInfo.apn.c_str(), lteConfig.fallback_apn.c_str());
-                            status = modem_.set_apn(lteConfig.cid, lteConfig.fallback_apn);
-                            if (status != ModemStatus::ok) {
-                                NETWORK_LOG_ERR("Failed to set APN");
-                                // flag error
-                            }
-                        }
                     }
                     
                     change_state(NetworkLteState::network_attaching);
