@@ -25,6 +25,8 @@ AtResponse AtCommand::parse_response(std::string_view raw) {
         return response;
     }
 
+    MODEM_LOG_DBG("<<: %.*s", static_cast<int>(raw.size()), raw.data());
+
     // Split raw response into lines on AT_TERMINATOR ("\r\n")
     constexpr std::string_view terminator = AT_TERMINATOR;
     std::string_view::size_type start = 0;

@@ -16,8 +16,8 @@
 
 // Choose one MVNO
 //#define IDEMIA_PUBLIC
-#define TELENOR_PUBLIC 
-//#define ONET_PUBLIC 
+//#define TELENOR_PUBLIC 
+#define ONET_PUBLIC 
 // --- --- ---
 #define COUNTRY_CODE 268
 #define DEFAULT_IOT_TECH RadioTech::cat_m1
@@ -28,13 +28,13 @@
 
 #if defined(ONET_PUBLIC)
     #define DEFAULT_APN "terminal.apn"
-    #define FALLBACK_APN "anova.apn"
+    #define FALLBACK_APN "terminal.apn"
 #elif defined(TELENOR_PUBLIC)
     #define DEFAULT_APN "connect.cxn"
-    #define FALLBACK_APN "anova.apn"
+    #define FALLBACK_APN "connect.cxn"
 #elif defined(IDEMIA_PUBLIC)
     #define DEFAULT_APN "lpwa.vodafone.iot"
-    #define FALLBACK_APN "anova.apn"
+    #define FALLBACK_APN "lpwa.vodafone.iot"
 #else
     #define DEFAULT_APN "anova.apn"
     #define FALLBACK_APN "anova.apn"
