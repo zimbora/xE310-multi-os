@@ -128,7 +128,7 @@ bool NetworkLte::network_connect() {
 
 bool NetworkLte::network_disconnect() {
 
-    if (true || state_ == NetworkLteState::data_ready) {
+    if (true || state_ == NetworkLteState::data_ready) { // NOLINT(readability-simplify-boolean-expr)
         auto status = modem_.network_detach();
         if (status == ModemStatus::ok)
             change_state(NetworkLteState::network_detached);
@@ -152,7 +152,7 @@ void NetworkLte::new_connection(uint8_t conn_id, std::string_view protocol, std:
     serverInfo[conn_id - 1].port = static_cast<uint16_t>(std::atoi(port_buf));
 }
 
-bool NetworkLte::server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, const uint16_t port) {
+bool NetworkLte::server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, uint16_t port) {
 
     if (state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode) {
         NETWORK_LOG_INF("Not currently in data ready mode or PSM, connect to the network first");
@@ -294,7 +294,7 @@ bool NetworkLte::force_psm() {
     // stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is
     // meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
     StaticVector<Operator, xE310::MAX_OPERATORS> availableOperators;
-    auto status = modem_.get_available_operators(availableOperators);
+    auto status = modem_.get_available_operators(availableOperators); // NOLINT(clang-analyzer-deadcode.DeadStores)
     for (const auto& op : availableOperators) {
         NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(),
                         static_cast<int>(op.act));
@@ -433,7 +433,7 @@ bool NetworkLte::send_at_command(std::string_view command, FixedString<AT_RESPON
     return true;
 }
 
-bool NetworkLte::update_modem(std::string_view firmware_url) {
+bool NetworkLte::update_modem(std::string_view /*firmware_url*/) {
     if (state_ != NetworkLteState::modem_fota) {
         go_to_state(NetworkLteState::modem_fota);
     }
@@ -479,10 +479,10 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             break;
         case NetworkLteEvent::psm_exit:
             NETWORK_LOG_INF("Exited PSM mode");
-            if (prev_state_ == NetworkLteState::data_ready)
+            if (prev_state_ == NetworkLteState::data_ready) {
                 change_state(NetworkLteState::data_ready); // assume we were in sleep mode with an active connection, we
                                                            // can go directly to data ready state
-            else {
+            } else {
                 change_state(NetworkLteState::idle_mode); // otherwise go back to idle and restart attach flow
             }
             break;
@@ -741,7 +741,7 @@ void NetworkLte::execute_actions() {
         case ModemAction::setup_radio: {
             // get modem info
             modem::ModemStatus status;
-            if (false) {
+            if (false) { // NOLINT(readability-simplify-boolean-expr)
                 status = modem_.request_imei_sv(modemInfo.imei_sv);
                 if (status != ModemStatus::ok) {
                     // flag error
@@ -781,8 +781,9 @@ void NetworkLte::execute_actions() {
                     if (status != ModemStatus::ok) {
                         NETWORK_LOG_ERR("Failed to set LTE bands");
                         // flag error
-                    } else
+                    } else {
                         fReboot = true;
+                    }
                 }
                 if (fChangeRAT) {
                     fChangeRAT = false;
@@ -794,8 +795,9 @@ void NetworkLte::execute_actions() {
                     if (status != ModemStatus::ok) {
                         NETWORK_LOG_ERR("Failed to set IoT technology");
                         // flag error
-                    } else
+                    } else {
                         fReboot = true;
+                    }
                 }
                 // reboot modem to apply new bands configuration
                 if (fReboot) call_action(ModemAction::reboot);
@@ -1479,7 +1481,7 @@ uint32_t NetworkLte::timer_elapsed_seconds() const {
     if (!timer_) {
         return 0;
     }
-    return timer_->elapsed_ms() / 1000u;
+    return timer_->elapsed_ms() / 1000U;
 }
 
 void NetworkLte::on_timer_expired() {

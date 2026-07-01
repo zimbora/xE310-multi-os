@@ -5,7 +5,7 @@
 
 namespace modem {
 
-enum class UartError {
+enum class UartError : uint8_t {
     ok = 0,
     timeout,
     write_failed,
@@ -24,6 +24,11 @@ struct UartConfig {
 /// Abstract UART interface — implemented per platform.
 class UartInterface {
 public:
+    UartInterface() = default;
+    UartInterface(const UartInterface&) = delete;
+    UartInterface& operator=(const UartInterface&) = delete;
+    UartInterface(UartInterface&&) = delete;
+    UartInterface& operator=(UartInterface&&) = delete;
     virtual ~UartInterface() = default;
 
     virtual UartError open(const char* port, const UartConfig& config) = 0;

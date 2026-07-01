@@ -7,7 +7,7 @@
 
 namespace modem {
 
-enum class QueueError {
+enum class QueueError : uint8_t {
     ok = 0,
     full,
     empty,
@@ -29,6 +29,11 @@ public:
     static constexpr uint8_t MAX_CONNECTIONS = 5;
     static constexpr size_t DEFAULT_CAPACITY = 16;
 
+    MessageQueueInterface() = default;
+    MessageQueueInterface(const MessageQueueInterface&) = delete;
+    MessageQueueInterface& operator=(const MessageQueueInterface&) = delete;
+    MessageQueueInterface(MessageQueueInterface&&) = delete;
+    MessageQueueInterface& operator=(MessageQueueInterface&&) = delete;
     virtual ~MessageQueueInterface() = default;
 
     /// Push a message onto the TX queue for the given connection ID (1-based).

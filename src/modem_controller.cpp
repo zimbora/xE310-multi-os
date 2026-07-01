@@ -102,9 +102,12 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
                 response.status == AtStatus::busy) {
                 // Extract any URCs that arrived after the status line and buffer them for poll_urc().
                 std::string_view acc_view = accumulated.view();
-                std::string_view search_term = (response.status == AtStatus::ok)      ? "OK"
-                                               : (response.status == AtStatus::error) ? "ERROR"
-                                                                                      : "BUSY";
+                std::string_view search_term = "BUSY";
+                if (response.status == AtStatus::ok) {
+                    search_term = "OK";
+                } else if (response.status == AtStatus::error) {
+                    search_term = "ERROR";
+                }
                 size_t status_end = acc_view.find(search_term);
                 if (status_end != std::string_view::npos) {
                     // Find the end of the status line (OK\r\n or ERROR\r\n)
@@ -317,7 +320,7 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
         if (line.empty()) {
             continue;
         }
-        for (const char* const* p = kPrefixes; *p; ++p) {
+        for (const char* const* p = kPrefixes; *p != nullptr; ++p) {
             if (line.rfind(*p, 0) == 0) {
                 urcs.push_back(line);
                 break;

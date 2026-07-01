@@ -16,7 +16,7 @@
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
     std::string port = "COM17";
     for (int i = 1; i < argc - 1; ++i) {
@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
                             fValid = false;
                             break;
                         }
-                        n = n * 10 + (c - '0');
+                        n = (n * 10) + (c - '0');
                     }
                     if (!fValid) return "ERROR: invalid conn_id";
                     if (n >= 1 && n <= MAX_SERVER_CONNECTIONS) return rpc::to_json(arr[n - 1]);
@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
                             fValid = false;
                             break;
                         }
-                        conn_id = conn_id * 10 + (c - '0');
+                        conn_id = (conn_id * 10) + (c - '0');
                     }
                     if (!fValid) return "ERROR: invalid conn_id";
                     if (conn_id < 1 || conn_id > MAX_SERVER_CONNECTIONS) {
