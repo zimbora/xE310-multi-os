@@ -5,6 +5,7 @@
 #include <zephyr/kernel.h>
 #include <cstring>
 #include <array>
+#include <vector>
 
 namespace modem {
 
@@ -17,7 +18,7 @@ public:
     static constexpr size_t SLOT_SIZE = MAX_MSG_SIZE + sizeof(uint16_t); // header + payload
 
     explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity) {
-        for (uint8_t i = 0; i < max_connections; ++i) {
+        for (uint8_t i = 0; i < MAX_CONNECTIONS; ++i) {
             tx_bufs_[i].resize(SLOT_SIZE * capacity);
             rx_bufs_[i].resize(SLOT_SIZE * capacity);
             k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, capacity);
@@ -88,10 +89,10 @@ private:
     }
 
     size_t capacity_;
-    std::array<struct k_msgq, max_connections> tx_queues_{};
-    std::array<struct k_msgq, max_connections> rx_queues_{};
-    std::array<std::vector<char>, max_connections> tx_bufs_;
-    std::array<std::vector<char>, max_connections> rx_bufs_;
+    std::array<struct k_msgq, MAX_CONNECTIONS> tx_queues_{};
+    std::array<struct k_msgq, MAX_CONNECTIONS> rx_queues_{};
+    std::array<std::vector<char>, MAX_CONNECTIONS> tx_bufs_;
+    std::array<std::vector<char>, MAX_CONNECTIONS> rx_bufs_;
 };
 
 } // namespace modem
