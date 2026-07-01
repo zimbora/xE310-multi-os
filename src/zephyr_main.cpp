@@ -9,6 +9,8 @@
 #include "modem/timer_factory.h"
 #include "modem/log.h"
 #include <memory>
+#include <string>
+#include <string_view>
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
@@ -32,8 +34,8 @@ int main(void) {
 
     modem::NetworkLteConfig lteConfig;
 
-    auto on_data_received = [&](uint8_t cid, const std::string& data, uint16_t n_bytes) {
-        MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
+    auto on_data_received = [&](uint8_t cid, std::string_view data, uint16_t n_bytes) {
+        MODEM_LOG_INF("Data received on CID %d (%u bytes): %.*s", cid, n_bytes, static_cast<int>(data.size()), data.data());
     };
 
     modem::NetworkLte network(modem, lteConfig, on_data_received);

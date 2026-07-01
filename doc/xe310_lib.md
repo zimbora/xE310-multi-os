@@ -261,8 +261,8 @@ Signal measurements from `AT+CESQ`.
 |--------|-----------|-----------|-------------|
 | `udp_open` | `AT#SD` | `ModemStatus udp_open(uint8_t conn_id, const std::string& host, uint16_t remote_port, uint16_t local_port = 0, uint8_t cid = 1)` | Open UDP socket to remote host |
 | `udp_listen` | `AT#SL` | `ModemStatus udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid = 1)` | Listen for incoming UDP on a port |
-| `udp_send` | `AT#SSENDEXT` | `ModemStatus udp_send(uint8_t conn_id, const std::vector<uint8_t>& data)` | Send binary data over UDP socket |
-| `udp_receive` | `AT#SRECV` | `ModemStatus udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes = 1500)` | Receive data from UDP socket |
+| `udp_send` | `AT#SSENDEXT` | `ModemStatus udp_send(uint8_t conn_id, const uint8_t* data, size_t length)` | Send binary data over UDP socket |
+| `udp_receive` | `AT#SRECV` | `ModemStatus udp_receive(uint8_t conn_id, StaticVector<uint8_t, UDP_MAX_BYTES>& data, uint16_t max_bytes = 1500)` | Receive data from UDP socket |
 | `udp_close` | `AT#SH` | `ModemStatus udp_close(uint8_t conn_id)` | Close UDP socket |
 | `udp_status` | `AT#SS` | `ModemStatus udp_status(uint8_t conn_id, uint8_t& state)` | Query socket connection state |
 
@@ -362,11 +362,11 @@ int main() {
     // 5. Send UDP data
     modem.udp_open(1, "192.168.1.100", 5000);
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    modem.udp_send(1, payload);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    modem.udp_send(1, payload, sizeof(payload));
 
     // 6. Receive UDP data
-    std::vector<uint8_t> rx_data;
+    StaticVector<uint8_t, xE310::UDP_MAX_BYTES> rx_data;
     modem.udp_receive(1, rx_data);
 
     // 7. Cleanup
