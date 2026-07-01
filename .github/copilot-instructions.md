@@ -27,6 +27,7 @@ All code must compile and run correctly on every target platform.
 - Keep headers minimal — forward-declare where possible
 - No exceptions on embedded targets — use error codes or `std::expected`-style patterns
 - No dynamic memory allocation in hot paths on embedded targets
+- All code must conform to the `.clang-format` file at the project root
 
 ## Build System
 
