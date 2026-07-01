@@ -10,7 +10,6 @@
 #include <functional>
 #include <memory>
 #include <string_view>
-#include <vector>
 
 #define MAX_SERVER_CONNECTIONS 5
 
@@ -310,7 +309,7 @@ public:
     const NetworkSurveyResult& network_survey_result() const;
 
     /// List of operators found by the last AT+COPS=? scan.
-    const std::vector<Operator>& available_operators() const;
+    const StaticVector<Operator, xE310::MAX_OPERATORS>& available_operators() const;
 
     /// Result of the last AT#CSURV scan (populated by scan_networks()).
     const CsurvResult& csurv_result() const;
@@ -385,7 +384,7 @@ private:
     TelitCpsmsConfig     telitCpsmsConfig;
     TelitCpsmsStatus     telitCpsmsStatus;
     NetworkSurveyResult  networkSurveyResult;
-    std::vector<Operator> operatorList;
+    StaticVector<Operator, xE310::MAX_OPERATORS> operatorList;
     CsurvResult          csurvResult;
     ServerInfo           serverInfo[MAX_SERVER_CONNECTIONS];
 

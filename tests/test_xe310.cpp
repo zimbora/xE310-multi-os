@@ -803,8 +803,8 @@ TEST_F(Xe310Test, UdpSend) {
             }));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::ok);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, UdpSendPromptTimeout) {
@@ -819,8 +819,8 @@ TEST_F(Xe310Test, UdpSendPromptTimeout) {
             .WillOnce(Return(UartError::timeout));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::timeout);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::timeout);
 }
 
 TEST_F(Xe310Test, UdpSendNoPrompt) {
@@ -840,8 +840,8 @@ TEST_F(Xe310Test, UdpSendNoPrompt) {
             }));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::at_error);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::at_error);
 }
 
 TEST_F(Xe310Test, UdpSendWritePayloadFails) {
@@ -866,8 +866,8 @@ TEST_F(Xe310Test, UdpSendWritePayloadFails) {
             .WillOnce(Return(UartError::write_failed));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::uart_error);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::uart_error);
 }
 
 TEST_F(Xe310Test, UdpSendBinaryData) {
@@ -910,8 +910,8 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
     }
 
     // Test with special bytes that would break AT#SSEND but work with AT#SSENDEXT
-    std::vector<uint8_t> payload = {0x00, 0x1A, 0xFF, 0x7E};
-    EXPECT_EQ(modem_->udp_send(2, payload), ModemStatus::ok);
+    uint8_t payload[] = {0x00, 0x1A, 0xFF, 0x7E};
+    EXPECT_EQ(modem_->udp_send(2, payload, sizeof(payload)), ModemStatus::ok);
 }
 
 // --- Not Connected ---

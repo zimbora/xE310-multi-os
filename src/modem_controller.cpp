@@ -146,7 +146,7 @@ ModemStatus ModemController::send_raw(std::string_view command, AtResponse& resp
     return status;
 }
 
-ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+ModemStatus ModemController::send_binary(const uint8_t* data, size_t length, AtResponse& response,
                                          uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
     if (!lock) {
@@ -156,7 +156,7 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
         return ModemStatus::not_connected;
     }
 
-    auto err = uart_->write(data.data(), data.size());
+    auto err = uart_->write(data, length);
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
@@ -164,12 +164,12 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
     // Log hex representation using stack buffer
     char hex_buf[512];
     size_t hex_pos = 0;
-    for (size_t i = 0; i < data.size() && hex_pos + 3 < sizeof(hex_buf); ++i) {
+    for (size_t i = 0; i < length && hex_pos + 3 < sizeof(hex_buf); ++i) {
         int n = snprintf(hex_buf + hex_pos, sizeof(hex_buf) - hex_pos, "%02x ", data[i]);
         if (n > 0) hex_pos += static_cast<size_t>(n);
     }
     hex_buf[hex_pos] = '\0';
-    MODEM_LOG_DBG(">>: [binary %zu bytes]: %s", data.size(), hex_buf);
+    MODEM_LOG_DBG(">>: [binary %zu bytes]: %s", length, hex_buf);
 
     // Read response (expect OK or ERROR after binary payload)
     uint8_t buffer[512];
@@ -194,7 +194,7 @@ ModemStatus ModemController::send_binary(const std::vector<uint8_t>& data, AtRes
 }
 
 ModemStatus ModemController::send_with_prompt(std::string_view command,
-                                               const std::vector<uint8_t>& data,
+                                               const uint8_t* data, size_t length,
                                                AtResponse& response,
                                                uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
@@ -241,13 +241,13 @@ ModemStatus ModemController::send_with_prompt(std::string_view command,
 
     // Log the data payload
     char log_buf[512];
-    size_t log_len = std::min(data.size(), sizeof(log_buf) - 1);
-    std::memcpy(log_buf, data.data(), log_len);
+    size_t log_len = std::min(length, sizeof(log_buf) - 1);
+    std::memcpy(log_buf, data, log_len);
     log_buf[log_len] = '\0';
     MODEM_LOG_DBG(">>: %s", log_buf);
 
     // Step 3: Send the binary payload
-    err = uart_->write(data.data(), data.size());
+    err = uart_->write(data, length);
     if (err != UartError::ok) {
         return ModemStatus::uart_error;
     }
@@ -273,8 +273,8 @@ ModemStatus ModemController::send_with_prompt(std::string_view command,
     return ModemStatus::ok;
 }
 
-std::vector<FixedString<URC_LINE_MAX>> ModemController::poll_urc(uint32_t timeout_ms) {
-    std::vector<FixedString<URC_LINE_MAX>> urcs;
+StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemController::poll_urc(uint32_t timeout_ms) {
+    StaticVector<FixedString<URC_LINE_MAX>, MAX_URC_LINES> urcs;
     IoLockGuard lock(io_mutex_);
     if (!lock) {
         return urcs;

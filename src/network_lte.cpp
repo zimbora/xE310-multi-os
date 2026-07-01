@@ -35,7 +35,7 @@ const CpsmsConfig&         NetworkLte::cpsms_config()         const { return cps
 const TelitCpsmsConfig&    NetworkLte::telit_cpsms_config()   const { return telitCpsmsConfig; }
 const TelitCpsmsStatus&    NetworkLte::telit_cpsms_status()   const { return telitCpsmsStatus; }
 const NetworkSurveyResult& NetworkLte::network_survey_result()const { return networkSurveyResult; }
-const std::vector<Operator>& NetworkLte::available_operators()  const { return operatorList; }
+const StaticVector<Operator, xE310::MAX_OPERATORS>& NetworkLte::available_operators()  const { return operatorList; }
 const CsurvResult&           NetworkLte::csurv_result()         const { return csurvResult; }
 const ServerInfo*          NetworkLte::server_info_array()    const { return serverInfo; }
 
@@ -223,7 +223,7 @@ bool NetworkLte::force_PSM(){
 
     bool psmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
-    std::vector<Operator> availableOperators;
+    StaticVector<Operator, xE310::MAX_OPERATORS> availableOperators;
     auto status = modem_.get_available_operators(availableOperators);
     for(const auto& op : availableOperators){
         NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
@@ -442,7 +442,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             {
                 NETWORK_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
                 uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
-                std::vector<uint8_t> buf;
+                StaticVector<uint8_t, xE310::UDP_MAX_BYTES> buf;
                 if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
                     // Push to RX queue for this connection
                     if (message_queue_) {
@@ -451,7 +451,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                             NETWORK_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
                         }
                     }
-                    std::string payload(buf.begin(), buf.end());
+                    std::string_view payload(reinterpret_cast<const char*>(buf.data()), buf.size());
                     if (on_data_received_) {
                         on_data_received_(conn, payload, static_cast<uint16_t>(buf.size()));
                     }
@@ -949,10 +949,10 @@ void NetworkLte::execute_actions() {
                     }
                     QueueMessage msg;
                     while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
-                        NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.data.size()));
+                        NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.length));
                         NETWORK_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
                         if (serverInfo[id - 1].protocol == "UDP") {
-                            auto status = modem_.udp_send(id, msg.data);
+                            auto status = modem_.udp_send(id, msg.data.data(), msg.length);
                             if (status != ModemStatus::ok) {
                                 NETWORK_LOG_ERR("Failed to send UDP data on conn_id %d", id);
                             }
@@ -968,10 +968,13 @@ void NetworkLte::execute_actions() {
         case ModemAction::read_data:
             // for testing, we can just read data from the modem and print it, in real implementation, we would pass it to a buffer
             {
-                std::vector<uint8_t> buf;
+                StaticVector<uint8_t, xE310::UDP_MAX_BYTES> buf;
                 if (modem_.udp_receive(lteConfig.conn_id, buf) == ModemStatus::ok && !buf.empty()) {
-                    std::string payload(buf.begin(), buf.end());
-                    NETWORK_LOG_INF("Received data: %s", payload.c_str());
+                    char payload[xE310::UDP_MAX_BYTES + 1];
+                    size_t len = std::min(buf.size(), sizeof(payload) - 1);
+                    std::memcpy(payload, buf.data(), len);
+                    payload[len] = '\0';
+                    NETWORK_LOG_INF("Received data: %s", payload);
                 } else {
                     NETWORK_LOG_ERR("Failed to read data or no data available");
                     // flag error

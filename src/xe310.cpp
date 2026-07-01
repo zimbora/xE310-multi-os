@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
-#include <vector>
 
 namespace modem {
 
@@ -840,7 +839,7 @@ ModemStatus xE310::get_operator(FixedString<MODEM_MEDIUM_STR>& oper) {
     return ModemStatus::ok;
 }
 
-ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
+ModemStatus xE310::get_available_operators(StaticVector<Operator, MAX_OPERATORS>& operators) {
     AtResponse response;
     auto status = send_raw("AT+COPS=?", response, 210000);
     if (status != ModemStatus::ok) {
@@ -902,7 +901,7 @@ ModemStatus xE310::get_available_operators(std::vector<Operator>& operators) {
         op.act        = (field_count >= 5)
                         ? static_cast<RadioTech>(std::atoi(field_buf[4]))
                         : RadioTech::gsm;
-        operators.push_back(std::move(op));
+        operators.push_back(op);
     }
 
     return ModemStatus::ok;
@@ -1183,15 +1182,15 @@ ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid)
     return send_raw(cmd, response);
 }
 
-ModemStatus xE310::udp_send(uint8_t conn_id, const std::vector<uint8_t>& data) {
+ModemStatus xE310::udp_send(uint8_t conn_id, const uint8_t* data, size_t length) {
     AtResponse response;
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "AT#SSENDEXT=%u,%zu",
-             static_cast<unsigned>(conn_id), data.size());
-    return controller_.send_with_prompt(cmd, data, response);
+             static_cast<unsigned>(conn_id), length);
+    return controller_.send_with_prompt(cmd, data, length, response);
 }
 
-ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes) {
+ModemStatus xE310::udp_receive(uint8_t conn_id, StaticVector<uint8_t, UDP_MAX_BYTES>& data, uint16_t max_bytes) {
     AtResponse response;
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "AT#SRECV=%u,%u",
@@ -1202,7 +1201,8 @@ ModemStatus xE310::udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint
         auto nl_pos = body.find('\n');
         if (nl_pos != std::string_view::npos && nl_pos + 1 < body.size()) {
             auto payload = body.substr(nl_pos + 1);
-            data.assign(payload.begin(), payload.end());
+            data.assign(reinterpret_cast<const uint8_t*>(payload.data()),
+                        reinterpret_cast<const uint8_t*>(payload.data() + payload.size()));
         } else {
             data.clear();
         }
@@ -1245,7 +1245,7 @@ ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESP
 // --- Event Handlers ---
 const RegistrationInfo& xE310::registration_info() const { return info; }
 
-std::vector<FixedString<URC_LINE_MAX>> xE310::poll_urc(uint32_t timeout_ms) {
+StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> xE310::poll_urc(uint32_t timeout_ms) {
     return controller_.poll_urc(timeout_ms);
 }
 

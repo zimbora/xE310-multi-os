@@ -2,12 +2,12 @@
 
 #include "modem/at_command.h"
 #include "modem/fixed_string.h"
+#include "modem/static_vector.h"
 #include "modem/timer_interface.h"
 #include "modem/uart_interface.h"
 
 #include <memory>
 #include <string_view>
-#include <vector>
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 #include <zephyr/kernel.h>
@@ -58,17 +58,18 @@ public:
                          uint32_t timeout_ms = 5000, bool retry = false);
 
     /// Send binary data.
-    ModemStatus send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+    ModemStatus send_binary(const uint8_t* data, size_t length, AtResponse& response,
                             uint32_t timeout_ms = 5000);
 
     /// Send a command that expects a '>' prompt, then send binary data, then read final response.
-    ModemStatus send_with_prompt(std::string_view command, const std::vector<uint8_t>& data,
+    ModemStatus send_with_prompt(std::string_view command, const uint8_t* data, size_t length,
                                  AtResponse& response, uint32_t timeout_ms = 5000);
 
     /// Non-blocking read of any unsolicited data from the modem.
     /// Returns lines that begin with a known URC prefix (e.g. "+CREG:", "+CGEV:").
     /// Reads for at most timeout_ms; pass 0 for a best-effort non-blocking poll.
-    std::vector<FixedString<URC_LINE_MAX>> poll_urc(uint32_t timeout_ms = 50);
+    static constexpr size_t MAX_URC_LINES = 8;
+    StaticVector<FixedString<URC_LINE_MAX>, MAX_URC_LINES> poll_urc(uint32_t timeout_ms = 50);
 
 private:
     class IoMutex {

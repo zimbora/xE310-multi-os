@@ -4,7 +4,6 @@
 
 #include <cstdint>
 #include <string_view>
-#include <vector>
 
 #define ME310M1
 
@@ -188,7 +187,8 @@ struct SurvCell {
 
 /// Result of AT#CSURVC.
 struct NetworkSurveyResult {
-    std::vector<SurvCell> cells;
+    static constexpr size_t MAX_CELLS = 32;
+    StaticVector<SurvCell, MAX_CELLS> cells;
     bool    has_summary   = false;
     int     no_arfcn      = 0;   ///< total scanned frequencies (if #CSURVF=2)
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
@@ -234,7 +234,8 @@ struct CsurvCell {
 
 /// Result of AT#CSURV (with AT#CSURVF=2 pre-set).
 struct CsurvResult {
-    std::vector<CsurvCell> cells;
+    static constexpr size_t MAX_CELLS = 32;
+    StaticVector<CsurvCell, MAX_CELLS> cells;
     bool has_summary = false;
     int  no_arfcn    = 0;  ///< Number of scanned frequencies
     int  no_bcch     = 0;  ///< Number of found BCCH
@@ -403,7 +404,8 @@ public:
 
     /// AT+COPS=? — List all available operators.
     /// Parses +COPS: (<stat>,<long>,<short>,<numeric>,<act>),... into operators.
-    ModemStatus get_available_operators(std::vector<Operator>& operators);
+    static constexpr size_t MAX_OPERATORS = 16;
+    ModemStatus get_available_operators(StaticVector<Operator, MAX_OPERATORS>& operators);
 
     /// AT#CSURVF=2 + AT#CSURV — Network survey in labeled/hex format.
     /// Sets CSURVF=2 (hex numerics + summary line) then runs AT#CSURV[=<s>,<e>].
@@ -450,10 +452,11 @@ public:
     ModemStatus udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid = 1);
 
     /// AT#SSEND / AT#SSENDEXT — Send data over an open UDP socket.
-    ModemStatus udp_send(uint8_t conn_id, const std::vector<uint8_t>& data);
+    ModemStatus udp_send(uint8_t conn_id, const uint8_t* data, size_t length);
 
     /// AT#SRECV — Receive data from a UDP socket.
-    ModemStatus udp_receive(uint8_t conn_id, std::vector<uint8_t>& data, uint16_t max_bytes = 1500);
+    static constexpr size_t UDP_MAX_BYTES = 1500;
+    ModemStatus udp_receive(uint8_t conn_id, StaticVector<uint8_t, UDP_MAX_BYTES>& data, uint16_t max_bytes = 1500);
 
     /// AT#SH — Close a UDP socket.
     ModemStatus udp_close(uint8_t conn_id);
@@ -473,7 +476,7 @@ public:
     ModemStatus last_status() const;
 
     /// Poll the UART for any pending URC lines (non-blocking, max timeout_ms wait).
-    std::vector<FixedString<URC_LINE_MAX>> poll_urc(uint32_t timeout_ms = 10);
+    StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> poll_urc(uint32_t timeout_ms = 10);
 private:
     ModemController& controller_;
 

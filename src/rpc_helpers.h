@@ -248,7 +248,7 @@ inline std::string to_json(const modem::Operator& op) {
            "\"act\":\""       + std::string(to_str(op.act)) + "\"}";
 }
 
-inline std::string to_json(const std::vector<modem::Operator>& ops) {
+inline std::string to_json(const modem::StaticVector<modem::Operator, modem::xE310::MAX_OPERATORS>& ops) {
     std::string s = "[";
     for (size_t i = 0; i < ops.size(); ++i) {
         if (i > 0) s += ',';
