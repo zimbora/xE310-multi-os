@@ -44,15 +44,16 @@ SpacesInSquareBrackets: false
 
 # Short forms
 AllowShortBlocksOnASingleLine: Empty
-AllowShortCaseLabelsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
 
 # Other
 BinPackArguments: true
 BinPackParameters: true
 BreakConstructorInitializers: BeforeColon
+PackConstructorInitializers: NextLineOnly
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 Cpp11BracedListStyle: true
