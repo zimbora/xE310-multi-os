@@ -1,0 +1,14 @@
+# ninja log v7
+1	1376	1782925783033992167	CMakeFiles/modem_xe310.dir/src/at_command.cpp.o	8e1bf9121621ca11
+3	1506	1782925783036514709	CMakeFiles/modem_xe310.dir/src/hal/posix_uart.cpp.o	3f357dad1aa05037
+5	1586	1782925783037992189	CMakeFiles/modem_xe310.dir/src/hal/posix_timer.cpp.o	358350ff9abe514
+2	1726	1782925783034992172	CMakeFiles/modem_xe310.dir/src/modem_controller.cpp.o	d392c59148cce6c5
+1377	2102	1782925784410101293	CMakeFiles/modem_xe310.dir/src/hal/posix_message_queue.cpp.o	7f261961fa63c513
+1586	2663	1782925784619001215	CMakeFiles/modem_app.dir/src/posix_ipc_server.cpp.o	13cfe4b4d0360d10
+1726	2739	1782925784759001942	CMakeFiles/test_xe310.dir/src/test_xe310.cpp.o	bb13bdcbdcbdcdb6
+2	2898	1782925783035752924	CMakeFiles/modem_xe310.dir/src/xe310.cpp.o	85844e0d3ca25595
+2	2981	1782925783036160316	CMakeFiles/modem_xe310.dir/src/network_lte.cpp.o	f2951c7fec6913cc
+1506	4259	1782925784539000771	CMakeFiles/modem_app.dir/src/main.cpp.o	3ab187a04385a038
+2981	20666	1782925786014008460	libmodem_xe310.a	52c442516f472e89
+20666	20720	1782925803699106312	modem_app	ea2a94180fc608f6
+20666	20720	1782925803700232296	test_xe310	ef215892f765b124

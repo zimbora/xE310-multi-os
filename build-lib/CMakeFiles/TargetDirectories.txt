@@ -1,0 +1,9 @@
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/modem_xe310.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/modem_app.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/test_xe310.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/edit_cache.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/rebuild_cache.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/list_install_components.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/install.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/install/local.dir
+/home/runner/work/xE310-multi-os/xE310-multi-os/build-lib/CMakeFiles/install/strip.dir

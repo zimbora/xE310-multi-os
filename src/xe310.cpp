@@ -1037,7 +1037,7 @@ ModemStatus xE310::get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn) {
         // Find the prefix "+CGDCONT:"
         constexpr std::string_view PREFIX = "+CGDCONT:";
         auto p = line.find(PREFIX);
-        if (p == std::string::npos) continue;
+        if (p == std::string_view::npos) continue;
 
         std::string_view params = line.substr(p + PREFIX.size());
 
