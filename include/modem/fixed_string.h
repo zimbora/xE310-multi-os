@@ -19,21 +19,19 @@ public:
     FixedString() noexcept { buf_[0] = '\0'; }
 
     explicit FixedString(const char* s) noexcept {
-        if (s) {
+        if (s != nullptr) {
             size_ = detail::fs_min(std::strlen(s), Capacity);
             std::memcpy(buf_, s, size_);
         }
         buf_[size_] = '\0';
     }
 
-    FixedString(const char* s, size_t len) noexcept {
-        size_ = detail::fs_min(len, Capacity);
+    FixedString(const char* s, size_t len) noexcept : size_(detail::fs_min(len, Capacity)) {
         std::memcpy(buf_, s, size_);
         buf_[size_] = '\0';
     }
 
-    explicit FixedString(std::string_view sv) noexcept {
-        size_ = detail::fs_min(sv.size(), Capacity);
+    explicit FixedString(std::string_view sv) noexcept : size_(detail::fs_min(sv.size(), Capacity)) {
         std::memcpy(buf_, sv.data(), size_);
         buf_[size_] = '\0';
     }
@@ -57,7 +55,7 @@ public:
 
     // --- Assignment ---
     FixedString& operator=(const char* s) noexcept {
-        if (s) {
+        if (s != nullptr) {
             size_ = detail::fs_min(std::strlen(s), Capacity);
             std::memcpy(buf_, s, size_);
         } else {
@@ -140,7 +138,7 @@ public:
     // --- Comparison ---
     bool operator==(std::string_view other) const noexcept { return view() == other; }
     bool operator!=(std::string_view other) const noexcept { return view() != other; }
-    bool operator==(const char* other) const noexcept { return view() == std::string_view(other ? other : ""); }
+    bool operator==(const char* other) const noexcept { return view() == std::string_view((other != nullptr) ? other : ""); }
     bool operator!=(const char* other) const noexcept { return !(*this == other); }
 
     template<size_t M> bool operator==(const FixedString<M>& other) const noexcept { return view() == other.view(); }

@@ -152,7 +152,7 @@ void NetworkLte::new_connection(uint8_t conn_id, std::string_view protocol, std:
     serverInfo[conn_id - 1].port = static_cast<uint16_t>(std::atoi(port_buf));
 }
 
-bool NetworkLte::server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, const uint16_t port) {
+bool NetworkLte::server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, uint16_t port) {
 
     if (state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode) {
         NETWORK_LOG_INF("Not currently in data ready mode or PSM, connect to the network first");

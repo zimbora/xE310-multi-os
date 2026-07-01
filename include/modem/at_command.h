@@ -9,7 +9,7 @@
 
 namespace modem {
 
-enum class AtStatus {
+enum class AtStatus : uint8_t {
     ok = 0,
     error,
     timeout,

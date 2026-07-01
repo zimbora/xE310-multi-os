@@ -24,6 +24,7 @@ Checks: >
   -cppcoreguidelines-init-variables,
   -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
   -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
   misc-*,
   -misc-non-private-member-variables-in-classes,
   -misc-include-cleaner,
@@ -54,6 +55,8 @@ HeaderFilterRegex: 'include/modem/.*\.h$'
 CheckOptions:
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
+  - key: readability-identifier-naming.ClassIgnoredRegexp
+    value: 'xE310'
   - key: readability-identifier-naming.StructCase
     value: CamelCase
   - key: readability-identifier-naming.EnumCase

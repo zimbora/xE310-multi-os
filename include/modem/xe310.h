@@ -62,22 +62,21 @@ enum class RegStatus : uint8_t {
 
 /// Full registration info from AT+CEREG?
 struct RegistrationInfo {
-    uint8_t mode = 0;
-    RegStatus stat = RegStatus::not_registered;
     FixedString<MODEM_SHORT_STR> lac;            ///< TAC (tracking area code) for LTE / LAC for 2G
     FixedString<MODEM_SHORT_STR> ci;             ///< Cell identity
-    FixedString<MODEM_MEDIUM_STR> operator_name; ///< Operator name from AT+COPS?
-    RadioTech act = RadioTech::gsm;
-    FixedString<MODEM_MEDIUM_STR> apn; ///< APN from AT+CGDCONT?
-    bool fHasLocation = false;
+    FixedString<MODEM_SHORT_STR> active_time;    ///< T3324 active timer (encoded bit string, e.g. "01100000")
+    FixedString<MODEM_SHORT_STR> periodic_tau;   ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
     FixedString<MODEM_IP_STR> ip_address;
-    // Extended / reject fields (extended format)
+    FixedString<MODEM_MEDIUM_STR> operator_name; ///< Operator name from AT+COPS?
+    FixedString<MODEM_MEDIUM_STR> apn;           ///< APN from AT+CGDCONT?
+    uint8_t mode = 0;
+    RegStatus stat = RegStatus::not_registered;
+    RadioTech act = RadioTech::gsm;
+    bool fHasLocation = false;
     uint8_t cause_type = 0;   ///< Cause type for registration rejection
     uint8_t reject_cause = 0; ///< Reject cause value
     bool fHasReject = false;
     // PSM timer fields (PSM / extended PSM format)
-    FixedString<MODEM_SHORT_STR> active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
-    FixedString<MODEM_SHORT_STR> periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
     bool fHasPsm = false;
 };
 
@@ -182,8 +181,8 @@ struct SurvCell {
     uint32_t tac = 0;
     uint32_t phys_cell_id = 0;
     uint64_t cell_identity = 0;
-    float rsrp = 0.0f;
-    float rsrq = 0.0f;
+    float rsrp = 0.0F;
+    float rsrq = 0.0F;
 };
 
 /// Result of AT#CSURVC.
@@ -219,7 +218,7 @@ struct Operator {
     FixedString<MODEM_MEDIUM_STR> long_name;
     FixedString<MODEM_MEDIUM_STR> short_name;
     FixedString<MODEM_SHORT_STR> numeric;
-    RadioTech act;
+    RadioTech act = RadioTech::unknown;
 };
 
 /// A single cell entry from AT#CSURV with AT#CSURVF=2 (hex numeric format).
@@ -349,7 +348,7 @@ public:
     // --- Network Registration ---
 
     // AT+CEREG=2 — Enable network registration URC with location info and IP address.
-    ModemStatus set_registration_urc(bool);
+    ModemStatus set_registration_urc(bool enable);
 
     /// AT%TRSHCMD="BSPFILE","ERASE_LTEPP",<param> — Delete MRU list for selected RAT.
     ModemStatus delete_mru_list(MruListRat rat);
@@ -421,7 +420,7 @@ public:
 
     /// AT+CGEREP — Set command enables/disables sending of unsolicited result codes in case of certain events
     /// occurring in the module or in the network.
-    ModemStatus set_pdp_urc(bool);
+    ModemStatus set_pdp_urc(bool enable);
 
     /// AT+CGACT=1 — Activate PDP context.
     ModemStatus activate_pdp(uint8_t cid);
