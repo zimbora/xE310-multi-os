@@ -51,7 +51,7 @@ public:
         int flags = fcntl(fd_, F_GETFL, 0);
         fcntl(fd_, F_SETFL, flags & ~O_NONBLOCK);
 
-        struct termios tty{};
+        struct termios tty {};
         if (tcgetattr(fd_, &tty) != 0) {
             close();
             return UartError::invalid_config;
