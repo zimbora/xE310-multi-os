@@ -104,6 +104,31 @@ cmake -S . -B build -DMODEM_LOG_LEVEL=4 -DNETWORK_LOG_LEVEL=2
 cmake --build build --config Release
 ```
 
+## Conventional Commits
+
+This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages.
+
+### Format
+
+```
+<type>(<optional scope>): <description>
+```
+
+### Types
+
+| Type       | When to use                                                                 |
+|------------|-----------------------------------------------------------------------------|
+| `feat`     | A new feature or capability visible to consumers of the library             |
+| `fix`      | A bug fix                                                                   |
+| `refactor` | Code change that is neither a feature nor a bug fix (restructuring, renaming) |
+| `perf`     | A change that improves performance                                          |
+| `test`     | Adding or correcting tests — no production code change                      |
+| `docs`     | Documentation only (README, Doxygen comments, inline comments)              |
+| `style`    | Formatting, whitespace, clang-format fixes — no logic change                |
+| `chore`    | Build system, CI config, dependency bumps — no production code change       |
+| `ci`       | Changes to GitHub Actions workflows only                                    |
+| `revert`   | Reverts a previous commit (reference the reverted SHA in the footer)        |
+
 ## Conventions
 
 - AT commands are sent as null-terminated strings over UART
