@@ -14,7 +14,7 @@
 
 MODEM_LOG_MODULE_REGISTER(modem_app);
 
-int main(void) {
+int main() { // NOLINT(bugprone-exception-escape)
     auto uart = modem::create_platform_uart();
     modem::ModemController modem_controller(std::move(uart));
 
