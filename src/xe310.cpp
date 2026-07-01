@@ -198,7 +198,7 @@ ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
             pos += snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_periodic_tau.c_str());
         pos += snprintf(cmd + pos, sizeof(cmd) - pos, ",");
         if (!cfg.req_active_time.empty())
-            pos += snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_active_time.c_str());
+            snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_active_time.c_str());
     }
     return send_raw(cmd, response);
 }

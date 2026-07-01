@@ -1155,8 +1155,9 @@ void NetworkLte::handle_urc(std::string_view urc) {
 
         auto is_uint_sv = [](std::string_view s) {
             if (s.empty()) return false;
-            for (char c : s) { if (c < '0' || c > '9') return false; }
-            return true;
+            return std::all_of(s.begin(), s.end(), [](char c) {
+                return c >= '0' && c <= '9';
+            });
         };
 
         std::string_view payload = urc.substr(colon + 1);
