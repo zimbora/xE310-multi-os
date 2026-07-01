@@ -102,9 +102,12 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
                 response.status == AtStatus::busy) {
                 // Extract any URCs that arrived after the status line and buffer them for poll_urc().
                 std::string_view acc_view = accumulated.view();
-                std::string_view search_term = (response.status == AtStatus::ok)      ? "OK" // NOLINT(readability-avoid-nested-conditional-operator)
-                                               : (response.status == AtStatus::error) ? "ERROR"
-                                                                                      : "BUSY";
+                std::string_view search_term = "BUSY";
+                if (response.status == AtStatus::ok) {
+                    search_term = "OK";
+                } else if (response.status == AtStatus::error) {
+                    search_term = "ERROR";
+                }
                 size_t status_end = acc_view.find(search_term);
                 if (status_end != std::string_view::npos) {
                     // Find the end of the status line (OK\r\n or ERROR\r\n)
