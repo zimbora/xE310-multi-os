@@ -31,3 +31,4 @@ CMakeUserPresets.json
 Thumbs.db
 .DS_Store
 build/
+build-lib/
