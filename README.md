@@ -111,24 +111,38 @@ cmake --build build --config Release
 - Timeouts must be configurable for every AT command exchange
 - Logging must be abstracted (use Zephyr logging on embedded, stdout/spdlog on desktop)
 
+## Code Formatting
+
+Format all source files with [clang-format](https://clang.llvm.org/docs/ClangFormat.html):
+
+```bash
+clang-format -i src/*.cpp src/hal/*.cpp include/modem/*.h
+```
+
+Check formatting without modifying files:
+
+```bash
+clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
+```
+
 ## Static Analysis
 
 Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
 
 ```bash
-cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1
+cppcheck --enable=all --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1 --std=c++17 -I include src/ include/
 ```
 
 To generate a detailed checkers report:
 
 ### Desktop (Windows)
 ```bash
-cppcheck --project=cppcheck-windows.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr --checkers-report=checkers.txt
+cppcheck --project=cppcheck-windows.cppcheck --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --error-exitcode=1 --std=c++17
 ```
 
 ### Embedded (Zephyr)
 ```bash
-cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --enable=warning,style,performance,portability,information --inline-suppr
+cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --error-exitcode=1 --std=c++17
 ```
 
 ## Testing
