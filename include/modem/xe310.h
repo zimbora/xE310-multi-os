@@ -66,18 +66,17 @@ struct RegistrationInfo {
     FixedString<MODEM_SHORT_STR> ci;             ///< Cell identity
     FixedString<MODEM_SHORT_STR> active_time;    ///< T3324 active timer (encoded bit string, e.g. "01100000")
     FixedString<MODEM_SHORT_STR> periodic_tau;   ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
-    FixedString<MODEM_IP_STR> ip_address;
+    FixedString<MODEM_IP_STR> ip_address;        ///< IP address assigned to the modem (from AT+CGDCONT?)
     FixedString<MODEM_MEDIUM_STR> operator_name; ///< Operator name from AT+COPS?
     FixedString<MODEM_MEDIUM_STR> apn;           ///< APN from AT+CGDCONT?
-    uint8_t mode = 0;
-    RegStatus stat = RegStatus::not_registered;
-    RadioTech act = RadioTech::gsm;
-    bool fHasLocation = false;
-    uint8_t cause_type = 0;   ///< Cause type for registration rejection
-    uint8_t reject_cause = 0; ///< Reject cause value
-    bool fHasReject = false;
-    // PSM timer fields (PSM / extended PSM format)
-    bool fHasPsm = false;
+    uint8_t mode = 0; ///< Registration mode (0=automatic, 1=manual, 2=deregistered, 3=manual/automatic)
+    RegStatus stat = RegStatus::not_registered; ///< Registration status (0-10)
+    RadioTech act = RadioTech::gsm;             ///< Access technology (0=GSM, 6=LTE, 7=Cat-M1, 9=NB-IoT)
+    bool fHasLocation = false;                  ///< Flag indicating if lac and ci are valid
+    uint8_t cause_type = 0;                     ///< Cause type for registration rejection
+    uint8_t reject_cause = 0;                   ///< Reject cause value
+    bool fHasReject = false;                    ///< Flag indicating if reject cause is valid
+    bool fHasPsm = false;                       ///< Flag indicating if PSM info is valid
 };
 
 enum class ContextState : uint8_t {
