@@ -16,6 +16,18 @@ jobs:
       - name: Check clang-format
         run: clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
 
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+
+      - name: Run clang-tidy
+        run: clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp src/hal/*.cpp
+
   cppcheck:
     name: Cppcheck Static Analysis
     runs-on: ubuntu-latest
