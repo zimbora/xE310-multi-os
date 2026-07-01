@@ -284,9 +284,9 @@ TEST_F(Xe310Test, SetTelitPsm) {
     expect_command_ok("AT#CPSMS=1,,,720,120", "");
     TelitCpsmsConfig cfg;
     cfg.mode             = PsmMode::enable;
-    cfg.has_periodic_tau = true;
+    cfg.fHasPeriodicTau = true;
     cfg.req_periodic_tau = 720;
-    cfg.has_active_time  = true;
+    cfg.fHasActiveTime  = true;
     cfg.req_active_time  = 120;
     EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
 }
@@ -296,13 +296,13 @@ TEST_F(Xe310Test, SetTelitPsmWithVersion) {
     expect_command_ok("AT#CPSMS=1,,,720,120,4,60", "");
     TelitCpsmsConfig cfg;
     cfg.mode              = PsmMode::enable;
-    cfg.has_periodic_tau  = true;
+    cfg.fHasPeriodicTau  = true;
     cfg.req_periodic_tau  = 720;
-    cfg.has_active_time   = true;
+    cfg.fHasActiveTime   = true;
     cfg.req_active_time   = 120;
-    cfg.has_psm_version   = true;
+    cfg.fHasPsmVersion   = true;
     cfg.psm_version       = PsmVersion::rel12_retain;
-    cfg.has_psm_threshold = true;
+    cfg.fHasPsmThreshold = true;
     cfg.psm_threshold     = 60;
     EXPECT_EQ(modem_->set_telit_psm(cfg), ModemStatus::ok);
 }
@@ -431,7 +431,7 @@ TEST_F(Xe310Test, NetworkSurvey2gBcch) {
     EXPECT_EQ(c0.cell_id,   14887u);
     EXPECT_EQ(c0.cell_stat, "CELL_SUITABLE");
 
-    EXPECT_TRUE(result.has_summary);
+    EXPECT_TRUE(result.fHasSummary);
 }
 
 TEST_F(Xe310Test, NetworkSurvey4g) {
@@ -474,7 +474,7 @@ TEST_F(Xe310Test, NetworkSurveyWithSummary) {
     NetworkSurveyResult result;
     EXPECT_EQ(modem_->network_survey(result), ModemStatus::ok);
     ASSERT_EQ(result.cells.size(), 1u);
-    EXPECT_TRUE(result.has_summary);
+    EXPECT_TRUE(result.fHasSummary);
     EXPECT_EQ(result.no_arfcn, 10);
     EXPECT_EQ(result.no_bcch,  3);
 }
@@ -548,7 +548,7 @@ TEST_F(Xe310Test, GetRegistrationStatusHome) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::registered_home);
-    EXPECT_FALSE(info.has_location);
+    EXPECT_FALSE(info.fHasLocation);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusSearching) {
@@ -557,7 +557,7 @@ TEST_F(Xe310Test, GetRegistrationStatusSearching) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::searching);
-    EXPECT_FALSE(info.has_location);
+    EXPECT_FALSE(info.fHasLocation);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusRoaming) {
@@ -566,7 +566,7 @@ TEST_F(Xe310Test, GetRegistrationStatusRoaming) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_roaming);
-    EXPECT_TRUE(info.has_location);
+    EXPECT_TRUE(info.fHasLocation);
     EXPECT_EQ(info.lac, "0001");
     EXPECT_EQ(info.ci, "0000A1B2");
     EXPECT_EQ(info.act, RadioTech::cat_m1);
@@ -578,7 +578,7 @@ TEST_F(Xe310Test, GetRegistrationStatusDenied) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::denied);
-    EXPECT_FALSE(info.has_location);
+    EXPECT_FALSE(info.fHasLocation);
 }
 
 TEST_F(Xe310Test, GetRegistrationStatusWithLocationCatM1) {
@@ -587,7 +587,7 @@ TEST_F(Xe310Test, GetRegistrationStatusWithLocationCatM1) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_home);
-    EXPECT_TRUE(info.has_location);
+    EXPECT_TRUE(info.fHasLocation);
     EXPECT_EQ(info.lac, "00FF");
     EXPECT_EQ(info.ci, "01234ABC");
     EXPECT_EQ(info.act, RadioTech::cat_m1);
@@ -599,7 +599,7 @@ TEST_F(Xe310Test, GetRegistrationStatusWithLocationNbIot) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 2);
     EXPECT_EQ(info.stat, RegStatus::registered_roaming);
-    EXPECT_TRUE(info.has_location);
+    EXPECT_TRUE(info.fHasLocation);
     EXPECT_EQ(info.lac, "1A2B");
     EXPECT_EQ(info.ci, "DEADBEEF");
     EXPECT_EQ(info.act, RadioTech::nb_iot);
@@ -611,7 +611,7 @@ TEST_F(Xe310Test, GetRegistrationStatusNotRegistered) {
     EXPECT_EQ(modem_->get_registration_status(info, RadioTech::lte), ModemStatus::ok);
     EXPECT_EQ(info.mode, 0);
     EXPECT_EQ(info.stat, RegStatus::not_registered);
-    EXPECT_FALSE(info.has_location);
+    EXPECT_FALSE(info.fHasLocation);
 }
 
 TEST_F(Xe310Test, NetworkAttach) {

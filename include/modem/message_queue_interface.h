@@ -26,8 +26,8 @@ struct QueueMessage {
 /// Each instance manages TX and RX queues for a fixed number of connection IDs.
 class MessageQueueInterface {
 public:
-    static constexpr uint8_t max_connections = 5;
-    static constexpr size_t  default_capacity = 16;
+    static constexpr uint8_t MAX_CONNECTIONS = 5;
+    static constexpr size_t  DEFAULT_CAPACITY = 16;
 
     virtual ~MessageQueueInterface() = default;
 

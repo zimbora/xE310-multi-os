@@ -26,7 +26,7 @@ public:
     }
 
     size_t tx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return 0;
         std::lock_guard<std::mutex> lk(mtx_);
         return tx_[conn_id - 1].size();
     }
@@ -40,15 +40,15 @@ public:
     }
 
     size_t rx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return 0;
         std::lock_guard<std::mutex> lk(mtx_);
         return rx_[conn_id - 1].size();
     }
 
 private:
-    QueueError push_to(std::array<std::deque<QueueMessage>, max_connections>& queues,
+    QueueError push_to(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues,
                        uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         std::unique_lock<std::mutex> lk(mtx_);
 
         auto& q = queues[conn_id - 1];
@@ -67,9 +67,9 @@ private:
         return QueueError::ok;
     }
 
-    QueueError pop_from(std::array<std::deque<QueueMessage>, max_connections>& queues,
+    QueueError pop_from(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues,
                         uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         std::unique_lock<std::mutex> lk(mtx_);
 
         auto& q = queues[conn_id - 1];
@@ -90,8 +90,8 @@ private:
     mutable std::mutex mtx_;
     std::condition_variable cv_push_;
     std::condition_variable cv_pop_;
-    std::array<std::deque<QueueMessage>, max_connections> tx_{};
-    std::array<std::deque<QueueMessage>, max_connections> rx_{};
+    std::array<std::deque<QueueMessage>, MAX_CONNECTIONS> tx_{};
+    std::array<std::deque<QueueMessage>, MAX_CONNECTIONS> rx_{};
 };
 
 } // namespace modem

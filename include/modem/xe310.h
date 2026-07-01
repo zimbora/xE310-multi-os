@@ -69,16 +69,16 @@ struct RegistrationInfo {
     FixedString<MODEM_MEDIUM_STR> operator_name;    ///< Operator name from AT+COPS?
     RadioTech act = RadioTech::gsm;
     FixedString<MODEM_MEDIUM_STR> apn;              ///< APN from AT+CGDCONT?
-    bool has_location = false;
+    bool fHasLocation = false;
     FixedString<MODEM_IP_STR> ip_address;
     // Extended / reject fields (extended format)
     uint8_t cause_type   = 0; ///< Cause type for registration rejection
     uint8_t reject_cause = 0; ///< Reject cause value
-    bool has_reject      = false;
+    bool fHasReject      = false;
     // PSM timer fields (PSM / extended PSM format)
     FixedString<MODEM_SHORT_STR> active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
     FixedString<MODEM_SHORT_STR> periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
-    bool has_psm         = false;
+    bool fHasPsm         = false;
 };
 
 enum class ContextState : uint8_t {
@@ -129,17 +129,17 @@ struct CpsmsConfig {
 /// AT#CPSMS set configuration (Telit-specific — timer values in seconds as integers).
 struct TelitCpsmsConfig {
     PsmMode  mode               = PsmMode::disable;
-    bool     has_periodic_rau   = false;
+    bool     fHasPeriodicRau   = false;
     uint32_t req_periodic_rau   = 0;    ///< T3312 in seconds (GERAN)
-    bool     has_gprs_ready_timer = false;
+    bool     fHasGprsReadyTimer = false;
     uint32_t req_gprs_ready_timer = 0;  ///< T3314 in seconds (GERAN)
-    bool     has_periodic_tau   = false;
+    bool     fHasPeriodicTau   = false;
     uint32_t req_periodic_tau   = 0;    ///< T3412 in seconds
-    bool     has_active_time    = false;
+    bool     fHasActiveTime    = false;
     uint32_t req_active_time    = 0;    ///< T3324 in seconds
-    bool     has_psm_version    = false;
+    bool     fHasPsmVersion    = false;
     PsmVersion  psm_version     = PsmVersion::rel12_retain;    ///< bitmask: 1=no-coord, 2=Rel12 no-retain, 4=Rel12 retain, 8=eDRX
-    bool     has_psm_threshold  = false;
+    bool     fHasPsmThreshold  = false;
     uint32_t psm_threshold      = 60;   ///< min duration threshold to enter PSM, seconds (min 60)
 };
 
@@ -189,7 +189,7 @@ struct SurvCell {
 struct NetworkSurveyResult {
     static constexpr size_t MAX_CELLS = 32;
     StaticVector<SurvCell, MAX_CELLS> cells;
-    bool    has_summary   = false;
+    bool    fHasSummary   = false;
     int     no_arfcn      = 0;   ///< total scanned frequencies (if #CSURVF=2)
     int     no_bcch       = 0;   ///< found BCCH (if #CSURVF=2)
 };
@@ -236,7 +236,7 @@ struct CsurvCell {
 struct CsurvResult {
     static constexpr size_t MAX_CELLS = 32;
     StaticVector<CsurvCell, MAX_CELLS> cells;
-    bool has_summary = false;
+    bool fHasSummary = false;
     int  no_arfcn    = 0;  ///< Number of scanned frequencies
     int  no_bcch     = 0;  ///< Number of found BCCH
 };

@@ -16,17 +16,17 @@ MODEM_LOG_MODULE_REGISTER(modem_app);
 
 int main(void) {
     auto uart = modem::create_platform_uart();
-    modem::ModemController modemController(std::move(uart));
+    modem::ModemController modem_controller(std::move(uart));
 
     // "UART_1" is passed to device_get_binding() in ZephyrUart::open().
     // Update to match the devicetree label for the modem UART on the target board.
-    modemController.connect("UART_1", modem::UartConfig{});
+    modem_controller.connect("UART_1", modem::UartConfig{});
 
-    modem::xE310 modem(modemController);
+    modem::xE310 modem(modem_controller);
     auto status = modem.at_ok();
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Modem not responsive");
-        modemController.disconnect();
+        modem_controller.disconnect();
         return 1;
     }
 
@@ -40,10 +40,10 @@ int main(void) {
 
     modem::NetworkLte network(modem, lteConfig, on_data_received);
 
-    bool net_res = network.network_connect();
-    if (!net_res) {
+    bool fNetRes = network.network_connect();
+    if (!fNetRes) {
         MODEM_LOG_ERR("Failed to connect to network");
-        modemController.disconnect();
+        modem_controller.disconnect();
         return 1;
     }
 

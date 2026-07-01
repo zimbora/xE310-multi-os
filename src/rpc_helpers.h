@@ -136,18 +136,18 @@ inline std::string to_json(const modem::RegistrationInfo& v) {
     char buf[512];
     snprintf(buf, sizeof(buf),
         "{\"mode\":%u,\"stat\":\"%s\",\"lac\":%s,\"ci\":%s,"
-        "\"act\":\"%s\",\"has_location\":%s,"
+        "\"act\":\"%s\",\"fHasLocation\":%s,"
         "\"operator_name\":%s,\"apn\":%s,"
-        "\"cause_type\":%u,\"reject_cause\":%u,\"has_reject\":%s,"
-        "\"active_time\":%s,\"periodic_tau\":%s,\"has_psm\":%s}",
+        "\"cause_type\":%u,\"reject_cause\":%u,\"fHasReject\":%s,"
+        "\"active_time\":%s,\"periodic_tau\":%s,\"fHasPsm\":%s}",
         (unsigned)v.mode, to_str(v.stat),
         json_str(v.lac).c_str(), json_str(v.ci).c_str(),
-        to_str(v.act), v.has_location ? "true" : "false",
+        to_str(v.act), v.fHasLocation ? "true" : "false",
         json_str(v.operator_name).c_str(), json_str(v.apn).c_str(),
         (unsigned)v.cause_type, (unsigned)v.reject_cause,
-        v.has_reject ? "true" : "false",
+        v.fHasReject ? "true" : "false",
         json_str(v.active_time).c_str(), json_str(v.periodic_tau).c_str(),
-        v.has_psm ? "true" : "false");
+        v.fHasPsm ? "true" : "false");
     return buf;
 }
 
@@ -176,19 +176,19 @@ inline std::string to_json(const modem::TelitCpsmsConfig& v) {
     char buf[512];
     snprintf(buf, sizeof(buf),
         "{\"mode\":\"%s\","
-        "\"has_periodic_rau\":%s,\"req_periodic_rau\":%u,"
-        "\"has_gprs_ready_timer\":%s,\"req_gprs_ready_timer\":%u,"
-        "\"has_periodic_tau\":%s,\"req_periodic_tau\":%u,"
-        "\"has_active_time\":%s,\"req_active_time\":%u,"
-        "\"has_psm_version\":%s,\"psm_version\":%u,"
-        "\"has_psm_threshold\":%s,\"psm_threshold\":%u}",
+        "\"fHasPeriodicRau\":%s,\"req_periodic_rau\":%u,"
+        "\"fHasGprsReadyTimer\":%s,\"req_gprs_ready_timer\":%u,"
+        "\"fHasPeriodicTau\":%s,\"req_periodic_tau\":%u,"
+        "\"fHasActiveTime\":%s,\"req_active_time\":%u,"
+        "\"fHasPsmVersion\":%s,\"psm_version\":%u,"
+        "\"fHasPsmThreshold\":%s,\"psm_threshold\":%u}",
         to_str(v.mode),
-        v.has_periodic_rau    ? "true" : "false", v.req_periodic_rau,
-        v.has_gprs_ready_timer? "true" : "false", v.req_gprs_ready_timer,
-        v.has_periodic_tau    ? "true" : "false", v.req_periodic_tau,
-        v.has_active_time     ? "true" : "false", v.req_active_time,
-        v.has_psm_version     ? "true" : "false", (unsigned)v.psm_version,
-        v.has_psm_threshold   ? "true" : "false", v.psm_threshold);
+        v.fHasPeriodicRau    ? "true" : "false", v.req_periodic_rau,
+        v.fHasGprsReadyTimer? "true" : "false", v.req_gprs_ready_timer,
+        v.fHasPeriodicTau    ? "true" : "false", v.req_periodic_tau,
+        v.fHasActiveTime     ? "true" : "false", v.req_active_time,
+        v.fHasPsmVersion     ? "true" : "false", (unsigned)v.psm_version,
+        v.fHasPsmThreshold   ? "true" : "false", v.psm_threshold);
     return buf;
 }
 
@@ -219,8 +219,8 @@ inline std::string to_json(const modem::SurvCell& c) {
 
 inline std::string to_json(const modem::NetworkSurveyResult& v) {
     char hdr[64];
-    snprintf(hdr, sizeof(hdr), "{\"has_summary\":%s,\"no_arfcn\":%d,\"no_bcch\":%d,\"cells\":[",
-             v.has_summary ? "true" : "false", v.no_arfcn, v.no_bcch);
+    snprintf(hdr, sizeof(hdr), "{\"fHasSummary\":%s,\"no_arfcn\":%d,\"no_bcch\":%d,\"cells\":[",
+             v.fHasSummary ? "true" : "false", v.no_arfcn, v.no_bcch);
     std::string s = hdr;
     for (size_t i = 0; i < v.cells.size(); ++i) {
         if (i > 0) s += ',';
@@ -278,8 +278,8 @@ inline std::string to_json(const modem::CsurvResult& r) {
     }
     char tail[64];
     snprintf(tail, sizeof(tail),
-        "],\"has_summary\":%s,\"no_arfcn\":%d,\"no_bcch\":%d}",
-        r.has_summary ? "true" : "false", r.no_arfcn, r.no_bcch);
+        "],\"fHasSummary\":%s,\"no_arfcn\":%d,\"no_bcch\":%d}",
+        r.fHasSummary ? "true" : "false", r.no_arfcn, r.no_bcch);
     s += tail;
     return s;
 }
@@ -318,7 +318,7 @@ inline modem::RadioTech radio_tech_from_str(const std::string& s) {
 // Parse "key=value [key=value ...]" and apply matched fields to cfg.
 // Returns true if at least one field was successfully set.
 inline bool apply_config_fields(const std::string& args, modem::NetworkLteConfig& cfg) {
-    bool changed = false;
+    bool fChanged = false;
     size_t pos = 0;
     while (pos < args.size()) {
         while (pos < args.size() && args[pos] == ' ') ++pos;
@@ -337,31 +337,31 @@ inline bool apply_config_fields(const std::string& args, modem::NetworkLteConfig
 #ifdef __cpp_exceptions
         try {
 #endif
-            if      (key == "cid")                     { cfg.cid                     = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "attach_timeout_sec")       { cfg.attach_timeout_sec       = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "pdp_timeout_sec")          { cfg.pdp_timeout_sec          = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "data_ready_timeout_sec")   { cfg.data_ready_timeout_sec   = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "transparent_timeout_sec")  { cfg.transparent_timeout_sec  = (uint16_t)std::stoul(val); changed = true; }
-            else if (key == "max_network_attempts")     { cfg.max_network_attempts     = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "max_attach_retries")       { cfg.max_attach_retries       = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "max_pdp_retries")          { cfg.max_pdp_retries          = (uint8_t)std::stoul(val);  changed = true; }
-            else if (key == "default_lte_bands")        { cfg.default_lte_bands        = std::stoull(val);          changed = true; }
-            else if (key == "default_iot_tech")         { cfg.default_iot_tech         = radio_tech_from_str(val);  changed = true; }
-            else if (key == "default_apn")              { cfg.default_apn              = val;                       changed = true; }
-            else if (key == "fallback_lte_bands")       { cfg.fallback_lte_bands       = std::stoull(val);          changed = true; }
-            else if (key == "fallback_iot_tech")        { cfg.fallback_iot_tech        = radio_tech_from_str(val);  changed = true; }
-            else if (key == "fallback_apn")             { cfg.fallback_apn             = val;                       changed = true; }
-            else if (key == "plmn")                     { cfg.plmn                     = val;                       changed = true; }
-            else if (key == "psm_t3412")                { cfg.psm_t3412                = std::stoul(val);           changed = true; }
-            else if (key == "psm_t3324")                { cfg.psm_t3324                = std::stoul(val);           changed = true; }
-            else if (key == "conn_id")                  { cfg.conn_id                  = (uint8_t)std::stoul(val);  changed = true; }
+            if      (key == "cid")                     { cfg.cid                     = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "attach_timeout_sec")       { cfg.attach_timeout_sec       = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "pdp_timeout_sec")          { cfg.pdp_timeout_sec          = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "data_ready_timeout_sec")   { cfg.data_ready_timeout_sec   = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "transparent_timeout_sec")  { cfg.transparent_timeout_sec  = (uint16_t)std::stoul(val); fChanged = true; }
+            else if (key == "max_network_attempts")     { cfg.max_network_attempts     = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "max_attach_retries")       { cfg.max_attach_retries       = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "max_pdp_retries")          { cfg.max_pdp_retries          = (uint8_t)std::stoul(val);  fChanged = true; }
+            else if (key == "default_lte_bands")        { cfg.default_lte_bands        = std::stoull(val);          fChanged = true; }
+            else if (key == "default_iot_tech")         { cfg.default_iot_tech         = radio_tech_from_str(val);  fChanged = true; }
+            else if (key == "default_apn")              { cfg.default_apn              = val;                       fChanged = true; }
+            else if (key == "fallback_lte_bands")       { cfg.fallback_lte_bands       = std::stoull(val);          fChanged = true; }
+            else if (key == "fallback_iot_tech")        { cfg.fallback_iot_tech        = radio_tech_from_str(val);  fChanged = true; }
+            else if (key == "fallback_apn")             { cfg.fallback_apn             = val;                       fChanged = true; }
+            else if (key == "plmn")                     { cfg.plmn                     = val;                       fChanged = true; }
+            else if (key == "psm_t3412")                { cfg.psm_t3412                = std::stoul(val);           fChanged = true; }
+            else if (key == "psm_t3324")                { cfg.psm_t3324                = std::stoul(val);           fChanged = true; }
+            else if (key == "conn_id")                  { cfg.conn_id                  = (uint8_t)std::stoul(val);  fChanged = true; }
 #ifdef __cpp_exceptions
         } catch (const std::exception&) {
             // skip invalid values silently
         }
 #endif
     }
-    return changed;
+    return fChanged;
 }
 
 } // namespace rpc

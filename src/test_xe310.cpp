@@ -159,7 +159,7 @@ int main() {
         MODEM_LOG_INF("Location Area Code: %s", reg_info.lac.c_str());
         MODEM_LOG_INF("Cell ID: %s", reg_info.ci.c_str());
         MODEM_LOG_INF("Access Technology: %d", static_cast<int>(reg_info.act));
-        MODEM_LOG_INF("Has Location: %s", reg_info.has_location ? "Yes" : "No");
+        MODEM_LOG_INF("Has Location: %s", reg_info.fHasLocation ? "Yes" : "No");
     }   
 
     modem::SignalQuality sq;
@@ -191,13 +191,13 @@ int main() {
         MODEM_LOG_INF("APN: %s", apn.c_str());
     }   
 
-    bool active = false;
-    status = modem.get_pdp_state(cid, active);
+    bool fActive = false;
+    status = modem.get_pdp_state(cid, fActive);
     if (status != modem::ModemStatus::ok) {
         MODEM_LOG_ERR("Failed to retrieve PDP state");
         log_status(status);
     } else {
-        MODEM_LOG_INF("PDP Context %d is %s", cid, active ? "Active" : "Inactive");
+        MODEM_LOG_INF("PDP Context %d is %s", cid, fActive ? "Active" : "Inactive");
     }
 
     modem::FixedString<modem::MODEM_IP_STR> ip_addr;
