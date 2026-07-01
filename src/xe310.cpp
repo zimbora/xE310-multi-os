@@ -52,9 +52,9 @@ ModemStatus xE310::request_model_id(std::string& model) {
     AtResponse response;
     auto status = send_raw("AT#CGMM", response);
     if (status == ModemStatus::ok) {
-        constexpr std::string_view prefix = "#CGMM: ";
-        if (response.body.rfind(prefix, 0) == 0) {
-            model = response.body.substr(prefix.size());
+        constexpr std::string_view PREFIX = "#CGMM: ";
+        if (response.body.rfind(PREFIX, 0) == 0) {
+            model = response.body.substr(PREFIX.size());
         } else {
             model = response.body;
         }
@@ -121,9 +121,9 @@ ModemStatus xE310::read_iccid(std::string& iccid) {
     AtResponse response;
     auto status = send_raw("AT#CCID", response);
     if (status == ModemStatus::ok) {
-        constexpr std::string_view prefix = "#CCID: ";
-        if (response.body.rfind(prefix, 0) == 0) {
-            iccid = response.body.substr(prefix.size());
+        constexpr std::string_view PREFIX = "#CCID: ";
+        if (response.body.rfind(PREFIX, 0) == 0) {
+            iccid = response.body.substr(PREFIX.size());
         } else {
             iccid = response.body;
         }
@@ -243,12 +243,12 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
 
     // Determine last field that has a value so we know how far to extend the command
     int last = 0;
-    if (cfg.has_periodic_rau)    last = 1;
-    if (cfg.has_gprs_ready_timer) last = 2;
-    if (cfg.has_periodic_tau)    last = 3;
-    if (cfg.has_active_time)     last = 4;
-    if (cfg.has_psm_version)     last = 5;
-    if (cfg.has_psm_threshold)   last = 6;
+    if (cfg.fHasPeriodicRau)    last = 1;
+    if (cfg.fHasGprsReadyTimer) last = 2;
+    if (cfg.fHasPeriodicTau)    last = 3;
+    if (cfg.fHasActiveTime)     last = 4;
+    if (cfg.fHasPsmVersion)     last = 5;
+    if (cfg.fHasPsmThreshold)   last = 6;
 
     auto append_opt = [&](int field, bool has, uint32_t val) {
         if (field <= last) {
@@ -257,12 +257,12 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
         }
     };
 
-    append_opt(1, cfg.has_periodic_rau,    cfg.req_periodic_rau);
-    append_opt(2, cfg.has_gprs_ready_timer, cfg.req_gprs_ready_timer);
-    append_opt(3, cfg.has_periodic_tau,    cfg.req_periodic_tau);
-    append_opt(4, cfg.has_active_time,     cfg.req_active_time);
-    append_opt(5, cfg.has_psm_version,     static_cast<uint32_t>(cfg.psm_version));
-    append_opt(6, cfg.has_psm_threshold,   cfg.psm_threshold);
+    append_opt(1, cfg.fHasPeriodicRau,    cfg.req_periodic_rau);
+    append_opt(2, cfg.fHasGprsReadyTimer, cfg.req_gprs_ready_timer);
+    append_opt(3, cfg.fHasPeriodicTau,    cfg.req_periodic_tau);
+    append_opt(4, cfg.fHasActiveTime,     cfg.req_active_time);
+    append_opt(5, cfg.fHasPsmVersion,     static_cast<uint32_t>(cfg.psm_version));
+    append_opt(6, cfg.fHasPsmThreshold,   cfg.psm_threshold);
 
     return send_raw(cmd, response);
 }
@@ -458,7 +458,7 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
 
         // "Network survey ended" — with or without "(Carrier: N BCCh: M)" suffix
         if (line.rfind("Network survey ended", 0) == 0) {
-            result.has_summary = true;
+            result.fHasSummary = true;
             auto carrier_pos = line.find("Carrier:");
             auto bcch_pos = line.find("BCCh:");
             if (carrier_pos != std::string::npos && bcch_pos != std::string::npos) {
@@ -669,7 +669,7 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
     if (fields.size() >= 4) {
         info.lac = trim(fields[2]);
         info.ci = trim(fields[3]);
-        info.has_location = true;
+        info.fHasLocation = true;
     }
 
     if (fields.size() >= 5) {
@@ -915,7 +915,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
 
         // Summary line: "Network survey ended (Carrier: <N> BCCh: <M>)"
         if (line.rfind("Network survey ended", 0) == 0) {
-            result.has_summary = true;
+            result.fHasSummary = true;
             auto carrier_pos = line.find("Carrier:");
             auto bcch_pos = line.find("BCCh:");
             if (carrier_pos != std::string::npos && bcch_pos != std::string::npos) {
@@ -979,12 +979,12 @@ ModemStatus xE310::get_apn(uint8_t cid, std::string& apn) {
         start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
 
         // Find the prefix "+CGDCONT:"
-        constexpr std::string_view prefix = "+CGDCONT:";
-        auto p = line.find(prefix);
+        constexpr std::string_view PREFIX = "+CGDCONT:";
+        auto p = line.find(PREFIX);
         if (p == std::string::npos) continue;
 
         // Tokenize comma-separated fields after the colon
-        std::string params = line.substr(p + prefix.size());
+        std::string params = line.substr(p + PREFIX.size());
         std::vector<std::string> fields;
         size_t pos = 0;
         while (pos <= params.size()) {

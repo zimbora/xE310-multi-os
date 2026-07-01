@@ -158,7 +158,7 @@ struct NetworkLteConfig {
 
     std::string plmn                     = DEFAULT_PLMN; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
 
-    bool        psm_enable               = false; ///< Whether to use PSM if available on the network  
+    bool        fPsmEnable               = false; ///< Whether to use PSM if available on the network  
     uint32_t    psm_t3412                = 3600; ///< Sleep time in PSM mode, in seconds
     uint32_t    psm_t3324                = 60; ///< Active time in PSM mode, in seconds
 
@@ -246,7 +246,7 @@ public:
     QueueError rx_read(uint8_t conn_id, QueueMessage& msg);
 
     /// Try to register on a network with PSM enabled, by checking the current network registration and PSM configuration, and iterating through available operators if registration or PSM is not available with the current one. Returns true if successfully registered on a network with PSM enabled, false otherwise.
-    bool force_PSM();
+    bool force_psm();
     /// Enter sleep mode (PSM).
     bool enter_sleep();
     /// Enter transparent mode (if supported by the modem).

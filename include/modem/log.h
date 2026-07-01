@@ -27,7 +27,7 @@
 
 namespace modem_log_detail {
 inline const char* timestamp() {
-    static char buf[24];
+    static char s_buf[24];
     int64_t uptime_ms = k_uptime_get();
     uint32_t ms = static_cast<uint32_t>(uptime_ms % 1000);
     uint32_t total_seconds = static_cast<uint32_t>(uptime_ms / 1000);
@@ -36,10 +36,10 @@ inline const char* timestamp() {
     uint32_t min = total_seconds % 60;
     total_seconds /= 60;
     uint32_t hour = total_seconds % 24;
-    std::snprintf(buf, sizeof(buf), "%02u:%02u:%02u.%03u",
+    std::snprintf(s_buf, sizeof(s_buf), "%02u:%02u:%02u.%03u",
                   static_cast<unsigned>(hour), static_cast<unsigned>(min),
                   static_cast<unsigned>(sec), static_cast<unsigned>(ms));
-    return buf;
+    return s_buf;
 }
 } // namespace modem_log_detail
 
@@ -103,7 +103,7 @@ inline const char* timestamp() {
 namespace modem_log_detail {
 inline const char* timestamp() {
     using clock = std::chrono::system_clock;
-    static char buf[24];
+    static char s_buf[24];
     auto now   = clock::now();
     auto ms    = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
     std::time_t t = clock::to_time_t(now);
@@ -113,9 +113,9 @@ inline const char* timestamp() {
 #else
     localtime_r(&t, &tm_buf);
 #endif
-    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03d",
+    std::snprintf(s_buf, sizeof(s_buf), "%02d:%02d:%02d.%03d",
                   tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec, (int)ms.count());
-    return buf;
+    return s_buf;
 }
 } // namespace modem_log_detail
 

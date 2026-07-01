@@ -27,11 +27,11 @@ int main(int argc, char* argv[]) {
     }
 
     auto uart = modem::create_platform_uart();
-    modem::ModemController modemController(std::move(uart));
+    modem::ModemController modem_controller(std::move(uart));
 
-    modemController.connect(port.c_str(), modem::UartConfig{});
+    modem_controller.connect(port.c_str(), modem::UartConfig{});
 
-    modem::xE310 modem(modemController);
+    modem::xE310 modem(modem_controller);
 
     modem::NetworkLteConfig lteConfig;
 
@@ -61,8 +61,8 @@ int main(int argc, char* argv[]) {
             ipc.stop();
             return 1;
         }
-        bool res = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
-        if(res){
+        bool fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+        if(fRes){
             network.tx_write(lteConfig.conn_id, data, len);
             network.call_action(modem::ModemAction::send_data);
             MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
@@ -180,9 +180,9 @@ int main(int argc, char* argv[]) {
                 const auto* arr = network.server_info_array();
                 if (!arg.empty()) {
                     int n = 0;
-                    bool valid = !arg.empty();
-                    for (char c : arg) { if (c < '0' || c > '9') { valid = false; break; } n = n * 10 + (c - '0'); }
-                    if (!valid) return "ERROR: invalid conn_id";
+                    bool fValid = !arg.empty();
+                    for (char c : arg) { if (c < '0' || c > '9') { fValid = false; break; } n = n * 10 + (c - '0'); }
+                    if (!fValid) return "ERROR: invalid conn_id";
                     if (n >= 1 && n <= MAX_SERVER_CONNECTIONS)
                         return rpc::to_json(arr[n - 1]);
                     return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
@@ -226,32 +226,32 @@ int main(int argc, char* argv[]) {
             std::string res  = sub.substr(0, sp2 == std::string::npos ? sub.size() : sp2);
             std::string args = sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
             if (res == "NETWORKCONNECT" || res == "CONNECT") {
-                bool ok = network.network_connect();
+                bool fOk = network.network_connect();
                 return std::string("{")
                     + "\"resource\":\"NETWORKCONNECT\","
-                    + "\"network_connect\":" + (ok ? "true" : "false")
+                    + "\"network_connect\":" + (fOk ? "true" : "false")
                     + "}";
             }
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
                 int conn_id = lteConfig.conn_id;
                 if (!args.empty()) {
-                    bool valid = true;
+                    bool fValid = true;
                     conn_id = 0;
-                    for (char c : args) { if (c < '0' || c > '9') { valid = false; break; } conn_id = conn_id * 10 + (c - '0'); }
-                    if (!valid) return "ERROR: invalid conn_id";
+                    for (char c : args) { if (c < '0' || c > '9') { fValid = false; break; } conn_id = conn_id * 10 + (c - '0'); }
+                    if (!fValid) return "ERROR: invalid conn_id";
                     if (conn_id < 1 || conn_id > MAX_SERVER_CONNECTIONS) {
                         return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
                     }
                 }
 
-                bool server_ok = network.server_disconnect(static_cast<uint8_t>(conn_id));
-                bool network_ok = network.network_disconnect();
+                bool fServerOk = network.server_disconnect(static_cast<uint8_t>(conn_id));
+                bool fNetworkOk = network.network_disconnect();
 
                 return std::string("{")
                     + "\"resource\":\"NETWORKDISCONNECT\"," 
                     + "\"conn_id\":" + std::to_string(conn_id) + ","
-                    + "\"server_disconnect\":" + (server_ok ? "true" : "false") + ","
-                    + "\"network_disconnect\":" + (network_ok ? "true" : "false")
+                    + "\"server_disconnect\":" + (fServerOk ? "true" : "false") + ","
+                    + "\"network_disconnect\":" + (fNetworkOk ? "true" : "false")
                     + "}";
             }
             if (res == "CONFIG") {
@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
                 return "ERROR: no valid fields provided (use key=value pairs)";
             }
             if (res == "FORCEPSM") {
-                network.force_PSM();
+                network.force_psm();
                 return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
             }
             return "ERROR: unknown SET resource";
@@ -286,15 +286,15 @@ int main(int argc, char* argv[]) {
     }
 
     
-    bool net_res = network.network_connect();
-    if(!net_res){
+    bool fNetRes = network.network_connect();
+    if(!fNetRes){
         MODEM_LOG_ERR("Failed to connect to network");
-        //modemController.disconnect();
+        //modem_controller.disconnect();
         //return 1;
     }
     
-    bool res = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
-    if(res){
+    bool fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+    if(fRes){
         MODEM_LOG_INF("Connected to server successfully");
         // Queue initial message for TX
         std::string hello = "Hello, World!";
@@ -308,9 +308,9 @@ int main(int argc, char* argv[]) {
     
     auto timer = modem::create_platform_timer();
 
-    bool forcePSMMode = false;
+    bool fForcePsmMode = false;
     timer->start(15000, [&]() {
-        //forcePSMMode = true;
+        //fForcePsmMode = true;
     });
     
     while(true){
@@ -325,10 +325,10 @@ int main(int argc, char* argv[]) {
         }
       
         // cppcheck-suppress knownConditionTrueFalse
-        if(forcePSMMode){
+        if(fForcePsmMode){
             MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
-            forcePSMMode = false;
-            network.force_PSM();
+            fForcePsmMode = false;
+            network.force_psm();
         }
         /*
         std::this_thread::sleep_for(std::chrono::seconds(1));

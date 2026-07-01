@@ -199,7 +199,7 @@ QueueError NetworkLte::rx_read(uint8_t conn_id, QueueMessage& msg) {
     return message_queue_->rx_pop(conn_id, msg);
 }
 
-bool NetworkLte::force_PSM(){
+bool NetworkLte::force_psm(){
 
     if(state_ != NetworkLteState::data_ready){
         NETWORK_LOG_INF("Currently not in data ready state, cannot force PSM mode");
@@ -215,7 +215,7 @@ bool NetworkLte::force_PSM(){
     modem_.set_registration_urc(false); // enable registration URCs in normal mode
     modem_.set_pdp_urc(false); // enable PDP URCs in normal mode
 
-    bool psmModeAttached = false;
+    bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
     std::vector<Operator> availableOperators;
     auto status = modem_.get_available_operators(availableOperators);
@@ -244,11 +244,11 @@ bool NetworkLte::force_PSM(){
                 continue; // try next operator
             }else if(tCpsmsStatus.t3412 == lteConfig.psm_t3412 && tCpsmsStatus.t3324 == lteConfig.psm_t3324){
                 NETWORK_LOG_INF("PSM timers were accepted by network for this operator");
-                psmModeAttached = true;
+                fPsmModeAttached = true;
                 break;
             }else{
                 NETWORK_LOG_WRN("PSM timers were not accepted by network for this operator, but different timers were granted");
-                psmModeAttached = true;
+                fPsmModeAttached = true;
                 break;
             }
         }else{
@@ -257,7 +257,7 @@ bool NetworkLte::force_PSM(){
         }
     }
     
-    if(psmModeAttached)
+    if(fPsmModeAttached)
         change_state(NetworkLteState::data_ready);
     else
         change_state(NetworkLteState::idle_mode); // if we couldn't enter PSM mode with any operator, go back to idle mode
@@ -271,7 +271,7 @@ bool NetworkLte::force_PSM(){
     modem_.set_registration_urc(true); // enable registration URCs in normal mode
     modem_.set_pdp_urc(true); // enable PDP URCs in normal mode
 
-    return psmModeAttached; // return whether PSM mode was successfully entered
+    return fPsmModeAttached; // return whether PSM mode was successfully entered
 }
 
 bool NetworkLte::enter_sleep() {
@@ -738,7 +738,7 @@ void NetworkLte::execute_actions() {
                             false,
                             60 // min duration to enter PSM in seconds
                         };
-                        if(!lteConfig.psm_enable)
+                        if(!lteConfig.fPsmEnable)
                             modem_.disable_telit_psm();
                         else
                             modem_.set_telit_psm(cfg);
@@ -887,11 +887,11 @@ void NetworkLte::execute_actions() {
             break;
         case ModemAction::query_pdp_context:
             {
-                bool pdp_active = false;
-                auto status = modem_.get_pdp_state(lteConfig.cid, pdp_active);
+                bool fPdpActive = false;
+                auto status = modem_.get_pdp_state(lteConfig.cid, fPdpActive);
                 if(status != ModemStatus::ok){
                     NETWORK_LOG_ERR("Failed to query PDP context state");
-                } else if(!pdp_active){
+                } else if(!fPdpActive){
                     change_state(NetworkLteState::pdp_context_closed); // if context is inactive, we can consider it closed and trigger PDP activation flow
                     call_action(ModemAction::open_pdp_context); // trigger PDP activation flow
                 } else {
@@ -1060,7 +1060,7 @@ void NetworkLte::change_state(NetworkLteState new_state) {
                 modem_.get_signal_quality(signalQuality); // update signal quality in info struct after applying it to modem
                 modem_.get_operator(regInfo.operator_name); // update operator name in info struct after applying it to modem
                 modem_.get_apn(lteConfig.cid, regInfo.apn); // parse +CGDCONT? into regInfo.apn and regInfo.ip_address
-                //modem_.get_pdp_state(lteConfig.cid, regInfo.pdp_active); // update PDP state in info struct after applying it to modem
+                //modem_.get_pdp_state(lteConfig.cid, regInfo.fPdpActive); // update PDP state in info struct after applying it to modem
                 
                 TelitCpsmsStatus psm_state;
                 auto status = modem_.get_telit_psm(psm_state); // update PSM config in info struct after applying it to modem

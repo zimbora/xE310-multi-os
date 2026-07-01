@@ -13,15 +13,15 @@ namespace modem {
 /// Each slot stores a raw byte buffer; the message length is prepended as a uint16_t header.
 class ZephyrMessageQueue : public MessageQueueInterface {
 public:
-    static constexpr size_t max_msg_size = 256; // max payload per message
-    static constexpr size_t slot_size = max_msg_size + sizeof(uint16_t); // header + payload
+    static constexpr size_t MAX_MSG_SIZE = 256; // max payload per message
+    static constexpr size_t SLOT_SIZE = MAX_MSG_SIZE + sizeof(uint16_t); // header + payload
 
     explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity) {
-        for (uint8_t i = 0; i < max_connections; ++i) {
-            tx_bufs_[i].resize(slot_size * capacity);
-            rx_bufs_[i].resize(slot_size * capacity);
-            k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), slot_size, capacity);
-            k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), slot_size, capacity);
+        for (uint8_t i = 0; i < MAX_CONNECTIONS; ++i) {
+            tx_bufs_[i].resize(SLOT_SIZE * capacity);
+            rx_bufs_[i].resize(SLOT_SIZE * capacity);
+            k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, capacity);
+            k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), SLOT_SIZE, capacity);
         }
     }
 
@@ -36,7 +36,7 @@ public:
     }
 
     size_t tx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return 0;
         return k_msgq_num_used_get(const_cast<struct k_msgq*>(&tx_queues_[conn_id - 1]));
     }
 
@@ -49,17 +49,17 @@ public:
     }
 
     size_t rx_count(uint8_t conn_id) const override {
-        if (conn_id < 1 || conn_id > max_connections) return 0;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return 0;
         return k_msgq_num_used_get(const_cast<struct k_msgq*>(&rx_queues_[conn_id - 1]));
     }
 
 private:
-    QueueError push_to(std::array<struct k_msgq, max_connections>& queues,
+    QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues,
                        uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
-        if (length > max_msg_size) return QueueError::full;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
+        if (length > MAX_MSG_SIZE) return QueueError::full;
 
-        uint8_t slot[slot_size];
+        uint8_t slot[SLOT_SIZE];
         auto len16 = static_cast<uint16_t>(length);
         std::memcpy(slot, &len16, sizeof(len16));
         std::memcpy(slot + sizeof(len16), data, length);
@@ -71,11 +71,11 @@ private:
         return QueueError::ok;
     }
 
-    QueueError pop_from(std::array<struct k_msgq, max_connections>& queues,
+    QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues,
                         uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) {
-        if (conn_id < 1 || conn_id > max_connections) return QueueError::invalid_id;
+        if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
 
-        uint8_t slot[slot_size];
+        uint8_t slot[SLOT_SIZE];
         k_timeout_t tout = (timeout_ms == 0) ? K_NO_WAIT : K_MSEC(timeout_ms);
         int ret = k_msgq_get(&queues[conn_id - 1], slot, tout);
         if (ret == -ENOMSG || ret == -EAGAIN) return QueueError::empty;
@@ -87,10 +87,10 @@ private:
     }
 
     size_t capacity_;
-    std::array<struct k_msgq, max_connections> tx_queues_{};
-    std::array<struct k_msgq, max_connections> rx_queues_{};
-    std::array<std::vector<char>, max_connections> tx_bufs_;
-    std::array<std::vector<char>, max_connections> rx_bufs_;
+    std::array<struct k_msgq, MAX_CONNECTIONS> tx_queues_{};
+    std::array<struct k_msgq, MAX_CONNECTIONS> rx_queues_{};
+    std::array<std::vector<char>, MAX_CONNECTIONS> tx_bufs_;
+    std::array<std::vector<char>, MAX_CONNECTIONS> rx_bufs_;
 };
 
 } // namespace modem
