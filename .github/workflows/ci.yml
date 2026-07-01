@@ -13,6 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install clang-format (pinned)
+        run: |
+          python3 -m pip install --user clang-format==22.1.7
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Check clang-format
         run: clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
 
