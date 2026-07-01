@@ -13,14 +13,15 @@ namespace modem {
 /// Each slot stores a raw byte buffer; the message length is prepended as a uint16_t header.
 class ZephyrMessageQueue : public MessageQueueInterface {
 public:
-    static constexpr size_t max_msg_size = MAX_MSG_DATA; // max payload per message
-    static constexpr size_t slot_size = max_msg_size + sizeof(uint16_t); // header + payload
-    static constexpr size_t max_queue_capacity = default_capacity;
+    static constexpr size_t MAX_MSG_SIZE = 256; // max payload per message
+    static constexpr size_t SLOT_SIZE = MAX_MSG_SIZE + sizeof(uint16_t); // header + payload
 
-    explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity > max_queue_capacity ? max_queue_capacity : capacity) {
+    explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity) {
         for (uint8_t i = 0; i < max_connections; ++i) {
-            k_msgq_init(&tx_queues_[i], reinterpret_cast<char*>(tx_bufs_[i].data()), slot_size, capacity_);
-            k_msgq_init(&rx_queues_[i], reinterpret_cast<char*>(rx_bufs_[i].data()), slot_size, capacity_);
+            tx_bufs_[i].resize(SLOT_SIZE * capacity);
+            rx_bufs_[i].resize(SLOT_SIZE * capacity);
+            k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, capacity);
+            k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), SLOT_SIZE, capacity);
         }
     }
 
@@ -89,8 +90,8 @@ private:
     size_t capacity_;
     std::array<struct k_msgq, max_connections> tx_queues_{};
     std::array<struct k_msgq, max_connections> rx_queues_{};
-    std::array<std::array<uint8_t, slot_size * max_queue_capacity>, max_connections> tx_bufs_{};
-    std::array<std::array<uint8_t, slot_size * max_queue_capacity>, max_connections> rx_bufs_{};
+    std::array<std::vector<char>, max_connections> tx_bufs_;
+    std::array<std::vector<char>, max_connections> rx_bufs_;
 };
 
 } // namespace modem

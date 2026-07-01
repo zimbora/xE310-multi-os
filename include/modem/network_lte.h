@@ -15,8 +15,8 @@
 
 // Choose one MVNO
 //#define IDEMIA_PUBLIC
-//#define TELENOR_PUBLIC 
-#define ONET_PUBLIC 
+#define TELENOR_PUBLIC 
+//#define ONET_PUBLIC 
 // --- --- ---
 #define COUNTRY_CODE 268
 #define DEFAULT_IOT_TECH RadioTech::cat_m1

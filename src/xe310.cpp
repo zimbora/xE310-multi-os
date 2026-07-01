@@ -53,12 +53,11 @@ ModemStatus xE310::request_model_id(FixedString<MODEM_MEDIUM_STR>& model) {
     AtResponse response;
     auto status = send_raw("AT#CGMM", response);
     if (status == ModemStatus::ok) {
-        constexpr std::string_view prefix = "#CGMM: ";
-        std::string_view body = response.body.view();
-        if (body.substr(0, prefix.size()) == prefix) {
-            model = body.substr(prefix.size());
+        constexpr std::string_view PREFIX = "#CGMM: ";
+        if (response.body.rfind(PREFIX, 0) == 0) {
+            model = response.body.substr(PREFIX.size());
         } else {
-            model = body;
+            model = response.body;
         }
     }
     return status;
@@ -129,12 +128,11 @@ ModemStatus xE310::read_iccid(FixedString<MODEM_SHORT_STR>& iccid) {
     AtResponse response;
     auto status = send_raw("AT#CCID", response);
     if (status == ModemStatus::ok) {
-        constexpr std::string_view prefix = "#CCID: ";
-        std::string_view body = response.body.view();
-        if (body.substr(0, prefix.size()) == prefix) {
-            iccid = body.substr(prefix.size());
+        constexpr std::string_view PREFIX = "#CCID: ";
+        if (response.body.rfind(PREFIX, 0) == 0) {
+            iccid = response.body.substr(PREFIX.size());
         } else {
-            iccid = body;
+            iccid = response.body;
         }
     }
     return status;
@@ -162,7 +160,7 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
     if (result == ModemStatus::ok) {
         // Response body: "#QSS: <mode>,<status>"
         auto comma_pos = response.body.find(',');
-        if (comma_pos != FixedString<AT_RESPONSE_MAX>::npos) {
+        if (comma_pos != FixedString<AT_RESPONSE_MAX>::NPOS) {
             status = static_cast<SimStatus>(std::atoi(response.body.c_str() + comma_pos + 1));
         }
     }
@@ -346,7 +344,7 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
     if (status == ModemStatus::ok) {
         // Response body: "#PSMURC: <en>"
         auto colon = response.body.find(':');
-        if (colon != FixedString<AT_RESPONSE_MAX>::npos) {
+        if (colon != FixedString<AT_RESPONSE_MAX>::NPOS) {
             enabled = std::atoi(response.body.c_str() + colon + 1) != 0;
         }
     }
@@ -488,7 +486,7 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
         }
 
         // "Network survey ended" — with or without "(Carrier: N BCCh: M)" suffix
-        if (line.substr(0, 20) == "Network survey ended") {
+        if (line.rfind("Network survey ended", 0) == 0) {
             result.fHasSummary = true;
             auto carrier_pos = line.find("Carrier:");
             auto bcch_pos = line.find("BCCh:");
@@ -713,8 +711,8 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
     }
 
     if (field_count >= 4) {
-        info.lac = std::string_view(field_buf[2]);
-        info.ci = std::string_view(field_buf[3]);
+        info.lac = field_buf[2];
+        info.ci = field_buf[3];
         info.fHasLocation = true;
     }
 
@@ -954,7 +952,8 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
             continue;
         }
 
-        if (line.substr(0, 20) == "Network survey ended") {
+        // Summary line: "Network survey ended (Carrier: <N> BCCh: <M>)"
+        if (line.rfind("Network survey ended", 0) == 0) {
             result.fHasSummary = true;
             auto carrier_pos = line.find("Carrier:");
             auto bcch_pos = line.find("BCCh:");
@@ -1035,16 +1034,17 @@ ModemStatus xE310::get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn) {
                     : body.substr(start, end - start);
         start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
 
-        constexpr std::string_view prefix = "+CGDCONT:";
-        auto p = line.find(prefix);
-        if (p == std::string_view::npos) continue;
+        // Find the prefix "+CGDCONT:"
+        constexpr std::string_view PREFIX = "+CGDCONT:";
+        auto p = line.find(PREFIX);
+        if (p == std::string::npos) continue;
 
-        std::string_view params = line.substr(p + prefix.size());
+        std::string_view params = line.substr(p + PREFIX.size());
 
         // Find the CID (first field) and APN (third field)
         int field_idx = 0;
         size_t pos = 0;
-        bool found_cid = false;
+        bool fFoundCid = false;
         while (pos < params.size()) {
             auto comma = params.find(',', pos);
             std::string_view token = (comma == std::string_view::npos)
@@ -1061,11 +1061,11 @@ ModemStatus xE310::get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn) {
                 std::memcpy(buf, stripped.data(), len);
                 buf[len] = '\0';
                 if (static_cast<uint8_t>(std::atoi(buf)) == cid) {
-                    found_cid = true;
+                    fFoundCid = true;
                 } else {
                     break;
                 }
-            } else if (field_idx == 2 && found_cid) {
+            } else if (field_idx == 2 && fFoundCid) {
                 apn = stripped;
                 return ModemStatus::ok;
             }
@@ -1105,7 +1105,7 @@ ModemStatus xE310::get_pdp_state(uint8_t cid, bool& active) {
         char search[8];
         snprintf(search, sizeof(search), "%u,", static_cast<unsigned>(cid));
         auto pos = response.body.find(search);
-        if (pos != FixedString<AT_RESPONSE_MAX>::npos) {
+        if (pos != FixedString<AT_RESPONSE_MAX>::NPOS) {
             active = (response.body[pos + 2] == '1');
         } else {
             active = false;
@@ -1224,7 +1224,7 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         auto comma_pos = response.body.find(',');
-        if (comma_pos != FixedString<AT_RESPONSE_MAX>::npos) {
+        if (comma_pos != FixedString<AT_RESPONSE_MAX>::NPOS) {
             state = static_cast<uint8_t>(std::atoi(response.body.c_str() + comma_pos + 1));
         }
     }

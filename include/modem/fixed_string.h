@@ -104,9 +104,9 @@ public:
         return *this;
     }
 
-    void erase(size_t pos, size_t count = npos) noexcept {
+    void erase(size_t pos, size_t count = NPOS) noexcept {
         if (pos >= size_) return;
-        if (count == npos || pos + count >= size_) {
+        if (count == NPOS || pos + count >= size_) {
             size_ = pos;
         } else {
             std::memmove(buf_ + pos, buf_ + pos + count, size_ - pos - count);
@@ -116,7 +116,7 @@ public:
     }
 
     // --- Search ---
-    static constexpr size_t npos = std::string_view::npos;
+    static constexpr size_t NPOS = std::string_view::npos;
 
     size_t find(char c, size_t pos = 0) const noexcept {
         return view().find(c, pos);
@@ -126,11 +126,11 @@ public:
         return view().find(sv, pos);
     }
 
-    size_t rfind(char c, size_t pos = npos) const noexcept {
+    size_t rfind(char c, size_t pos = NPOS) const noexcept {
         return view().rfind(c, pos);
     }
 
-    size_t rfind(std::string_view sv, size_t pos = npos) const noexcept {
+    size_t rfind(std::string_view sv, size_t pos = NPOS) const noexcept {
         return view().rfind(sv, pos);
     }
 
@@ -138,14 +138,14 @@ public:
         return view().find_first_not_of(chars, pos);
     }
 
-    size_t find_last_not_of(std::string_view chars, size_t pos = npos) const noexcept {
+    size_t find_last_not_of(std::string_view chars, size_t pos = NPOS) const noexcept {
         return view().find_last_not_of(chars, pos);
     }
 
     // --- Substring (returns a new FixedString) ---
-    FixedString substr(size_t pos, size_t count = npos) const noexcept {
+    FixedString substr(size_t pos, size_t count = NPOS) const noexcept {
         if (pos >= size_) return {};
-        size_t len = (count == npos) ? (size_ - pos) : detail::fs_min(count, size_ - pos);
+        size_t len = (count == NPOS) ? (size_ - pos) : detail::fs_min(count, size_ - pos);
         return FixedString(buf_ + pos, len);
     }
 

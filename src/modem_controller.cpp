@@ -315,7 +315,7 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     }
 
     size_t end = 0;
-    while ((end = urc_rx_buffer_.find("\r\n")) != FixedString<URC_RX_BUFFER_MAX>::npos) {
+    while ((end = urc_rx_buffer_.find("\r\n")) != FixedString<URC_RX_BUFFER_MAX>::NPOS) {
         FixedString<URC_LINE_MAX> line(std::string_view(urc_rx_buffer_.data(), end));
         urc_rx_buffer_.erase(0, end + 2);
 

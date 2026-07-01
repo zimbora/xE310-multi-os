@@ -28,14 +28,14 @@ AtResponse AtCommand::parse_response(std::string_view raw) {
     MODEM_LOG_DBG("<<: %.*s", static_cast<int>(raw.size()), raw.data());
 
     // Split raw response into lines on AT_TERMINATOR ("\r\n")
-    constexpr std::string_view terminator = AT_TERMINATOR;
-    std::string_view::size_type start = 0;
+    constexpr std::string_view TERMINATOR = AT_TERMINATOR;
+    std::string::size_type start = 0;
     while (start < raw.size()) {
         auto end = raw.find(AT_TERMINATOR, start);
         std::string_view line = (end == std::string_view::npos)
                            ? raw.substr(start)
                            : raw.substr(start, end - start);
-        start = (end == std::string_view::npos) ? raw.size() : end + terminator.size();
+        start = (end == std::string::npos) ? raw.size() : end + TERMINATOR.size();
 
         if (line.empty()) {
             continue;
