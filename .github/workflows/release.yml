@@ -13,31 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure library
-        run: cmake -B build-lib -G Ninja -DCMAKE_BUILD_TYPE=Release -DMODEM_BUILD_TESTS=OFF
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMODEM_BUILD_TESTS=OFF
 
-      - name: Build library
-        run: cmake --build build-lib
+      - name: Build
+        run: cmake --build build
 
-      - name: Configure with executable
-        run: cmake -B build-app -G Ninja -DCMAKE_BUILD_TYPE=Release -DMODEM_BUILD_TESTS=OFF
+      - name: Stage outputs
+        run: |
+          mkdir -p out/lib out/bin
+          cp build/libmodem_xe310.a out/lib/
+          cp build/modem_app build/test_xe310 out/bin/
 
-      - name: Build executable
-        run: cmake --build build-app
-
-      - name: Upload library
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-library
-          path: build-lib/libmodem_xe310.a
-
-      - name: Upload executables
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-executables
-          path: |
-            build-app/modem_app
-            build-app/test_xe310
+          name: linux
+          path: out/
 
   build-windows:
     name: Build Windows
@@ -48,25 +40,24 @@ jobs:
       - name: Configure
         run: cmake -B build -G "Visual Studio 17 2022" -DMODEM_BUILD_TESTS=OFF
 
-      - name: Build library
-        run: cmake --build build --config Release --target modem_xe310
-
-      - name: Build executables
+      - name: Build
         run: cmake --build build --config Release
 
-      - name: Upload library
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-library
-          path: build/Release/modem_xe310.lib
+      - name: Stage outputs
+        run: |
+          mkdir out
+          mkdir out\lib
+          mkdir out\bin
+          copy build\Release\modem_xe310.lib out\lib\
+          copy build\Release\modem_app.exe out\bin\
+          copy build\Release\test_xe310.exe out\bin\
+        shell: cmd
 
-      - name: Upload executables
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-executables
-          path: |
-            build/Release/modem_app.exe
-            build/Release/test_xe310.exe
+          name: windows
+          path: out/
 
   build-zephyr:
     name: Build Zephyr (nRF54L15)
@@ -91,11 +82,15 @@ jobs:
         run: |
           west build -b nrf54l15dk/nrf54l15/cpuapp . --pristine
 
+      - name: Stage outputs
+        run: |
+          mkdir -p out/firmware
+          cp build/zephyr/zephyr.hex out/firmware/
+          cp build/zephyr/zephyr.bin out/firmware/
+          cp build/zephyr/zephyr.elf out/firmware/
+
       - name: Upload Zephyr artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zephyr-firmware
-          path: |
-            build/zephyr/zephyr.hex
-            build/zephyr/zephyr.bin
-            build/zephyr/zephyr.elf
+          name: zephyr
+          path: out/
