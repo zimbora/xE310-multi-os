@@ -27,7 +27,7 @@ static constexpr size_t URC_RX_BUFFER_MAX = 1024;
 /// Maximum capacity for a single URC line.
 static constexpr size_t URC_LINE_MAX = 256;
 
-enum class ModemStatus {
+enum class ModemStatus : uint8_t {
     ok = 0,
     busy,
     uart_error,
@@ -97,6 +97,8 @@ private:
         }
         IoLockGuard(const IoLockGuard&) = delete;
         IoLockGuard& operator=(const IoLockGuard&) = delete;
+        IoLockGuard(IoLockGuard&&) = delete;
+        IoLockGuard& operator=(IoLockGuard&&) = delete;
         explicit operator bool() const { return owns_; }
 
     private:
