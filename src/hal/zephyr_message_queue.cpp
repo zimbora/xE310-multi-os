@@ -14,10 +14,11 @@ namespace modem {
 /// Each slot stores a raw byte buffer; the message length is prepended as a uint16_t header.
 class ZephyrMessageQueue : public MessageQueueInterface {
 public:
-    static constexpr size_t MAX_MSG_SIZE = 256; // max payload per message
+    static constexpr size_t MAX_MSG_SIZE = 256;                          // max payload per message
     static constexpr size_t SLOT_SIZE = MAX_MSG_SIZE + sizeof(uint16_t); // header + payload
 
-    explicit ZephyrMessageQueue(size_t capacity) : capacity_(capacity) {
+    explicit ZephyrMessageQueue(size_t capacity)
+        : capacity_(capacity) {
         for (uint8_t i = 0; i < MAX_CONNECTIONS; ++i) {
             tx_bufs_[i].resize(SLOT_SIZE * capacity);
             rx_bufs_[i].resize(SLOT_SIZE * capacity);
@@ -55,8 +56,8 @@ public:
     }
 
 private:
-    QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues,
-                       uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) {
+    QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, const uint8_t* data,
+                       size_t length, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         if (length > MAX_MSG_SIZE) return QueueError::full;
 
@@ -72,8 +73,8 @@ private:
         return QueueError::ok;
     }
 
-    QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues,
-                        uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) {
+    QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, QueueMessage& msg,
+                        uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
 
         uint8_t slot[SLOT_SIZE];

@@ -11,7 +11,8 @@ namespace modem {
 
 class PosixMessageQueue : public MessageQueueInterface {
 public:
-    explicit PosixMessageQueue(size_t capacity) : capacity_(capacity) {}
+    explicit PosixMessageQueue(size_t capacity)
+        : capacity_(capacity) {}
     ~PosixMessageQueue() override = default;
 
     PosixMessageQueue(const PosixMessageQueue&) = delete;
@@ -46,16 +47,15 @@ public:
     }
 
 private:
-    QueueError push_to(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues,
-                       uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) {
+    QueueError push_to(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues, uint8_t conn_id,
+                       const uint8_t* data, size_t length, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         std::unique_lock<std::mutex> lk(mtx_);
 
         auto& q = queues[conn_id - 1];
         if (q.size() >= capacity_) {
             if (timeout_ms == 0) return QueueError::full;
-            auto ok = cv_pop_.wait_for(lk, std::chrono::milliseconds(timeout_ms),
-                                       [&] { return q.size() < capacity_; });
+            auto ok = cv_pop_.wait_for(lk, std::chrono::milliseconds(timeout_ms), [&] { return q.size() < capacity_; });
             if (!ok) return QueueError::timeout;
         }
 
@@ -67,16 +67,15 @@ private:
         return QueueError::ok;
     }
 
-    QueueError pop_from(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues,
-                        uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) {
+    QueueError pop_from(std::array<std::deque<QueueMessage>, MAX_CONNECTIONS>& queues, uint8_t conn_id,
+                        QueueMessage& msg, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         std::unique_lock<std::mutex> lk(mtx_);
 
         auto& q = queues[conn_id - 1];
         if (q.empty()) {
             if (timeout_ms == 0) return QueueError::empty;
-            auto ok = cv_push_.wait_for(lk, std::chrono::milliseconds(timeout_ms),
-                                        [&] { return !q.empty(); });
+            auto ok = cv_push_.wait_for(lk, std::chrono::milliseconds(timeout_ms), [&] { return !q.empty(); });
             if (!ok) return QueueError::timeout;
         }
 

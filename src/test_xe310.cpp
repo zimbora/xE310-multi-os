@@ -10,21 +10,11 @@ MODEM_LOG_MODULE_REGISTER(modem_app);
 
 static void log_status(modem::ModemStatus status) {
     switch (status) {
-        case modem::ModemStatus::timeout:
-            MODEM_LOG_ERR("  -> timeout");
-            break;
-        case modem::ModemStatus::at_error:
-            MODEM_LOG_ERR("  -> AT command error");
-            break;
-        case modem::ModemStatus::uart_error:
-            MODEM_LOG_ERR("  -> UART error");
-            break;
-        case modem::ModemStatus::not_connected:
-            MODEM_LOG_ERR("  -> not connected");
-            break;
-        default:
-            MODEM_LOG_ERR("  -> error code %d", static_cast<int>(status));
-            break;
+        case modem::ModemStatus::timeout: MODEM_LOG_ERR("  -> timeout"); break;
+        case modem::ModemStatus::at_error: MODEM_LOG_ERR("  -> AT command error"); break;
+        case modem::ModemStatus::uart_error: MODEM_LOG_ERR("  -> UART error"); break;
+        case modem::ModemStatus::not_connected: MODEM_LOG_ERR("  -> not connected"); break;
+        default: MODEM_LOG_ERR("  -> error code %d", static_cast<int>(status)); break;
     }
 }
 
@@ -120,7 +110,7 @@ int main() {
     } else {
         MODEM_LOG_INF("IMSI: %s", read_imsi.c_str());
     }
-    
+
     modem::TelitCpsmsStatus psm_status;
     status = modem.get_telit_psm(psm_status);
     if (status != modem::ModemStatus::ok) {
@@ -142,12 +132,11 @@ int main() {
         log_status(status);
     } else {
         MODEM_LOG_INF("Band Configuration - GSM: %llu, UMTS: %llu, LTE: %llu, TDSCDMA: %llu, LTE>64: %llu",
-                      static_cast<unsigned long long>(bands.gsm_mask),
-                      static_cast<unsigned long long>(bands.umts_mask),
+                      static_cast<unsigned long long>(bands.gsm_mask), static_cast<unsigned long long>(bands.umts_mask),
                       static_cast<unsigned long long>(bands.lte_mask),
                       static_cast<unsigned long long>(bands.tdscdma_mask),
                       static_cast<unsigned long long>(bands.lte_mask_over_64));
-    }   
+    }
 
     modem::RegistrationInfo reg_info;
     status = modem.get_registration_status(reg_info);
@@ -160,7 +149,7 @@ int main() {
         MODEM_LOG_INF("Cell ID: %s", reg_info.ci.c_str());
         MODEM_LOG_INF("Access Technology: %d", static_cast<int>(reg_info.act));
         MODEM_LOG_INF("Has Location: %s", reg_info.fHasLocation ? "Yes" : "No");
-    }   
+    }
 
     modem::SignalQuality sq;
     status = modem.get_signal_quality(sq);
@@ -168,9 +157,8 @@ int main() {
         MODEM_LOG_ERR("Failed to retrieve signal quality");
         log_status(status);
     } else {
-        MODEM_LOG_INF("Signal Quality - RSSI: %d, BER: %d, RSRQ: %d, RSRP: %d",
-                      sq.rssi, sq.ber, sq.rsrq, sq.rsrp);
-    }   
+        MODEM_LOG_INF("Signal Quality - RSSI: %d, BER: %d, RSRQ: %d, RSRP: %d", sq.rssi, sq.ber, sq.rsrq, sq.rsrp);
+    }
 
     modem::FixedString<modem::MODEM_MEDIUM_STR> oper;
     status = modem.get_operator(oper);
@@ -179,7 +167,7 @@ int main() {
         log_status(status);
     } else {
         MODEM_LOG_INF("Operator: %s", oper.c_str());
-    }   
+    }
 
     modem::FixedString<modem::MODEM_MEDIUM_STR> apn;
     uint8_t cid = 1; // Example CID for PDP context
@@ -189,7 +177,7 @@ int main() {
         log_status(status);
     } else {
         MODEM_LOG_INF("APN: %s", apn.c_str());
-    }   
+    }
 
     bool fActive = false;
     status = modem.get_pdp_state(cid, fActive);
@@ -208,7 +196,7 @@ int main() {
     } else {
         MODEM_LOG_INF("IP Address for PDP Context %d: %s", cid, ip_addr.c_str());
     }
-    
+
     modem::RadioTech tech = modem::RadioTech::cat_m1;
     uint8_t gsmPriority = 0;
     status = modem.get_iot_tech(tech, gsmPriority);
@@ -216,7 +204,7 @@ int main() {
         MODEM_LOG_ERR("Failed to retrieve IoT technology");
         log_status(status);
     } else {
-        switch(static_cast<int>(tech)){
+        switch (static_cast<int>(tech)) {
             case 0: MODEM_LOG_INF("IoT Technology: CAT-M1"); break;
             case 1: MODEM_LOG_INF("IoT Technology: NB-IoT"); break;
             case 2: MODEM_LOG_INF("IoT Technology: CAT-M1 preferred + NB-IoT"); break;
@@ -224,7 +212,7 @@ int main() {
             default: MODEM_LOG_INF("IoT Technology: Unknown (%d)", static_cast<int>(tech)); break;
         }
     }
-   
+
     modem::NetworkSurveyResult survey_result;
     status = modem.network_survey(survey_result);
     if (status != modem::ModemStatus::ok) {
@@ -233,8 +221,7 @@ int main() {
     } else {
         MODEM_LOG_INF("Network survey completed, found %zu cells", survey_result.cells.size());
         for (const auto& cell : survey_result.cells) {
-            MODEM_LOG_INF("Cell: Type=%d, ARFCN=%d, RSRP=%.1f dBm",
-                          static_cast<int>(cell.type), cell.arfcn, cell.rsrp);
+            MODEM_LOG_INF("Cell: Type=%d, ARFCN=%d, RSRP=%.1f dBm", static_cast<int>(cell.type), cell.arfcn, cell.rsrp);
         }
     }
 

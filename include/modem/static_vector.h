@@ -9,14 +9,14 @@
 namespace modem {
 
 namespace detail {
-template <typename T>
-constexpr T sv_min(T a, T b) noexcept { return (a < b) ? a : b; }
+template<typename T> constexpr T sv_min(T a, T b) noexcept {
+    return (a < b) ? a : b;
+}
 } // namespace detail
 
 /// Fixed-capacity vector — no heap allocation.
 /// Backed by std::array<T, Capacity> with a runtime size counter.
-template <typename T, size_t Capacity>
-class StaticVector {
+template<typename T, size_t Capacity> class StaticVector {
 public:
     StaticVector() noexcept = default;
 
@@ -79,8 +79,7 @@ public:
     void resize(size_t new_size) noexcept {
         if (new_size > Capacity) new_size = Capacity;
         if (new_size > size_) {
-            for (size_t i = size_; i < new_size; ++i)
-                data_[i] = T{};
+            for (size_t i = size_; i < new_size; ++i) data_[i] = T{};
         }
         size_ = new_size;
     }
@@ -88,8 +87,7 @@ public:
     void resize(size_t new_size, const T& value) noexcept {
         if (new_size > Capacity) new_size = Capacity;
         if (new_size > size_) {
-            for (size_t i = size_; i < new_size; ++i)
-                data_[i] = value;
+            for (size_t i = size_; i < new_size; ++i) data_[i] = value;
         }
         size_ = new_size;
     }
@@ -122,9 +120,7 @@ public:
         return true;
     }
 
-    bool operator!=(const StaticVector& other) const noexcept {
-        return !(*this == other);
-    }
+    bool operator!=(const StaticVector& other) const noexcept { return !(*this == other); }
 
 private:
     std::array<T, Capacity> data_{};

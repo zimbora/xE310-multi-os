@@ -7,14 +7,14 @@
 namespace modem {
 
 namespace detail {
-template <typename T>
-constexpr T fs_min(T a, T b) noexcept { return (a < b) ? a : b; }
+template<typename T> constexpr T fs_min(T a, T b) noexcept {
+    return (a < b) ? a : b;
+}
 } // namespace detail
 
 /// Fixed-capacity string — no heap allocation.
 /// Provides a subset of std::string-like API for use on embedded targets.
-template <size_t Capacity>
-class FixedString {
+template<size_t Capacity> class FixedString {
 public:
     FixedString() noexcept { buf_[0] = '\0'; }
 
@@ -88,13 +88,9 @@ public:
         return *this;
     }
 
-    FixedString& append(std::string_view sv) noexcept {
-        return append(sv.data(), sv.size());
-    }
+    FixedString& append(std::string_view sv) noexcept { return append(sv.data(), sv.size()); }
 
-    FixedString& operator+=(std::string_view sv) noexcept {
-        return append(sv);
-    }
+    FixedString& operator+=(std::string_view sv) noexcept { return append(sv); }
 
     FixedString& operator+=(char c) noexcept {
         if (size_ < Capacity) {
@@ -118,21 +114,13 @@ public:
     // --- Search ---
     static constexpr size_t NPOS = std::string_view::npos;
 
-    size_t find(char c, size_t pos = 0) const noexcept {
-        return view().find(c, pos);
-    }
+    size_t find(char c, size_t pos = 0) const noexcept { return view().find(c, pos); }
 
-    size_t find(std::string_view sv, size_t pos = 0) const noexcept {
-        return view().find(sv, pos);
-    }
+    size_t find(std::string_view sv, size_t pos = 0) const noexcept { return view().find(sv, pos); }
 
-    size_t rfind(char c, size_t pos = NPOS) const noexcept {
-        return view().rfind(c, pos);
-    }
+    size_t rfind(char c, size_t pos = NPOS) const noexcept { return view().rfind(c, pos); }
 
-    size_t rfind(std::string_view sv, size_t pos = NPOS) const noexcept {
-        return view().rfind(sv, pos);
-    }
+    size_t rfind(std::string_view sv, size_t pos = NPOS) const noexcept { return view().rfind(sv, pos); }
 
     size_t find_first_not_of(std::string_view chars, size_t pos = 0) const noexcept {
         return view().find_first_not_of(chars, pos);
@@ -155,10 +143,8 @@ public:
     bool operator==(const char* other) const noexcept { return view() == std::string_view(other ? other : ""); }
     bool operator!=(const char* other) const noexcept { return !(*this == other); }
 
-    template <size_t M>
-    bool operator==(const FixedString<M>& other) const noexcept { return view() == other.view(); }
-    template <size_t M>
-    bool operator!=(const FixedString<M>& other) const noexcept { return view() != other.view(); }
+    template<size_t M> bool operator==(const FixedString<M>& other) const noexcept { return view() == other.view(); }
+    template<size_t M> bool operator!=(const FixedString<M>& other) const noexcept { return view() != other.view(); }
 
     // Allow iteration
     const char* begin() const noexcept { return buf_; }
@@ -176,15 +162,13 @@ private:
 };
 
 // --- Free-function concatenation (returns a FixedString large enough) ---
-template <size_t N>
-FixedString<N> operator+(const FixedString<N>& lhs, std::string_view rhs) noexcept {
+template<size_t N> FixedString<N> operator+(const FixedString<N>& lhs, std::string_view rhs) noexcept {
     FixedString<N> result = lhs;
     result.append(rhs);
     return result;
 }
 
-template <size_t N>
-FixedString<N> operator+(std::string_view lhs, const FixedString<N>& rhs) noexcept {
+template<size_t N> FixedString<N> operator+(std::string_view lhs, const FixedString<N>& rhs) noexcept {
     FixedString<N> result(lhs);
     result.append(rhs.view());
     return result;

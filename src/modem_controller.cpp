@@ -6,10 +6,8 @@
 
 namespace modem {
 
-ModemController::ModemController(std::unique_ptr<UartInterface> uart,
-                                 std::unique_ptr<TimerInterface> timer)
-    : uart_(std::move(uart)),
-      cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
+ModemController::ModemController(std::unique_ptr<UartInterface> uart, std::unique_ptr<TimerInterface> timer)
+    : uart_(std::move(uart)), cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
     IoLockGuard lock(io_mutex_);
@@ -100,11 +98,13 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
             accumulated.append(reinterpret_cast<const char*>(buffer), bytes_read);
             response = AtCommand::parse_response(accumulated.view());
 
-            if (response.status == AtStatus::ok || response.status == AtStatus::error || response.status == AtStatus::busy) {
+            if (response.status == AtStatus::ok || response.status == AtStatus::error ||
+                response.status == AtStatus::busy) {
                 // Extract any URCs that arrived after the status line and buffer them for poll_urc().
                 std::string_view acc_view = accumulated.view();
-                std::string_view search_term = (response.status == AtStatus::ok) ? "OK" :
-                                               (response.status == AtStatus::error) ? "ERROR" : "BUSY";
+                std::string_view search_term = (response.status == AtStatus::ok)      ? "OK"
+                                               : (response.status == AtStatus::error) ? "ERROR"
+                                                                                      : "BUSY";
                 size_t status_end = acc_view.find(search_term);
                 if (status_end != std::string_view::npos) {
                     // Find the end of the status line (OK\r\n or ERROR\r\n)
@@ -117,7 +117,7 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
                         }
                     }
                 }
-                
+
                 if (response.status == AtStatus::ok) {
                     return ModemStatus::ok;
                 }
@@ -129,15 +129,14 @@ ModemStatus ModemController::send_command(const AtCommand& cmd, AtResponse& resp
     }
 }
 
-ModemStatus ModemController::send_raw(std::string_view command, AtResponse& response,
-                                      uint32_t timeout_ms, bool retry) {
+ModemStatus ModemController::send_raw(std::string_view command, AtResponse& response, uint32_t timeout_ms, bool retry) {
     AtCommand cmd(command, timeout_ms);
     ModemStatus status = send_command(cmd, response);
 
     if (retry && status == ModemStatus::timeout) {
         for (uint8_t attempt = 1; attempt < MAX_AT_RETRIES && status == ModemStatus::timeout; ++attempt) {
-            MODEM_LOG_DBG("Retrying AT command (%u/%u): %.*s", attempt, MAX_AT_RETRIES - 1,
-                          (int)command.size(), command.data());
+            MODEM_LOG_DBG("Retrying AT command (%u/%u): %.*s", attempt, MAX_AT_RETRIES - 1, (int)command.size(),
+                          command.data());
             AtCommand retry_cmd(command, timeout_ms);
             status = send_command(retry_cmd, response);
         }
@@ -193,10 +192,8 @@ ModemStatus ModemController::send_binary(const uint8_t* data, size_t length, AtR
     return ModemStatus::ok;
 }
 
-ModemStatus ModemController::send_with_prompt(std::string_view command,
-                                               const uint8_t* data, size_t length,
-                                               AtResponse& response,
-                                               uint32_t timeout_ms) {
+ModemStatus ModemController::send_with_prompt(std::string_view command, const uint8_t* data, size_t length,
+                                              AtResponse& response, uint32_t timeout_ms) {
     IoLockGuard lock(io_mutex_);
     if (!lock) {
         return ModemStatus::busy;
@@ -284,19 +281,17 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     }
 
     // Known URC prefixes to recognise
-    static const char* const kPrefixes[] = {
-        "+CREG:",  "+CGREG:", "+CEREG:",  // registration
-        "+CGEV:",                           // PDP context events
-        "#PSMURC:",                         // PSM entry
-        "+CME ERROR:", "+CMS ERROR:",       // async errors
-        "#CSURV:",                          // survey URC
-        "SRING:",                           // socket data available
-        "RING",                             // incoming call (can be "RING" or "RING: N")
-        "NO CARRIER",                       // connection terminated
-        "BUSY",                             // line busy
-        "NO DIALTONE",                      // no dial tone
-        nullptr
-    };
+    static const char* const kPrefixes[] = {"+CREG:",      "+CGREG:",     "+CEREG:", // registration
+                                            "+CGEV:",                                // PDP context events
+                                            "#PSMURC:",                              // PSM entry
+                                            "+CME ERROR:", "+CMS ERROR:",            // async errors
+                                            "#CSURV:",                               // survey URC
+                                            "SRING:",                                // socket data available
+                                            "RING",        // incoming call (can be "RING" or "RING: N")
+                                            "NO CARRIER",  // connection terminated
+                                            "BUSY",        // line busy
+                                            "NO DIALTONE", // no dial tone
+                                            nullptr};
 
     uint8_t buffer[512];
     size_t bytes_read = 0;
@@ -305,8 +300,8 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
         buffer[bytes_read] = '\0';
         std::string_view raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
 
-        MODEM_LOG_DBG("<< (URC poll raw): %.*s [%zu bytes]", (int)bytes_read,
-                      reinterpret_cast<const char*>(buffer), bytes_read);
+        MODEM_LOG_DBG("<< (URC poll raw): %.*s [%zu bytes]", (int)bytes_read, reinterpret_cast<const char*>(buffer),
+                      bytes_read);
 
         // Append and parse only complete CRLF-terminated lines.
         urc_rx_buffer_.append(raw_chunk);

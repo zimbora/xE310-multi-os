@@ -23,15 +23,7 @@ public:
         // Win32 serial ports need the \\.\prefix for COM10+, works for all
         std::string full_path = std::string("\\\\.\\") + port;
 
-        handle_ = CreateFileA(
-            full_path.c_str(),
-            GENERIC_READ | GENERIC_WRITE,
-            0,
-            nullptr,
-            OPEN_EXISTING,
-            0,
-            nullptr
-        );
+        handle_ = CreateFileA(full_path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
 
         if (handle_ == INVALID_HANDLE_VALUE) {
             return UartError::invalid_config;
@@ -48,15 +40,15 @@ public:
         dcb.BaudRate = config.baud_rate;
         dcb.ByteSize = config.data_bits;
         dcb.StopBits = (config.stop_bits == 2) ? TWOSTOPBITS : ONESTOPBIT;
-        dcb.Parity   = NOPARITY;
-        dcb.fBinary  = TRUE;
-        dcb.fParity  = FALSE;
+        dcb.Parity = NOPARITY;
+        dcb.fBinary = TRUE;
+        dcb.fParity = FALSE;
         dcb.fOutxCtsFlow = FALSE;
         dcb.fOutxDsrFlow = FALSE;
-        dcb.fDtrControl  = DTR_CONTROL_ENABLE;
-        dcb.fRtsControl  = RTS_CONTROL_ENABLE;
+        dcb.fDtrControl = DTR_CONTROL_ENABLE;
+        dcb.fRtsControl = RTS_CONTROL_ENABLE;
         dcb.fOutX = FALSE;
-        dcb.fInX  = FALSE;
+        dcb.fInX = FALSE;
 
         if (!SetCommState(handle_, &dcb)) {
             close();
@@ -65,11 +57,11 @@ public:
 
         // Configure timeouts
         COMMTIMEOUTS timeouts{};
-        timeouts.ReadIntervalTimeout         = 50;
-        timeouts.ReadTotalTimeoutConstant     = config.timeout_ms;
-        timeouts.ReadTotalTimeoutMultiplier   = 0;
-        timeouts.WriteTotalTimeoutConstant    = config.timeout_ms;
-        timeouts.WriteTotalTimeoutMultiplier  = 0;
+        timeouts.ReadIntervalTimeout = 50;
+        timeouts.ReadTotalTimeoutConstant = config.timeout_ms;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
+        timeouts.WriteTotalTimeoutConstant = config.timeout_ms;
+        timeouts.WriteTotalTimeoutMultiplier = 0;
 
         if (!SetCommTimeouts(handle_, &timeouts)) {
             close();
@@ -82,13 +74,9 @@ public:
         return UartError::ok;
     }
 
-    void close() override {
-        do_close();
-    }
+    void close() override { do_close(); }
 
-    bool is_open() const override {
-        return handle_ != INVALID_HANDLE_VALUE;
-    }
+    bool is_open() const override { return handle_ != INVALID_HANDLE_VALUE; }
 
     UartError write(const uint8_t* data, size_t length) override {
         if (handle_ == INVALID_HANDLE_VALUE) {
@@ -107,8 +95,7 @@ public:
         return UartError::ok;
     }
 
-    UartError read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read,
-                   uint32_t timeout_ms) override {
+    UartError read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms) override {
         if (handle_ == INVALID_HANDLE_VALUE) {
             return UartError::port_not_open;
         }

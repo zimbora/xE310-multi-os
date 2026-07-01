@@ -13,9 +13,7 @@ public:
         k_timer_user_data_set(&timer_, this);
     }
 
-    ~ZephyrTimer() override {
-        k_timer_stop(&timer_);
-    }
+    ~ZephyrTimer() override { k_timer_stop(&timer_); }
 
     ZephyrTimer(const ZephyrTimer&) = delete;
     ZephyrTimer& operator=(const ZephyrTimer&) = delete;
@@ -24,8 +22,8 @@ public:
         if (running_) {
             return TimerError::already_running;
         }
-        cb_       = std::move(cb);
-        running_  = true;
+        cb_ = std::move(cb);
+        running_ = true;
         start_ms_ = k_uptime_get();
         k_timer_start(&timer_, K_MSEC(timeout_ms), K_NO_WAIT);
         return TimerError::ok;
@@ -45,15 +43,13 @@ public:
         if (!cb_) {
             return TimerError::not_running;
         }
-        running_  = true;
+        running_ = true;
         start_ms_ = k_uptime_get();
         k_timer_start(&timer_, K_MSEC(timeout_ms), K_NO_WAIT);
         return TimerError::ok;
     }
 
-    bool is_running() const override {
-        return running_;
-    }
+    bool is_running() const override { return running_; }
 
     uint32_t elapsed_ms() const override {
         if (start_ms_ < 0) {
@@ -73,9 +69,9 @@ private:
     }
 
     struct k_timer timer_;
-    Callback       cb_;
-    bool           running_  = false;
-    int64_t        start_ms_ = -1;  ///< k_uptime_get() at last start/reset, -1 if never started
+    Callback cb_;
+    bool running_ = false;
+    int64_t start_ms_ = -1; ///< k_uptime_get() at last start/reset, -1 if never started
 };
 
 } // namespace modem

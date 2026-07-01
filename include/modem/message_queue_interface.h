@@ -27,7 +27,7 @@ struct QueueMessage {
 class MessageQueueInterface {
 public:
     static constexpr uint8_t MAX_CONNECTIONS = 5;
-    static constexpr size_t  DEFAULT_CAPACITY = 16;
+    static constexpr size_t DEFAULT_CAPACITY = 16;
 
     virtual ~MessageQueueInterface() = default;
 
