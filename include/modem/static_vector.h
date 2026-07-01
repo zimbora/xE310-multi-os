@@ -21,7 +21,7 @@ public:
     StaticVector() noexcept = default;
 
     StaticVector(std::initializer_list<T> init) noexcept {
-        for (auto& v : init) {
+        for (const auto& v : init) {
             if (size_ >= Capacity) break;
             data_[size_++] = v;
         }
@@ -107,7 +107,7 @@ public:
     /// Assign from initializer list.
     void assign(std::initializer_list<T> init) noexcept {
         size_ = 0;
-        for (auto& v : init) {
+        for (const auto& v : init) {
             if (size_ >= Capacity) break;
             data_[size_++] = v;
         }

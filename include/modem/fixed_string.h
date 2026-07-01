@@ -18,7 +18,7 @@ class FixedString {
 public:
     FixedString() noexcept { buf_[0] = '\0'; }
 
-    FixedString(const char* s) noexcept {
+    explicit FixedString(const char* s) noexcept {
         if (s) {
             size_ = detail::fs_min(std::strlen(s), Capacity);
             std::memcpy(buf_, s, size_);
@@ -32,7 +32,7 @@ public:
         buf_[size_] = '\0';
     }
 
-    FixedString(std::string_view sv) noexcept {
+    explicit FixedString(std::string_view sv) noexcept {
         size_ = detail::fs_min(sv.size(), Capacity);
         std::memcpy(buf_, sv.data(), size_);
         buf_[size_] = '\0';
