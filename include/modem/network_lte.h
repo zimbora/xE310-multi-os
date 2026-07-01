@@ -245,7 +245,7 @@ public:
     void new_connection(uint8_t conn_id, std::string_view protocol, std::string_view ip, std::string_view port);
     /// Connect to the network and server using the current configuration. Blocks until connected or max retries
     /// reached.
-    bool server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, const uint16_t port);
+    bool server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
     bool server_disconnect(uint8_t conn_id);
 

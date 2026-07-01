@@ -84,6 +84,7 @@ ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
             case 1: ver.modem_version = field_val; break;
             case 2: ver.prod_params_version = field_val; break;
             case 3: ver.app_version = field_val; break;
+            default: break;
         }
         if (end == std::string_view::npos) break;
         start = end + terminator.size();
@@ -984,7 +985,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         cell.cell_identity =
             static_cast<uint64_t>(std::strtoull(to_cstr(extract_value(line, "cellIdentity:")), nullptr, 16));
 
-        result.cells.push_back(std::move(cell));
+        result.cells.push_back(cell);
     }
 
     return ModemStatus::ok;
@@ -1134,6 +1135,7 @@ ModemStatus xE310::get_pdp_info(uint8_t cid, FixedString<MODEM_IP_STR>& ip_addr,
                 case 2: gw_addr = value; break;
                 case 3: dns_primary = value; break;
                 case 4: dns_secondary = value; break;
+                default: break;
             }
             ++field;
             pos = end_q + 1;

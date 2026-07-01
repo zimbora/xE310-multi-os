@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
+#include <utility>
 
 namespace modem {
 
@@ -68,7 +69,7 @@ public:
 
     bool push_back(T&& value) noexcept {
         if (size_ >= Capacity) return false;
-        data_[size_++] = static_cast<T&&>(value);
+        data_[size_++] = std::move(value);
         return true;
     }
 

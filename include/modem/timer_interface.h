@@ -5,7 +5,7 @@
 
 namespace modem {
 
-enum class TimerError {
+enum class TimerError : uint8_t {
     ok = 0,
     already_running,
     not_running,
@@ -19,6 +19,11 @@ class TimerInterface {
 public:
     using Callback = std::function<void()>;
 
+    TimerInterface() = default;
+    TimerInterface(const TimerInterface&) = delete;
+    TimerInterface& operator=(const TimerInterface&) = delete;
+    TimerInterface(TimerInterface&&) = delete;
+    TimerInterface& operator=(TimerInterface&&) = delete;
     virtual ~TimerInterface() = default;
 
     /// Start the timer. Fires cb once after timeout_ms milliseconds.
