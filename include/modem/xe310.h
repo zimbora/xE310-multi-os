@@ -78,7 +78,7 @@ struct RegistrationInfo {
     // PSM timer fields (PSM / extended PSM format)
     FixedString<MODEM_SHORT_STR> active_time;  ///< T3324 active timer (encoded bit string, e.g. "01100000")
     FixedString<MODEM_SHORT_STR> periodic_tau; ///< T3412 periodic TAU timer (encoded bit string, e.g. "01000011")
-    bool has_psm         = false;
+    bool fHasPsm         = false;
 };
 
 enum class ContextState : uint8_t {
