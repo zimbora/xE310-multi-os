@@ -17,8 +17,7 @@ ModemStatus xE310::last_status() const {
     return last_status_;
 }
 
-ModemStatus xE310::send_raw(std::string_view command, AtResponse& response,
-                            uint32_t timeout_ms, bool retry) {
+ModemStatus xE310::send_raw(std::string_view command, AtResponse& response, uint32_t timeout_ms, bool retry) {
     last_status_ = controller_.send_raw(command, response, timeout_ms, retry);
     return last_status_;
 }
@@ -78,9 +77,8 @@ ModemStatus xE310::request_sw_package_version(SoftwarePackageVersion& ver) {
     int field_idx = 0;
     while (start < body.size() && field_idx < 4) {
         auto end = body.find(terminator, start);
-        std::string_view field_val = (end == std::string_view::npos)
-                 ? body.substr(start)
-                 : body.substr(start, end - start);
+        std::string_view field_val =
+            (end == std::string_view::npos) ? body.substr(start) : body.substr(start, end - start);
         switch (field_idx) {
             case 0: ver.package_version = field_val; break;
             case 1: ver.modem_version = field_val; break;
@@ -170,8 +168,8 @@ ModemStatus xE310::query_sim_status(SimStatus& status) {
 ModemStatus xE310::send_sim_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& sim_response) {
     AtResponse response;
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "AT+CSIM=%u,\"%.*s\"",
-             static_cast<unsigned>(command.size()), (int)command.size(), command.data());
+    snprintf(cmd, sizeof(cmd), "AT+CSIM=%u,\"%.*s\"", static_cast<unsigned>(command.size()), (int)command.size(),
+             command.data());
     auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         sim_response = response.body.view();
@@ -185,8 +183,8 @@ ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
     AtResponse response;
     char cmd[256];
     int pos = snprintf(cmd, sizeof(cmd), "AT+CPSMS=%d", static_cast<int>(cfg.mode));
-    if (!cfg.req_periodic_rau.empty() || !cfg.req_gprs_ready_timer.empty() ||
-        !cfg.req_periodic_tau.empty() || !cfg.req_active_time.empty()) {
+    if (!cfg.req_periodic_rau.empty() || !cfg.req_gprs_ready_timer.empty() || !cfg.req_periodic_tau.empty() ||
+        !cfg.req_active_time.empty()) {
         pos += snprintf(cmd + pos, sizeof(cmd) - pos, ",");
         if (!cfg.req_periodic_rau.empty())
             pos += snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_periodic_rau.c_str());
@@ -197,8 +195,7 @@ ModemStatus xE310::set_psm(const CpsmsConfig& cfg) {
         if (!cfg.req_periodic_tau.empty())
             pos += snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_periodic_tau.c_str());
         pos += snprintf(cmd + pos, sizeof(cmd) - pos, ",");
-        if (!cfg.req_active_time.empty())
-            snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_active_time.c_str());
+        if (!cfg.req_active_time.empty()) snprintf(cmd + pos, sizeof(cmd) - pos, "\"%s\"", cfg.req_active_time.c_str());
     }
     return send_raw(cmd, response);
 }
@@ -239,10 +236,10 @@ ModemStatus xE310::get_psm(CpsmsConfig& cfg) {
     }
 
     if (field_count >= 1) cfg.mode = static_cast<PsmMode>(std::atoi(fields[0].c_str()));
-    if (field_count >= 2) cfg.req_periodic_rau         = strip_quotes(fields[1].view());
-    if (field_count >= 3) cfg.req_gprs_ready_timer      = strip_quotes(fields[2].view());
-    if (field_count >= 4) cfg.req_periodic_tau          = strip_quotes(fields[3].view());
-    if (field_count >= 5) cfg.req_active_time           = strip_quotes(fields[4].view());
+    if (field_count >= 2) cfg.req_periodic_rau = strip_quotes(fields[1].view());
+    if (field_count >= 3) cfg.req_gprs_ready_timer = strip_quotes(fields[2].view());
+    if (field_count >= 4) cfg.req_periodic_tau = strip_quotes(fields[3].view());
+    if (field_count >= 5) cfg.req_active_time = strip_quotes(fields[4].view());
 
     return ModemStatus::ok;
 }
@@ -259,12 +256,12 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
 
     // Determine last field that has a value
     int last = 0;
-    if (cfg.fHasPeriodicRau)    last = 1;
+    if (cfg.fHasPeriodicRau) last = 1;
     if (cfg.fHasGprsReadyTimer) last = 2;
-    if (cfg.fHasPeriodicTau)    last = 3;
-    if (cfg.fHasActiveTime)     last = 4;
-    if (cfg.fHasPsmVersion)     last = 5;
-    if (cfg.fHasPsmThreshold)   last = 6;
+    if (cfg.fHasPeriodicTau) last = 3;
+    if (cfg.fHasActiveTime) last = 4;
+    if (cfg.fHasPsmVersion) last = 5;
+    if (cfg.fHasPsmThreshold) last = 6;
 
     auto append_opt = [&](int field, bool has, uint32_t val) {
         if (field <= last) {
@@ -273,12 +270,12 @@ ModemStatus xE310::set_telit_psm(const TelitCpsmsConfig& cfg) {
         }
     };
 
-    append_opt(1, cfg.fHasPeriodicRau,    cfg.req_periodic_rau);
+    append_opt(1, cfg.fHasPeriodicRau, cfg.req_periodic_rau);
     append_opt(2, cfg.fHasGprsReadyTimer, cfg.req_gprs_ready_timer);
-    append_opt(3, cfg.fHasPeriodicTau,    cfg.req_periodic_tau);
-    append_opt(4, cfg.fHasActiveTime,     cfg.req_active_time);
-    append_opt(5, cfg.fHasPsmVersion,     static_cast<uint32_t>(cfg.psm_version));
-    append_opt(6, cfg.fHasPsmThreshold,   cfg.psm_threshold);
+    append_opt(3, cfg.fHasPeriodicTau, cfg.req_periodic_tau);
+    append_opt(4, cfg.fHasActiveTime, cfg.req_active_time);
+    append_opt(5, cfg.fHasPsmVersion, static_cast<uint32_t>(cfg.psm_version));
+    append_opt(6, cfg.fHasPsmThreshold, cfg.psm_threshold);
 
     return send_raw(cmd, response);
 }
@@ -318,12 +315,12 @@ ModemStatus xE310::get_telit_psm(TelitCpsmsStatus& st) {
         sv = sv.substr(comma + 1);
     }
 
-    if (field_count >= 1) st.status        = static_cast<uint8_t>(std::atoi(field_buf[0]));
+    if (field_count >= 1) st.status = static_cast<uint8_t>(std::atoi(field_buf[0]));
     if (field_count >= 2 && field_buf[1][0] != '\0') st.t3324 = static_cast<uint32_t>(std::atol(field_buf[1]));
     if (field_count >= 3 && field_buf[2][0] != '\0') st.t3412 = static_cast<uint32_t>(std::atol(field_buf[2]));
-    if (field_count >= 4) st.psm_version   = static_cast<uint8_t>(std::atoi(field_buf[3]));
-    if (field_count >= 5) st.psm_threshold  = static_cast<uint32_t>(std::atol(field_buf[4]));
-    if (field_count >= 6) st.mode           = static_cast<PsmMode>(std::atoi(field_buf[5]));
+    if (field_count >= 4) st.psm_version = static_cast<uint8_t>(std::atoi(field_buf[3]));
+    if (field_count >= 5) st.psm_threshold = static_cast<uint32_t>(std::atol(field_buf[4]));
+    if (field_count >= 6) st.mode = static_cast<PsmMode>(std::atoi(field_buf[5]));
 
     return ModemStatus::ok;
 }
@@ -355,7 +352,6 @@ ModemStatus xE310::get_psm_urc(bool& enabled) {
 
 void xE310::power_on() {
     // TODO: assert power-enable GPIO
-
 }
 
 void xE310::power_off() {
@@ -378,7 +374,7 @@ ModemStatus xE310::shutdown() {
     // go to DH0 mode
     send_raw("AT+CFUN=4", response, 15000);
     return send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
-    //return send_raw("AT#SHDN", response); // use on/off
+    // return send_raw("AT#SHDN", response); // use on/off
 }
 
 ModemStatus xE310::reboot() {
@@ -410,51 +406,50 @@ static SurvCell parse_surv_line(std::string_view line) {
 
     if (field_count == 2) {
         // 2G non-BCCH: <arfcn>,<rxLev>
-        cell.type   = SurvCellType::cell_2g_non_bcch;
-        cell.arfcn  = std::atoi(field_buf[0]);
+        cell.type = SurvCellType::cell_2g_non_bcch;
+        cell.arfcn = std::atoi(field_buf[0]);
         cell.rx_lev = std::atoi(field_buf[1]);
     } else if (field_count == 7) {
         // LTE (AT#CSURVC): <earfcn>,<rsrp>,<mcc>,<mnc>,<pci>,<tac>,<cell_id>
-        cell.type          = SurvCellType::cell_4g;
-        cell.earfcn        = std::atoi(field_buf[0]);
-        cell.rsrp          = std::strtof(field_buf[1], nullptr);
-        cell.rx_lev        = static_cast<int>(cell.rsrp);
-        cell.mcc           = static_cast<uint16_t>(std::atoi(field_buf[2]));
-        cell.mnc           = static_cast<uint16_t>(std::atoi(field_buf[3]));
-        cell.phys_cell_id  = static_cast<uint32_t>(std::atoi(field_buf[4]));
-        cell.tac           = static_cast<uint32_t>(std::atoi(field_buf[5]));
+        cell.type = SurvCellType::cell_4g;
+        cell.earfcn = std::atoi(field_buf[0]);
+        cell.rsrp = std::strtof(field_buf[1], nullptr);
+        cell.rx_lev = static_cast<int>(cell.rsrp);
+        cell.mcc = static_cast<uint16_t>(std::atoi(field_buf[2]));
+        cell.mnc = static_cast<uint16_t>(std::atoi(field_buf[3]));
+        cell.phys_cell_id = static_cast<uint32_t>(std::atoi(field_buf[4]));
+        cell.tac = static_cast<uint32_t>(std::atoi(field_buf[5]));
         cell.cell_identity = static_cast<uint64_t>(std::atoll(field_buf[6]));
     } else if (field_count >= 10) {
         // 2G BCCH: <arfcn>,<bsic>,<rxLev>,<ber>,<mcc>,<mnc>,<lac>,<cellId>,<cellStat>,<numArfcn>
-        cell.type     = SurvCellType::cell_2g_bcch;
-        cell.arfcn    = std::atoi(field_buf[0]);
-        cell.bsic     = std::atoi(field_buf[1]);
-        cell.rx_lev   = std::atoi(field_buf[2]);
-        cell.ber      = std::atoi(field_buf[3]);
-        cell.mcc      = static_cast<uint16_t>(std::strtoul(field_buf[4], nullptr, 16));
-        cell.mnc      = static_cast<uint16_t>(std::strtoul(field_buf[5], nullptr, 16));
-        cell.lac      = static_cast<uint32_t>(std::strtoul(field_buf[6], nullptr, 0));
-        cell.cell_id  = static_cast<uint32_t>(std::strtoul(field_buf[7], nullptr, 0));
+        cell.type = SurvCellType::cell_2g_bcch;
+        cell.arfcn = std::atoi(field_buf[0]);
+        cell.bsic = std::atoi(field_buf[1]);
+        cell.rx_lev = std::atoi(field_buf[2]);
+        cell.ber = std::atoi(field_buf[3]);
+        cell.mcc = static_cast<uint16_t>(std::strtoul(field_buf[4], nullptr, 16));
+        cell.mnc = static_cast<uint16_t>(std::strtoul(field_buf[5], nullptr, 16));
+        cell.lac = static_cast<uint32_t>(std::strtoul(field_buf[6], nullptr, 0));
+        cell.cell_id = static_cast<uint32_t>(std::strtoul(field_buf[7], nullptr, 0));
         cell.cell_stat = std::string_view(field_buf[8]);
         cell.num_arfcn = std::atoi(field_buf[9]);
     } else if (field_count >= 9) {
         // 4G: <earfcn>,<rxLev>,<mcc>,<mnc>,<cellId>,<tac>,<cellIdentity>,<rsrp>,<rsrq>
-        cell.type         = SurvCellType::cell_4g;
-        cell.earfcn       = std::atoi(field_buf[0]);
-        cell.rx_lev       = std::atoi(field_buf[1]);
-        cell.mcc          = static_cast<uint16_t>(std::strtoul(field_buf[2], nullptr, 16));
-        cell.mnc          = static_cast<uint16_t>(std::strtoul(field_buf[3], nullptr, 16));
+        cell.type = SurvCellType::cell_4g;
+        cell.earfcn = std::atoi(field_buf[0]);
+        cell.rx_lev = std::atoi(field_buf[1]);
+        cell.mcc = static_cast<uint16_t>(std::strtoul(field_buf[2], nullptr, 16));
+        cell.mnc = static_cast<uint16_t>(std::strtoul(field_buf[3], nullptr, 16));
         cell.phys_cell_id = static_cast<uint32_t>(std::strtoul(field_buf[4], nullptr, 16));
-        cell.tac          = static_cast<uint32_t>(std::strtoul(field_buf[5], nullptr, 16));
+        cell.tac = static_cast<uint32_t>(std::strtoul(field_buf[5], nullptr, 16));
         cell.cell_identity = static_cast<uint64_t>(std::strtoull(field_buf[6], nullptr, 16));
-        cell.rsrp         = std::strtof(field_buf[7], nullptr);
-        cell.rsrq         = std::strtof(field_buf[8], nullptr);
+        cell.rsrp = std::strtof(field_buf[7], nullptr);
+        cell.rsrq = std::strtof(field_buf[8], nullptr);
     }
     return cell;
 }
 
-ModemStatus xE310::network_survey(NetworkSurveyResult& result,
-                                   uint32_t start_ch, uint32_t end_ch) {
+ModemStatus xE310::network_survey(NetworkSurveyResult& result, uint32_t start_ch, uint32_t end_ch) {
     AtResponse response;
     char cmd[64];
     if (start_ch == 0 && end_ch == 0) {
@@ -470,15 +465,13 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
     result = {};
 
     // Split body on AT_TERMINATOR and parse each line
-    std::string_view body     = response.body.view();
+    std::string_view body = response.body.view();
     std::string_view terminator = AT_TERMINATOR;
     std::string_view::size_type start = 0;
 
     while (start < body.size()) {
-        auto end  = body.find(terminator, start);
-        std::string_view line = (end == std::string_view::npos)
-                    ? body.substr(start)
-                    : body.substr(start, end - start);
+        auto end = body.find(terminator, start);
+        std::string_view line = (end == std::string_view::npos) ? body.substr(start) : body.substr(start, end - start);
         start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
 
         if (line.empty() || line.substr(0, 22) == "Network survey started") {
@@ -524,16 +517,16 @@ ModemStatus xE310::network_survey(NetworkSurveyResult& result,
 ModemStatus xE310::set_iot_tech(RadioTech tech, uint8_t gsm_priority) {
     AtResponse response;
     uint8_t n = 0;
-    #ifdef ME310M1
-        if(tech == RadioTech::cat_m1)
-            n = 0;
-        else if(tech == RadioTech::nb_iot)
-            n = 1;
-        else
-            return ModemStatus::invalid_param;
-        gsm_priority = 0;
-    #endif
-    
+#ifdef ME310M1
+    if (tech == RadioTech::cat_m1)
+        n = 0;
+    else if (tech == RadioTech::nb_iot)
+        n = 1;
+    else
+        return ModemStatus::invalid_param;
+    gsm_priority = 0;
+#endif
+
     char cmd[32];
     snprintf(cmd, sizeof(cmd), "AT#WS46=%u,%u", static_cast<unsigned>(n), static_cast<unsigned>(gsm_priority));
     return send_raw(cmd, response);
@@ -563,9 +556,9 @@ ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
                 buf[len] = '\0';
                 gp = static_cast<unsigned int>(std::strtoul(buf, nullptr, 10));
             }
-            if(nv == 0)
+            if (nv == 0)
                 tech = RadioTech::cat_m1;
-            else if(nv == 1)
+            else if (nv == 1)
                 tech = RadioTech::nb_iot;
             else
                 tech = RadioTech::unknown;
@@ -575,13 +568,12 @@ ModemStatus xE310::get_iot_tech(RadioTech& tech, uint8_t& gsm_priority) {
     return status;
 }
 
-ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask,
-                              uint64_t tdscdma_mask, uint64_t lte_mask_over_64) {
+ModemStatus xE310::set_bands(uint64_t gsm_mask, uint64_t umts_mask, uint64_t lte_mask, uint64_t tdscdma_mask,
+                             uint64_t lte_mask_over_64) {
     AtResponse response;
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "AT#BND=%llu,%llu,%llu,%llu,%llu",
-             (unsigned long long)gsm_mask, (unsigned long long)umts_mask,
-             (unsigned long long)lte_mask, (unsigned long long)tdscdma_mask,
+    snprintf(cmd, sizeof(cmd), "AT#BND=%llu,%llu,%llu,%llu,%llu", (unsigned long long)gsm_mask,
+             (unsigned long long)umts_mask, (unsigned long long)lte_mask, (unsigned long long)tdscdma_mask,
              (unsigned long long)lte_mask_over_64);
     return send_raw(cmd, response);
 }
@@ -639,10 +631,8 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
     };
 
     BandConfig parsed;
-    if (!parse_u64(field_buf[0], parsed.gsm_mask) ||
-        !parse_u64(field_buf[1], parsed.umts_mask) ||
-        !parse_u64(field_buf[2], parsed.lte_mask) ||
-        !parse_u64(field_buf[3], parsed.tdscdma_mask) ||
+    if (!parse_u64(field_buf[0], parsed.gsm_mask) || !parse_u64(field_buf[1], parsed.umts_mask) ||
+        !parse_u64(field_buf[2], parsed.lte_mask) || !parse_u64(field_buf[3], parsed.tdscdma_mask) ||
         !parse_u64(field_buf[4], parsed.lte_mask_over_64)) {
         return ModemStatus::at_error;
     }
@@ -686,9 +676,8 @@ ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tec
     size_t pos = 0;
     while (pos < params.size() && field_count < 8) {
         auto comma = params.find(',', pos);
-        std::string_view token = (comma == std::string_view::npos)
-            ? params.substr(pos)
-            : params.substr(pos, comma - pos);
+        std::string_view token =
+            (comma == std::string_view::npos) ? params.substr(pos) : params.substr(pos, comma - pos);
         // Trim leading/trailing whitespace and quotes
         auto fs = token.find_first_not_of(" \t\"");
         auto fe = token.find_last_not_of(" \t\"");
@@ -765,7 +754,7 @@ ModemStatus xE310::get_signal_quality(SignalQuality& sq) {
 
             if (parsed_count >= 6) {
                 sq.rssi = parsed[0];
-                sq.ber  = parsed[1];
+                sq.ber = parsed[1];
                 sq.rsrq = parsed[4];
                 sq.rsrp = parsed[5];
             }
@@ -783,12 +772,11 @@ ModemStatus xE310::set_radio_tech(RadioTech tech) {
 
 ModemStatus xE310::set_operator_manual(std::string_view oper, RadioTech tech) {
     AtResponse response;
-    if(oper.empty()) {
+    if (oper.empty()) {
         return set_operator_auto();
     } else {
         char cmd[128];
-        snprintf(cmd, sizeof(cmd), "AT+COPS=1,2,\"%.*s\",%d",
-                 (int)oper.size(), oper.data(), static_cast<int>(tech));
+        snprintf(cmd, sizeof(cmd), "AT+COPS=1,2,\"%.*s\",%d", (int)oper.size(), oper.data(), static_cast<int>(tech));
         return send_raw(cmd, response, 210000);
     }
 }
@@ -821,9 +809,8 @@ ModemStatus xE310::get_operator(FixedString<MODEM_MEDIUM_STR>& oper) {
         auto comma = params.find(',', pos);
         if (field_idx == 2) {
             // This is the oper field
-            std::string_view token = (comma == std::string_view::npos)
-                ? params.substr(pos)
-                : params.substr(pos, comma - pos);
+            std::string_view token =
+                (comma == std::string_view::npos) ? params.substr(pos) : params.substr(pos, comma - pos);
             auto a = token.find_first_not_of(" \t\"");
             auto b = token.find_last_not_of(" \t\"");
             oper = (a == std::string_view::npos) ? std::string_view("") : token.substr(a, b - a + 1);
@@ -893,12 +880,10 @@ ModemStatus xE310::get_available_operators(StaticVector<Operator, MAX_OPERATORS>
 
         Operator op;
         // fields[0] = stat (skip), [1] = long_name, [2] = short_name, [3] = numeric, [4] = act
-        op.long_name  = std::string_view(field_buf[1]);
+        op.long_name = std::string_view(field_buf[1]);
         op.short_name = std::string_view(field_buf[2]);
-        op.numeric    = std::string_view(field_buf[3]);
-        op.act        = (field_count >= 5)
-                        ? static_cast<RadioTech>(std::atoi(field_buf[4]))
-                        : RadioTech::gsm;
+        op.numeric = std::string_view(field_buf[3]);
+        op.act = (field_count >= 5) ? static_cast<RadioTech>(std::atoi(field_buf[4])) : RadioTech::gsm;
         operators.push_back(op);
     }
 
@@ -937,15 +922,13 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         return (end == std::string_view::npos) ? line.substr(pos) : line.substr(pos, end - pos);
     };
 
-    std::string_view body       = response.body.view();
+    std::string_view body = response.body.view();
     std::string_view terminator = AT_TERMINATOR;
     std::string_view::size_type start = 0;
 
     while (start < body.size()) {
-        auto end  = body.find(terminator, start);
-        std::string_view line = (end == std::string_view::npos)
-                    ? body.substr(start)
-                    : body.substr(start, end - start);
+        auto end = body.find(terminator, start);
+        std::string_view line = (end == std::string_view::npos) ? body.substr(start) : body.substr(start, end - start);
         start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
 
         if (line.empty() || line.substr(0, 22) == "Network survey started") {
@@ -992,13 +975,14 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
             return vbuf;
         };
 
-        cell.earfcn        = std::atoi(to_cstr(earfcn_str));
-        cell.rx_lev        = std::atoi(to_cstr(extract_value(line, "rxLev:")));
-        cell.mcc           = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mcc:")),         nullptr, 16));
-        cell.mnc           = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mnc:")),         nullptr, 16));
-        cell.cell_id       = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellid:")),      nullptr, 16));
-        cell.tac           = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "tac:")),         nullptr, 16));
-        cell.cell_identity = static_cast<uint64_t>(std::strtoull(to_cstr(extract_value(line, "cellIdentity:")), nullptr, 16));
+        cell.earfcn = std::atoi(to_cstr(earfcn_str));
+        cell.rx_lev = std::atoi(to_cstr(extract_value(line, "rxLev:")));
+        cell.mcc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mcc:")), nullptr, 16));
+        cell.mnc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mnc:")), nullptr, 16));
+        cell.cell_id = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellid:")), nullptr, 16));
+        cell.tac = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "tac:")), nullptr, 16));
+        cell.cell_identity =
+            static_cast<uint64_t>(std::strtoull(to_cstr(extract_value(line, "cellIdentity:")), nullptr, 16));
 
         result.cells.push_back(std::move(cell));
     }
@@ -1011,8 +995,8 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
 ModemStatus xE310::set_apn(uint8_t cid, std::string_view apn) {
     AtResponse response;
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "AT+CGDCONT=%u,\"IP\",\"%.*s\"",
-             static_cast<unsigned>(cid), (int)apn.size(), apn.data());
+    snprintf(cmd, sizeof(cmd), "AT+CGDCONT=%u,\"IP\",\"%.*s\"", static_cast<unsigned>(cid), (int)apn.size(),
+             apn.data());
     return send_raw(cmd, response);
 }
 
@@ -1028,10 +1012,8 @@ ModemStatus xE310::get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn) {
     std::string_view::size_type start = 0;
 
     while (start < body.size()) {
-        auto end  = body.find(terminator, start);
-        std::string_view line = (end == std::string_view::npos)
-                    ? body.substr(start)
-                    : body.substr(start, end - start);
+        auto end = body.find(terminator, start);
+        std::string_view line = (end == std::string_view::npos) ? body.substr(start) : body.substr(start, end - start);
         start = (end == std::string_view::npos) ? body.size() : end + terminator.size();
 
         // Find the prefix "+CGDCONT:"
@@ -1047,13 +1029,13 @@ ModemStatus xE310::get_apn(uint8_t cid, FixedString<MODEM_MEDIUM_STR>& apn) {
         bool fFoundCid = false;
         while (pos < params.size()) {
             auto comma = params.find(',', pos);
-            std::string_view token = (comma == std::string_view::npos)
-                ? params.substr(pos)
-                : params.substr(pos, comma - pos);
+            std::string_view token =
+                (comma == std::string_view::npos) ? params.substr(pos) : params.substr(pos, comma - pos);
             // Strip whitespace and quotes
             auto a = token.find_first_not_of(" \t\"");
             auto b = token.find_last_not_of(" \t\"");
-            std::string_view stripped = (a == std::string_view::npos) ? std::string_view("") : token.substr(a, b - a + 1);
+            std::string_view stripped =
+                (a == std::string_view::npos) ? std::string_view("") : token.substr(a, b - a + 1);
 
             if (field_idx == 0) {
                 char buf[8];
@@ -1131,7 +1113,7 @@ ModemStatus xE310::get_ip_address(uint8_t cid, FixedString<MODEM_IP_STR>& ip_add
 }
 
 ModemStatus xE310::get_pdp_info(uint8_t cid, FixedString<MODEM_IP_STR>& ip_addr, FixedString<MODEM_IP_STR>& gw_addr,
-                                 FixedString<MODEM_IP_STR>& dns_primary, FixedString<MODEM_IP_STR>& dns_secondary) {
+                                FixedString<MODEM_IP_STR>& dns_primary, FixedString<MODEM_IP_STR>& dns_secondary) {
     AtResponse response;
     char cmd[32];
     snprintf(cmd, sizeof(cmd), "AT+CGCONTRDP=%u", static_cast<unsigned>(cid));
@@ -1162,39 +1144,34 @@ ModemStatus xE310::get_pdp_info(uint8_t cid, FixedString<MODEM_IP_STR>& ip_addr,
 
 // --- UDP Connection ---
 
-ModemStatus xE310::udp_open(uint8_t conn_id, std::string_view host, uint16_t remote_port,
-                             uint16_t local_port) {
-    if(local_port == 0)
-        local_port = remote_port;
+ModemStatus xE310::udp_open(uint8_t conn_id, std::string_view host, uint16_t remote_port, uint16_t local_port) {
+    if (local_port == 0) local_port = remote_port;
     AtResponse response;
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "AT#SD=%u,1,%u,\"%.*s\",0,%u,1,0,1",
-             static_cast<unsigned>(conn_id), static_cast<unsigned>(remote_port),
-             (int)host.size(), host.data(), static_cast<unsigned>(local_port));
+    snprintf(cmd, sizeof(cmd), "AT#SD=%u,1,%u,\"%.*s\",0,%u,1,0,1", static_cast<unsigned>(conn_id),
+             static_cast<unsigned>(remote_port), (int)host.size(), host.data(), static_cast<unsigned>(local_port));
     return send_raw(cmd, response);
 }
 
 ModemStatus xE310::udp_listen(uint8_t conn_id, uint16_t local_port, uint8_t cid) {
     AtResponse response;
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "AT#SL=%u,1,%u,255,%u",
-             static_cast<unsigned>(conn_id), static_cast<unsigned>(local_port), static_cast<unsigned>(cid));
+    snprintf(cmd, sizeof(cmd), "AT#SL=%u,1,%u,255,%u", static_cast<unsigned>(conn_id),
+             static_cast<unsigned>(local_port), static_cast<unsigned>(cid));
     return send_raw(cmd, response);
 }
 
 ModemStatus xE310::udp_send(uint8_t conn_id, const uint8_t* data, size_t length) {
     AtResponse response;
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "AT#SSENDEXT=%u,%zu",
-             static_cast<unsigned>(conn_id), length);
+    snprintf(cmd, sizeof(cmd), "AT#SSENDEXT=%u,%zu", static_cast<unsigned>(conn_id), length);
     return controller_.send_with_prompt(cmd, data, length, response);
 }
 
 ModemStatus xE310::udp_receive(uint8_t conn_id, StaticVector<uint8_t, UDP_MAX_BYTES>& data, uint16_t max_bytes) {
     AtResponse response;
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "AT#SRECV=%u,%u",
-             static_cast<unsigned>(conn_id), static_cast<unsigned>(max_bytes));
+    snprintf(cmd, sizeof(cmd), "AT#SRECV=%u,%u", static_cast<unsigned>(conn_id), static_cast<unsigned>(max_bytes));
     auto status = send_raw(cmd, response);
     if (status == ModemStatus::ok) {
         std::string_view body = response.body.view();
@@ -1231,7 +1208,8 @@ ModemStatus xE310::udp_status(uint8_t conn_id, uint8_t& state) {
     return status;
 }
 
-ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response, uint32_t timeout_ms) {
+ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response,
+                                   uint32_t timeout_ms) {
     AtResponse at_response;
     auto status = send_raw(command, at_response, timeout_ms);
     if (status == ModemStatus::ok) {
@@ -1243,7 +1221,9 @@ ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESP
 // --- Power Options ---
 
 // --- Event Handlers ---
-const RegistrationInfo& xE310::registration_info() const { return info; }
+const RegistrationInfo& xE310::registration_info() const {
+    return info;
+}
 
 StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> xE310::poll_urc(uint32_t timeout_ms) {
     return controller_.poll_urc(timeout_ms);

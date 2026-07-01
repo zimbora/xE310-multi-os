@@ -7,6 +7,15 @@ on:
     branches: ["**"]
 
 jobs:
+  clang-format:
+    name: Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check clang-format
+        run: clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
+
   cppcheck:
     name: Cppcheck Static Analysis
     runs-on: ubuntu-latest

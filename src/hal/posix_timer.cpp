@@ -19,7 +19,7 @@ public:
         {
             std::unique_lock<std::mutex> lock(mutex_);
             if (!running_) return;
-            running_  = false;
+            running_ = false;
             cancelled_ = true;
             cv_.notify_all();
             t = std::move(thread_);
@@ -35,12 +35,12 @@ public:
         if (running_) {
             return TimerError::already_running;
         }
-        cb_        = std::move(cb);
-        running_   = true;
+        cb_ = std::move(cb);
+        running_ = true;
         cancelled_ = false;
-        start_     = std::chrono::steady_clock::now();
-        deadline_  = start_ + std::chrono::milliseconds(timeout_ms);
-        thread_    = std::thread(&PosixTimer::run, this);
+        start_ = std::chrono::steady_clock::now();
+        deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
+        thread_ = std::thread(&PosixTimer::run, this);
         return TimerError::ok;
     }
 
@@ -51,7 +51,7 @@ public:
             if (!running_) {
                 return TimerError::not_running;
             }
-            running_   = false;
+            running_ = false;
             cancelled_ = true;
             cv_.notify_all();
             t = std::move(thread_);
@@ -69,7 +69,7 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         if (running_) {
             // Timer is active — shift the deadline and wake the thread to re-wait
-            start_    = std::chrono::steady_clock::now();
+            start_ = std::chrono::steady_clock::now();
             deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
             cv_.notify_all();
             return TimerError::ok;
@@ -78,11 +78,11 @@ public:
         if (!cb_) {
             return TimerError::not_running;
         }
-        running_   = true;
+        running_ = true;
         cancelled_ = false;
-        start_     = std::chrono::steady_clock::now();
-        deadline_  = start_ + std::chrono::milliseconds(timeout_ms);
-        thread_    = std::thread(&PosixTimer::run, this);
+        start_ = std::chrono::steady_clock::now();
+        deadline_ = start_ + std::chrono::milliseconds(timeout_ms);
+        thread_ = std::thread(&PosixTimer::run, this);
         return TimerError::ok;
     }
 
@@ -96,8 +96,8 @@ public:
         if (start_ == std::chrono::steady_clock::time_point{}) {
             return 0;
         }
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start_).count();
+        auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_).count();
         return static_cast<uint32_t>(ms < 0 ? 0 : ms);
     }
 
@@ -119,7 +119,7 @@ private:
                 Callback cb = cb_;
                 std::thread self = std::move(thread_); // thread_ is now empty
                 lock.unlock();
-                self.detach();                          // safe: run() is about to return
+                self.detach(); // safe: run() is about to return
                 if (cb) {
                     cb();
                 }
@@ -129,12 +129,12 @@ private:
         }
     }
 
-    mutable std::mutex              mutex_;
-    std::condition_variable         cv_;
-    std::thread                     thread_;
-    Callback                        cb_;
-    bool                            running_   = false;
-    bool                            cancelled_ = false;
+    mutable std::mutex mutex_;
+    std::condition_variable cv_;
+    std::thread thread_;
+    Callback cb_;
+    bool running_ = false;
+    bool cancelled_ = false;
     std::chrono::steady_clock::time_point start_{};
     std::chrono::steady_clock::time_point deadline_;
 };

@@ -42,8 +42,7 @@ class ModemController {
 public:
     /// Takes ownership of a platform-specific UART implementation.
     /// Optionally accepts a timer; if nullptr, a platform timer is created internally.
-    explicit ModemController(std::unique_ptr<UartInterface> uart,
-                             std::unique_ptr<TimerInterface> timer = nullptr);
+    explicit ModemController(std::unique_ptr<UartInterface> uart, std::unique_ptr<TimerInterface> timer = nullptr);
 
     ModemStatus connect(const char* port, const UartConfig& config = {});
     void disconnect();
@@ -54,16 +53,15 @@ public:
 
     /// Convenience: send raw AT command string.
     /// When retry is true, the command is retried up to MAX_AT_RETRIES times on timeout.
-    ModemStatus send_raw(std::string_view command, AtResponse& response,
-                         uint32_t timeout_ms = 5000, bool retry = false);
+    ModemStatus send_raw(std::string_view command, AtResponse& response, uint32_t timeout_ms = 5000,
+                         bool retry = false);
 
     /// Send binary data.
-    ModemStatus send_binary(const uint8_t* data, size_t length, AtResponse& response,
-                            uint32_t timeout_ms = 5000);
+    ModemStatus send_binary(const uint8_t* data, size_t length, AtResponse& response, uint32_t timeout_ms = 5000);
 
     /// Send a command that expects a '>' prompt, then send binary data, then read final response.
-    ModemStatus send_with_prompt(std::string_view command, const uint8_t* data, size_t length,
-                                 AtResponse& response, uint32_t timeout_ms = 5000);
+    ModemStatus send_with_prompt(std::string_view command, const uint8_t* data, size_t length, AtResponse& response,
+                                 uint32_t timeout_ms = 5000);
 
     /// Non-blocking read of any unsolicited data from the modem.
     /// Returns lines that begin with a known URC prefix (e.g. "+CREG:", "+CGEV:").
@@ -78,11 +76,13 @@ private:
         IoMutex() { k_mutex_init(&m_); }
         bool lock_for(uint32_t timeout_ms) { return k_mutex_lock(&m_, K_MSEC(timeout_ms)) == 0; }
         void unlock() { k_mutex_unlock(&m_); }
+
     private:
         struct k_mutex m_;
 #else
         bool lock_for(uint32_t timeout_ms) { return m_.try_lock_for(std::chrono::milliseconds(timeout_ms)); }
         void unlock() { m_.unlock(); }
+
     private:
         std::timed_mutex m_;
 #endif
@@ -90,11 +90,15 @@ private:
 
     class IoLockGuard {
     public:
-        explicit IoLockGuard(IoMutex& m, uint32_t timeout_ms = 5000) : m_(m), owns_(m_.lock_for(timeout_ms)) {}
-        ~IoLockGuard() { if (owns_) m_.unlock(); }
+        explicit IoLockGuard(IoMutex& m, uint32_t timeout_ms = 5000)
+            : m_(m), owns_(m_.lock_for(timeout_ms)) {}
+        ~IoLockGuard() {
+            if (owns_) m_.unlock();
+        }
         IoLockGuard(const IoLockGuard&) = delete;
         IoLockGuard& operator=(const IoLockGuard&) = delete;
         explicit operator bool() const { return owns_; }
+
     private:
         IoMutex& m_;
         bool owns_;

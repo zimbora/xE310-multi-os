@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
-#define   AT_TERMINATOR     		"\r\n"
+#define AT_TERMINATOR "\r\n"
 
 namespace modem {
 

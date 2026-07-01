@@ -31,8 +31,7 @@ public:
     virtual bool is_open() const = 0;
 
     virtual UartError write(const uint8_t* data, size_t length) = 0;
-    virtual UartError read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read,
-                           uint32_t timeout_ms) = 0;
+    virtual UartError read(uint8_t* buffer, size_t buffer_size, size_t& bytes_read, uint32_t timeout_ms) = 0;
 };
 
 } // namespace modem
