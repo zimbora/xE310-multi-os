@@ -45,8 +45,8 @@ int main(int argc, char* argv[]) {
     IpcServer coap_ipc(9001, nullptr, IpcServer::Mode::framed);
 
     // on_data_received is a lambda so it can capture ipc and forward replies.
-    auto on_data_received = [&](uint8_t cid, const std::string& data, uint16_t n_bytes) {
-        MODEM_LOG_INF("Data received on CID %d (%u bytes): %s", cid, n_bytes, data.c_str());
+    auto on_data_received = [&](uint8_t cid, std::string_view data, uint16_t n_bytes) {
+        MODEM_LOG_INF("Data received on CID %d (%u bytes): %.*s", cid, n_bytes, static_cast<int>(data.size()), data.data());
         //ipc.send(reinterpret_cast<const uint8_t*>(data.data()),static_cast<uint16_t>(n_bytes));
     };
 
@@ -103,21 +103,21 @@ int main(int argc, char* argv[]) {
         network.enter_transparent_mode(); // this will internally call the modem action to enter transparent mode, but we need to call execute_actions here to actually perform the action and change the modem state before we start receiving AT commands from the client
     });
     at_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
-        std::string cmd(reinterpret_cast<const char*>(data), len);
-        std::string response;
-        MODEM_LOG_INF("AT IPC >> %s", cmd.c_str());
+        std::string_view cmd(reinterpret_cast<const char*>(data), len);
+        modem::FixedString<modem::AT_RESPONSE_MAX> response;
+        MODEM_LOG_INF("AT IPC >> %.*s", static_cast<int>(cmd.size()), cmd.data());
         if (network.send_at_command(cmd, response, (uint32_t)210000)) {
             // parse_response() strips the status line into AtResponse::status,
             // so response.body is empty for simple commands (e.g. AT → OK).
             // Re-append the status line so the nc client sees a complete reply.
-            if (!response.empty()) response += "\r\n";
-            response += "OK\r\n";
+            if (!response.empty()) response.append("\r\n");
+            response.append("OK\r\n");
             MODEM_LOG_INF("AT IPC << %s", response.c_str());
-            at_ipc.send(reinterpret_cast<const uint8_t*>(response.data()),
+            at_ipc.send(reinterpret_cast<const uint8_t*>(response.c_str()),
                         static_cast<uint16_t>(response.size()));
         } else {
             MODEM_LOG_ERR("AT IPC: command failed");
-            at_ipc.send(reinterpret_cast<const uint8_t*>(response.data()),
+            at_ipc.send(reinterpret_cast<const uint8_t*>(response.c_str()),
                         static_cast<uint16_t>(response.size()));
         }
     });

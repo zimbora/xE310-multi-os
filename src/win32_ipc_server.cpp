@@ -10,7 +10,6 @@
 #pragma comment(lib, "Ws2_32.lib")
 
 #include <thread>
-#include <vector>
 #include <cstring>
 #include <cstdio>
 
@@ -125,14 +124,15 @@ void IpcServer::client_loop_framed(int fd) {
                        (static_cast<uint16_t>(hdr[1]) << 8);
         if (len == 0) continue;
 
-        std::vector<uint8_t> buf(len);
+        uint8_t buf[4096];
+        size_t recv_len = (len <= sizeof(buf)) ? len : sizeof(buf);
         int total = 0;
-        while (total < static_cast<int>(len)) {
-            int n = recv(s, reinterpret_cast<char*>(buf.data() + total), len - total, 0);
+        while (total < static_cast<int>(recv_len)) {
+            int n = recv(s, reinterpret_cast<char*>(buf + total), static_cast<int>(recv_len) - total, 0);
             if (n <= 0) return;
             total += n;
         }
-        if (on_message_) on_message_(buf.data(), len);
+        if (on_message_) on_message_(buf, recv_len);
     }
 }
 

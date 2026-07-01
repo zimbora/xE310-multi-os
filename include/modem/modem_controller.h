@@ -1,12 +1,13 @@
 #pragma once
 
 #include "modem/at_command.h"
+#include "modem/fixed_string.h"
+#include "modem/static_vector.h"
 #include "modem/timer_interface.h"
 #include "modem/uart_interface.h"
 
 #include <memory>
-#include <string>
-#include <vector>
+#include <string_view>
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 #include <zephyr/kernel.h>
@@ -19,6 +20,12 @@ namespace modem {
 
 /// Maximum number of retry attempts for AT commands when retry is enabled.
 static constexpr uint8_t MAX_AT_RETRIES = 3;
+
+/// Maximum capacity for the URC receive buffer.
+static constexpr size_t URC_RX_BUFFER_MAX = 1024;
+
+/// Maximum capacity for a single URC line.
+static constexpr size_t URC_LINE_MAX = 256;
 
 enum class ModemStatus {
     ok = 0,
@@ -47,21 +54,22 @@ public:
 
     /// Convenience: send raw AT command string.
     /// When retry is true, the command is retried up to MAX_AT_RETRIES times on timeout.
-    ModemStatus send_raw(const std::string& command, AtResponse& response,
+    ModemStatus send_raw(std::string_view command, AtResponse& response,
                          uint32_t timeout_ms = 5000, bool retry = false);
 
     /// Send binary data.
-    ModemStatus send_binary(const std::vector<uint8_t>& data, AtResponse& response,
+    ModemStatus send_binary(const uint8_t* data, size_t length, AtResponse& response,
                             uint32_t timeout_ms = 5000);
 
     /// Send a command that expects a '>' prompt, then send binary data, then read final response.
-    ModemStatus send_with_prompt(const std::string& command, const std::vector<uint8_t>& data,
+    ModemStatus send_with_prompt(std::string_view command, const uint8_t* data, size_t length,
                                  AtResponse& response, uint32_t timeout_ms = 5000);
 
     /// Non-blocking read of any unsolicited data from the modem.
     /// Returns lines that begin with a known URC prefix (e.g. "+CREG:", "+CGEV:").
     /// Reads for at most timeout_ms; pass 0 for a best-effort non-blocking poll.
-    std::vector<std::string> poll_urc(uint32_t timeout_ms = 50);
+    static constexpr size_t MAX_URC_LINES = 8;
+    StaticVector<FixedString<URC_LINE_MAX>, MAX_URC_LINES> poll_urc(uint32_t timeout_ms = 50);
 
 private:
     class IoMutex {
@@ -95,7 +103,7 @@ private:
     // Serialize UART read/write access across command and URC paths.
     mutable IoMutex io_mutex_;
     // Accumulates partial URC chunks until a full \r\n-terminated line is available.
-    std::string urc_rx_buffer_;
+    FixedString<URC_RX_BUFFER_MAX> urc_rx_buffer_;
     std::unique_ptr<UartInterface> uart_;
     std::unique_ptr<TimerInterface> cmd_timer_;
 };

@@ -1,9 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <vector>
+#include <cstring>
 
 namespace modem {
 
@@ -15,8 +15,11 @@ enum class QueueError {
     invalid_id,
 };
 
+static constexpr size_t MAX_MSG_DATA = 256;
+
 struct QueueMessage {
-    std::vector<uint8_t> data;
+    std::array<uint8_t, MAX_MSG_DATA> data{};
+    size_t length = 0;
 };
 
 /// Abstract message queue interface — implemented per platform.

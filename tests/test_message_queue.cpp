@@ -3,10 +3,17 @@
 #include "modem/message_queue_factory.h"
 
 #include <thread>
-#include <vector>
-#include <string>
+#include <cstring>
 
 using namespace modem;
+
+namespace {
+// Helper: compare QueueMessage content with expected bytes.
+void expect_msg_eq(const QueueMessage& msg, const uint8_t* expected, size_t expected_len) {
+    EXPECT_EQ(msg.length, expected_len);
+    EXPECT_EQ(std::memcmp(msg.data.data(), expected, expected_len), 0);
+}
+} // namespace
 
 class MessageQueueTest : public ::testing::Test {
 protected:
@@ -19,13 +26,13 @@ protected:
 // --- Basic TX push / pop ---
 
 TEST_F(MessageQueueTest, TxPushPopSingleMessage) {
-    std::vector<uint8_t> data = {0x01, 0x02, 0x03};
-    EXPECT_EQ(queue->tx_push(1, data.data(), data.size()), QueueError::ok);
+    uint8_t data[] = {0x01, 0x02, 0x03};
+    EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::ok);
     EXPECT_EQ(queue->tx_count(1), 1u);
 
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(1, msg), QueueError::ok);
-    EXPECT_EQ(msg.data, data);
+    expect_msg_eq(msg, data, sizeof(data));
     EXPECT_EQ(queue->tx_count(1), 0u);
 }
 
@@ -35,23 +42,23 @@ TEST_F(MessageQueueTest, TxPopEmptyReturnsEmpty) {
 }
 
 TEST_F(MessageQueueTest, TxPushFullReturnsFull) {
-    std::vector<uint8_t> data = {0xAA};
+    uint8_t data[] = {0xAA};
     for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(queue->tx_push(1, data.data(), data.size()), QueueError::ok);
+        EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::ok);
     }
-    EXPECT_EQ(queue->tx_push(1, data.data(), data.size()), QueueError::full);
+    EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::full);
 }
 
 // --- Basic RX push / pop ---
 
 TEST_F(MessageQueueTest, RxPushPopSingleMessage) {
-    std::vector<uint8_t> data = {0x10, 0x20};
-    EXPECT_EQ(queue->rx_push(2, data.data(), data.size()), QueueError::ok);
+    uint8_t data[] = {0x10, 0x20};
+    EXPECT_EQ(queue->rx_push(2, data, sizeof(data)), QueueError::ok);
     EXPECT_EQ(queue->rx_count(2), 1u);
 
     QueueMessage msg;
     EXPECT_EQ(queue->rx_pop(2, msg), QueueError::ok);
-    EXPECT_EQ(msg.data, data);
+    expect_msg_eq(msg, data, sizeof(data));
 }
 
 TEST_F(MessageQueueTest, RxPopEmptyReturnsEmpty) {
@@ -62,9 +69,9 @@ TEST_F(MessageQueueTest, RxPopEmptyReturnsEmpty) {
 // --- Invalid connection ID ---
 
 TEST_F(MessageQueueTest, InvalidConnIdZero) {
-    std::vector<uint8_t> data = {0x01};
-    EXPECT_EQ(queue->tx_push(0, data.data(), data.size()), QueueError::invalid_id);
-    EXPECT_EQ(queue->rx_push(0, data.data(), data.size()), QueueError::invalid_id);
+    uint8_t data[] = {0x01};
+    EXPECT_EQ(queue->tx_push(0, data, sizeof(data)), QueueError::invalid_id);
+    EXPECT_EQ(queue->rx_push(0, data, sizeof(data)), QueueError::invalid_id);
 
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(0, msg), QueueError::invalid_id);
@@ -72,9 +79,9 @@ TEST_F(MessageQueueTest, InvalidConnIdZero) {
 }
 
 TEST_F(MessageQueueTest, InvalidConnIdTooHigh) {
-    std::vector<uint8_t> data = {0x01};
-    EXPECT_EQ(queue->tx_push(6, data.data(), data.size()), QueueError::invalid_id);
-    EXPECT_EQ(queue->rx_push(6, data.data(), data.size()), QueueError::invalid_id);
+    uint8_t data[] = {0x01};
+    EXPECT_EQ(queue->tx_push(6, data, sizeof(data)), QueueError::invalid_id);
+    EXPECT_EQ(queue->rx_push(6, data, sizeof(data)), QueueError::invalid_id);
 
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(6, msg), QueueError::invalid_id);
@@ -84,76 +91,75 @@ TEST_F(MessageQueueTest, InvalidConnIdTooHigh) {
 // --- FIFO ordering ---
 
 TEST_F(MessageQueueTest, FifoOrdering) {
-    std::vector<uint8_t> a = {0x01};
-    std::vector<uint8_t> b = {0x02};
-    std::vector<uint8_t> c = {0x03};
+    uint8_t a[] = {0x01};
+    uint8_t b[] = {0x02};
+    uint8_t c[] = {0x03};
 
-    queue->tx_push(1, a.data(), a.size());
-    queue->tx_push(1, b.data(), b.size());
-    queue->tx_push(1, c.data(), c.size());
+    queue->tx_push(1, a, sizeof(a));
+    queue->tx_push(1, b, sizeof(b));
+    queue->tx_push(1, c, sizeof(c));
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    EXPECT_EQ(msg.data, a);
+    expect_msg_eq(msg, a, sizeof(a));
     queue->tx_pop(1, msg);
-    EXPECT_EQ(msg.data, b);
+    expect_msg_eq(msg, b, sizeof(b));
     queue->tx_pop(1, msg);
-    EXPECT_EQ(msg.data, c);
+    expect_msg_eq(msg, c, sizeof(c));
 }
 
 // --- Independence between connection IDs ---
 
 TEST_F(MessageQueueTest, QueuesAreIndependentPerConnId) {
-    std::vector<uint8_t> d1 = {0xAA};
-    std::vector<uint8_t> d2 = {0xBB};
+    uint8_t d1[] = {0xAA};
+    uint8_t d2[] = {0xBB};
 
-    queue->tx_push(1, d1.data(), d1.size());
-    queue->tx_push(2, d2.data(), d2.size());
+    queue->tx_push(1, d1, sizeof(d1));
+    queue->tx_push(2, d2, sizeof(d2));
 
     EXPECT_EQ(queue->tx_count(1), 1u);
     EXPECT_EQ(queue->tx_count(2), 1u);
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    EXPECT_EQ(msg.data, d1);
+    expect_msg_eq(msg, d1, sizeof(d1));
     queue->tx_pop(2, msg);
-    EXPECT_EQ(msg.data, d2);
+    expect_msg_eq(msg, d2, sizeof(d2));
 }
 
 // --- TX and RX are independent ---
 
 TEST_F(MessageQueueTest, TxAndRxAreIndependent) {
-    std::vector<uint8_t> tx_data = {0x01};
-    std::vector<uint8_t> rx_data = {0x02};
+    uint8_t tx_data[] = {0x01};
+    uint8_t rx_data[] = {0x02};
 
-    queue->tx_push(1, tx_data.data(), tx_data.size());
-    queue->rx_push(1, rx_data.data(), rx_data.size());
+    queue->tx_push(1, tx_data, sizeof(tx_data));
+    queue->rx_push(1, rx_data, sizeof(rx_data));
 
     EXPECT_EQ(queue->tx_count(1), 1u);
     EXPECT_EQ(queue->rx_count(1), 1u);
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    EXPECT_EQ(msg.data, tx_data);
+    expect_msg_eq(msg, tx_data, sizeof(tx_data));
     queue->rx_pop(1, msg);
-    EXPECT_EQ(msg.data, rx_data);
+    expect_msg_eq(msg, rx_data, sizeof(rx_data));
 }
 
 // --- All 5 connection IDs work ---
 
 TEST_F(MessageQueueTest, AllFiveConnectionIds) {
     for (uint8_t id = 1; id <= 5; ++id) {
-        std::vector<uint8_t> data = {id};
-        EXPECT_EQ(queue->tx_push(id, data.data(), data.size()), QueueError::ok);
-        EXPECT_EQ(queue->rx_push(id, data.data(), data.size()), QueueError::ok);
+        EXPECT_EQ(queue->tx_push(id, &id, 1), QueueError::ok);
+        EXPECT_EQ(queue->rx_push(id, &id, 1), QueueError::ok);
     }
 
     for (uint8_t id = 1; id <= 5; ++id) {
         QueueMessage msg;
         EXPECT_EQ(queue->tx_pop(id, msg), QueueError::ok);
-        EXPECT_EQ(msg.data, std::vector<uint8_t>{id});
+        expect_msg_eq(msg, &id, 1);
         EXPECT_EQ(queue->rx_pop(id, msg), QueueError::ok);
-        EXPECT_EQ(msg.data, std::vector<uint8_t>{id});
+        expect_msg_eq(msg, &id, 1);
     }
 }
 
@@ -165,15 +171,16 @@ TEST_F(MessageQueueTest, PopWithTimeoutWaitsForPush) {
     // Pop with 500ms timeout — a producer thread pushes after 50ms
     std::thread producer([&] {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        std::vector<uint8_t> data = {0xDE, 0xAD};
-        queue->rx_push(1, data.data(), data.size());
+        uint8_t data[] = {0xDE, 0xAD};
+        queue->rx_push(1, data, sizeof(data));
     });
 
     auto err = queue->rx_pop(1, msg, 500);
     producer.join();
 
+    uint8_t expected[] = {0xDE, 0xAD};
     EXPECT_EQ(err, QueueError::ok);
-    EXPECT_EQ(msg.data, (std::vector<uint8_t>{0xDE, 0xAD}));
+    expect_msg_eq(msg, expected, sizeof(expected));
 }
 
 // --- Timeout expires when no data arrives ---
@@ -196,11 +203,12 @@ TEST_F(MessageQueueTest, CountReturnsZeroForInvalidId) {
 // --- Large message ---
 
 TEST_F(MessageQueueTest, LargeMessage) {
-    std::vector<uint8_t> data(200, 0x42);
-    EXPECT_EQ(queue->tx_push(1, data.data(), data.size()), QueueError::ok);
+    uint8_t data[200];
+    std::memset(data, 0x42, sizeof(data));
+    EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::ok);
 
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(1, msg), QueueError::ok);
-    EXPECT_EQ(msg.data.size(), 200u);
-    EXPECT_EQ(msg.data, data);
+    EXPECT_EQ(msg.length, 200u);
+    expect_msg_eq(msg, data, sizeof(data));
 }

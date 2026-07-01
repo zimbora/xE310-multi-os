@@ -125,7 +125,7 @@ TEST_F(Xe310Test, SetEchoOff) {
 
 TEST_F(Xe310Test, RequestImeiSv) {
     expect_command_ok("AT+IMEISV", "1234567890123456");
-    std::string imei_sv;
+    FixedString<MODEM_SHORT_STR> imei_sv;
     auto status = modem_->request_imei_sv(imei_sv);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_FALSE(imei_sv.empty());
@@ -133,7 +133,7 @@ TEST_F(Xe310Test, RequestImeiSv) {
 
 TEST_F(Xe310Test, RequestModelId) {
     expect_command_ok("AT#CGMM", "#CGMM: ME310G1-W1");
-    std::string model;
+    FixedString<MODEM_MEDIUM_STR> model;
     auto status = modem_->request_model_id(model);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_EQ(model, "ME310G1-W1");
@@ -141,7 +141,7 @@ TEST_F(Xe310Test, RequestModelId) {
 
 TEST_F(Xe310Test, RequestTelitId) {
     expect_command_ok("AT#TID", "12345");
-    std::string tid;
+    FixedString<MODEM_MEDIUM_STR> tid;
     auto status = modem_->request_telit_id(tid);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_FALSE(tid.empty());
@@ -149,7 +149,7 @@ TEST_F(Xe310Test, RequestTelitId) {
 
 TEST_F(Xe310Test, RequestIdentification) {
     expect_command_ok("ATI", "Telit ME310G1-W1");
-    std::string info;
+    FixedString<MODEM_LONG_STR> info;
     auto status = modem_->request_identification(info);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_FALSE(info.empty());
@@ -157,7 +157,7 @@ TEST_F(Xe310Test, RequestIdentification) {
 
 TEST_F(Xe310Test, GetImei) {
     expect_command_ok("AT+CGSN", "353546090123456");
-    std::string imei;
+    FixedString<MODEM_SHORT_STR> imei;
     auto status = modem_->get_imei(imei);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_EQ(imei, "353546090123456");
@@ -165,7 +165,7 @@ TEST_F(Xe310Test, GetImei) {
 
 TEST_F(Xe310Test, GetImeiError) {
     expect_command_error("AT+CGSN");
-    std::string imei;
+    FixedString<MODEM_SHORT_STR> imei;
     EXPECT_EQ(modem_->get_imei(imei), ModemStatus::at_error);
     EXPECT_TRUE(imei.empty());
 }
@@ -190,7 +190,7 @@ TEST_F(Xe310Test, RequestSwPackageVersionError) {
 
 TEST_F(Xe310Test, RequestImeiSvError) {
     expect_command_error("AT+IMEISV");
-    std::string imei_sv;
+    FixedString<MODEM_SHORT_STR> imei_sv;
     EXPECT_EQ(modem_->request_imei_sv(imei_sv), ModemStatus::at_error);
     EXPECT_TRUE(imei_sv.empty());
 }
@@ -199,7 +199,7 @@ TEST_F(Xe310Test, RequestImeiSvError) {
 
 TEST_F(Xe310Test, ReadIccid) {
     expect_command_ok("AT#CCID", "#CCID: 89861109091740011006");
-    std::string iccid;
+    FixedString<MODEM_SHORT_STR> iccid;
     auto status = modem_->read_iccid(iccid);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_EQ(iccid, "89861109091740011006");
@@ -207,7 +207,7 @@ TEST_F(Xe310Test, ReadIccid) {
 
 TEST_F(Xe310Test, ReadImsi) {
     expect_command_ok("AT+CIMI", "214011234567890");
-    std::string imsi;
+    FixedString<MODEM_SHORT_STR> imsi;
     auto status = modem_->read_imsi(imsi);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_FALSE(imsi.empty());
@@ -239,7 +239,7 @@ TEST_F(Xe310Test, QuerySimStatusReady) {
 
 TEST_F(Xe310Test, SendSimCommand) {
     expect_command_ok("AT+CSIM=8,\"A0A40000\"", "+CSIM: 4,\"9000\"");
-    std::string sim_response;
+    FixedString<AT_RESPONSE_MAX> sim_response;
     auto status = modem_->send_sim_command("A0A40000", sim_response);
     EXPECT_EQ(status, ModemStatus::ok);
 }
@@ -676,7 +676,7 @@ TEST_F(Xe310Test, SetOperatorAuto) {
 
 TEST_F(Xe310Test, GetOperator) {
     expect_command_ok("AT+COPS?", "+COPS: 0,2,\"21401\",7");
-    std::string oper;
+    FixedString<MODEM_MEDIUM_STR> oper;
     auto status = modem_->get_operator(oper);
     EXPECT_EQ(status, ModemStatus::ok);
     EXPECT_FALSE(oper.empty());
@@ -691,7 +691,7 @@ TEST_F(Xe310Test, SetApn) {
 
 TEST_F(Xe310Test, GetApn) {
     expect_command_ok("AT+CGDCONT?", "+CGDCONT: 1,\"IP\",\"internet\"");
-    std::string apn;
+    FixedString<MODEM_MEDIUM_STR> apn;
     EXPECT_EQ(modem_->get_apn(1, apn), ModemStatus::ok);
 }
 
@@ -721,7 +721,7 @@ TEST_F(Xe310Test, GetPdpStateInactive) {
 
 TEST_F(Xe310Test, GetIpAddress) {
     expect_command_ok("AT+CGPADDR=1", "+CGPADDR: 1,\"10.0.0.1\"");
-    std::string ip;
+    FixedString<MODEM_IP_STR> ip;
     EXPECT_EQ(modem_->get_ip_address(1, ip), ModemStatus::ok);
     EXPECT_EQ(ip, "10.0.0.1");
 }
@@ -729,7 +729,7 @@ TEST_F(Xe310Test, GetIpAddress) {
 TEST_F(Xe310Test, GetPdpInfo) {
     expect_command_ok("AT+CGCONTRDP=1",
                       "+CGCONTRDP: 1,5,\"internet\",\"10.0.0.1\",\"10.0.0.254\",\"8.8.8.8\",\"8.8.4.4\"");
-    std::string ip, gw, dns1, dns2;
+    FixedString<MODEM_IP_STR> ip, gw, dns1, dns2;
     EXPECT_EQ(modem_->get_pdp_info(1, ip, gw, dns1, dns2), ModemStatus::ok);
     EXPECT_EQ(ip, "10.0.0.1");
     EXPECT_EQ(gw, "10.0.0.254");
@@ -803,8 +803,8 @@ TEST_F(Xe310Test, UdpSend) {
             }));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::ok);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::ok);
 }
 
 TEST_F(Xe310Test, UdpSendPromptTimeout) {
@@ -819,8 +819,8 @@ TEST_F(Xe310Test, UdpSendPromptTimeout) {
             .WillOnce(Return(UartError::timeout));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::timeout);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::timeout);
 }
 
 TEST_F(Xe310Test, UdpSendNoPrompt) {
@@ -840,8 +840,8 @@ TEST_F(Xe310Test, UdpSendNoPrompt) {
             }));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::at_error);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::at_error);
 }
 
 TEST_F(Xe310Test, UdpSendWritePayloadFails) {
@@ -866,8 +866,8 @@ TEST_F(Xe310Test, UdpSendWritePayloadFails) {
             .WillOnce(Return(UartError::write_failed));
     }
 
-    std::vector<uint8_t> payload = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
-    EXPECT_EQ(modem_->udp_send(1, payload), ModemStatus::uart_error);
+    uint8_t payload[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F};
+    EXPECT_EQ(modem_->udp_send(1, payload, sizeof(payload)), ModemStatus::uart_error);
 }
 
 TEST_F(Xe310Test, UdpSendBinaryData) {
@@ -910,8 +910,8 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
     }
 
     // Test with special bytes that would break AT#SSEND but work with AT#SSENDEXT
-    std::vector<uint8_t> payload = {0x00, 0x1A, 0xFF, 0x7E};
-    EXPECT_EQ(modem_->udp_send(2, payload), ModemStatus::ok);
+    uint8_t payload[] = {0x00, 0x1A, 0xFF, 0x7E};
+    EXPECT_EQ(modem_->udp_send(2, payload, sizeof(payload)), ModemStatus::ok);
 }
 
 // --- Not Connected ---

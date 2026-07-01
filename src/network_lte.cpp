@@ -3,6 +3,7 @@
 #include "modem/timer_factory.h"
 #include "modem/message_queue_factory.h"
 #include <algorithm>
+#include <string>
 
 namespace modem {
 
@@ -19,8 +20,8 @@ NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceive
 // --- Accessors ---
 const RegistrationInfo& NetworkLte::registration_info() const { return regInfo; }
 const SignalQuality&    NetworkLte::signal_quality()    const { return signalQuality; }
-const std::string&      NetworkLte::iccid()             const { return modemInfo.iccid; }
-const std::string&      NetworkLte::imsi()              const { return modemInfo.imsi; }
+const FixedString<MODEM_SHORT_STR>& NetworkLte::iccid() const { return modemInfo.iccid; }
+const FixedString<MODEM_SHORT_STR>& NetworkLte::imsi()  const { return modemInfo.imsi; }
 const NetworkLteConfig& NetworkLte::config()            const { return lteConfig; }
 void NetworkLte::set_config(const NetworkLteConfig& config) { lteConfig = config; }
 
@@ -34,7 +35,7 @@ const CpsmsConfig&         NetworkLte::cpsms_config()         const { return cps
 const TelitCpsmsConfig&    NetworkLte::telit_cpsms_config()   const { return telitCpsmsConfig; }
 const TelitCpsmsStatus&    NetworkLte::telit_cpsms_status()   const { return telitCpsmsStatus; }
 const NetworkSurveyResult& NetworkLte::network_survey_result()const { return networkSurveyResult; }
-const std::vector<Operator>& NetworkLte::available_operators()  const { return operatorList; }
+const StaticVector<Operator, xE310::MAX_OPERATORS>& NetworkLte::available_operators()  const { return operatorList; }
 const CsurvResult&           NetworkLte::csurv_result()         const { return csurvResult; }
 const ServerInfo*          NetworkLte::server_info_array()    const { return serverInfo; }
 
@@ -85,21 +86,24 @@ bool NetworkLte::network_disconnect() {
     }
 }
 
-void NetworkLte::new_connection(uint8_t conn_id, const std::string& protocol, const std::string& ip, const std::string& port){
+void NetworkLte::new_connection(uint8_t conn_id, std::string_view protocol, std::string_view ip, std::string_view port){
     serverInfo[conn_id-1].state = ServerState::disconnected;
     serverInfo[conn_id-1].protocol = protocol;
     serverInfo[conn_id-1].address = ip;
-    serverInfo[conn_id-1].port = std::stoi(port);
+    char port_buf[8] = {};
+    auto n = port.size() < sizeof(port_buf) - 1 ? port.size() : sizeof(port_buf) - 1;
+    std::memcpy(port_buf, port.data(), n);
+    serverInfo[conn_id-1].port = static_cast<uint16_t>(std::atoi(port_buf));
 }
 
-bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, const std::string& ip, const uint16_t port) {
+bool NetworkLte::server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, const uint16_t port) {
     
     if(state_ != NetworkLteState::data_ready && state_ != NetworkLteState::sleep_mode){
         NETWORK_LOG_INF("Not currently in data ready mode or PSM, connect to the network first");
         return false; // not connected to network, cannot connect to server
     }
 
-    NETWORK_LOG_DBG("Attempting to connect to server with CID %d, protocol %s, IP %s, port %d", conn_id, protocol.c_str(), ip.c_str(), port); 
+    NETWORK_LOG_DBG("Attempting to connect to server with CID %d, protocol %.*s, IP %.*s, port %d", conn_id, static_cast<int>(protocol.size()), protocol.data(), static_cast<int>(ip.size()), ip.data(), port); 
     if(state_ == NetworkLteState::data_ready ){
         uint8_t conn_state = 0;
         NETWORK_LOG_DBG("Checking current connection state for CID %d before connecting to server", conn_id);
@@ -110,14 +114,14 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
             return true; // already connected to a server, cannot connect to a different one without disconnecting first
         }
         if( serverInfo[conn_id-1].state == ServerState::suspended){
-            NETWORK_LOG_INF("Resuming suspended connection to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_INF("Resuming suspended connection to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
             auto status = modem_.udp_close(conn_id);
             if(status != ModemStatus::ok){
-                NETWORK_LOG_ERR("Failed to close connection to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_ERR("Failed to close connection to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
                 return false;
             }else{
                 serverInfo[conn_id-1].state = ServerState::connected;
-                NETWORK_LOG_INF("Successfully closed connection to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_INF("Successfully closed connection to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
             }
         }
         /*
@@ -138,26 +142,26 @@ bool NetworkLte::server_connect(uint8_t conn_id, const std::string& protocol, co
         }
 
         if(protocol == "UDP"){
-            NETWORK_LOG_INF("Connecting to UDP server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_INF("Connecting to UDP server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
             auto status = modem_.udp_open(conn_id, ip, port);
 
             if(status != ModemStatus::ok){
                 modem_.udp_close(conn_id); // ensure we close any half-open connection
-                NETWORK_LOG_ERR("Failed to connect to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_ERR("Failed to connect to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
                 return false;
             }else{
                 serverInfo[conn_id-1].state = ServerState::connected;
                 serverInfo[conn_id-1].protocol = protocol;
                 serverInfo[conn_id-1].address = ip;
                 serverInfo[conn_id-1].port = port;
-                NETWORK_LOG_INF("Successfully connected to server at %s:%d", ip.c_str(), port);
+                NETWORK_LOG_INF("Successfully connected to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
                 return true;
             }
         }else if(protocol == "TCP"){
-            NETWORK_LOG_WRN("TCP protocol is not currently supported, cannot connect to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_WRN("TCP protocol is not currently supported, cannot connect to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
             return false; // TCP not supported, cannot connect
         }else{
-            NETWORK_LOG_ERR("Unknown protocol for server connection, cannot connect to server at %s:%d", ip.c_str(), port);
+            NETWORK_LOG_ERR("Unknown protocol for server connection, cannot connect to server at %.*s:%d", static_cast<int>(ip.size()), ip.data(), port);
             return false; // unknown protocol, cannot connect
         }
     } else {
@@ -219,7 +223,7 @@ bool NetworkLte::force_PSM(){
 
     bool psmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will stay in PSM mode for a short time and then exit, to demonstrate the PSM enter and exit flows and events. This is meant to be used for testing purposes, to force the modem into PSM mode and trigger the corresponding events.
-    std::vector<Operator> availableOperators;
+    StaticVector<Operator, xE310::MAX_OPERATORS> availableOperators;
     auto status = modem_.get_available_operators(availableOperators);
     for(const auto& op : availableOperators){
         NETWORK_LOG_INF("Trying to register to operator %s with radio tech %d to force PSM mode", op.long_name.c_str(), static_cast<int>(op.act));
@@ -327,7 +331,7 @@ bool NetworkLte::leave_transparent_mode() {
     return state_ != NetworkLteState::transparent_mode;
 }
 
-bool NetworkLte::send_at_command(const std::string& command, std::string& response, uint32_t timeout_ms) {
+bool NetworkLte::send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response, uint32_t timeout_ms) {
     // send command
     if(state_ != NetworkLteState::transparent_mode){
         NETWORK_LOG_ERR("Modem is not in transparent mode, cannot send AT command");
@@ -336,22 +340,22 @@ bool NetworkLte::send_at_command(const std::string& command, std::string& respon
     }
     auto status = modem_.send_at_command(command, response, timeout_ms);
     if( status == ModemStatus::timeout){
-        NETWORK_LOG_ERR("Timeout while sending AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Timeout while sending AT command: %.*s", static_cast<int>(command.size()), command.data());
         response = "ERROR: Timeout";
         return false;
     }else if (status == ModemStatus::busy) {
-        NETWORK_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Failed to send AT command: %.*s", static_cast<int>(command.size()), command.data());
         response = "ERROR: Busy";
         return false;
     }else if (status != ModemStatus::ok) {
-        NETWORK_LOG_ERR("Failed to send AT command: %s", command.c_str());
+        NETWORK_LOG_ERR("Failed to send AT command: %.*s", static_cast<int>(command.size()), command.data());
         response = "ERROR: Failed to send AT command";
         return false;
     }
     return true;
 }
 
-bool NetworkLte::update_modem(const std::string& firmware_url){
+bool NetworkLte::update_modem(std::string_view firmware_url){
     if(state_ != NetworkLteState::modem_fota) {
         go_to_state(NetworkLteState::modem_fota);
     }
@@ -438,7 +442,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             {
                 NETWORK_LOG_INF("Data available event received on conn_id %d", last_data_conn_id_);
                 uint8_t conn = (last_data_conn_id_ > 0) ? last_data_conn_id_ : lteConfig.conn_id;
-                std::vector<uint8_t> buf;
+                StaticVector<uint8_t, xE310::UDP_MAX_BYTES> buf;
                 if (modem_.udp_receive(conn, buf) == ModemStatus::ok && !buf.empty()) {
                     // Push to RX queue for this connection
                     if (message_queue_) {
@@ -447,7 +451,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                             NETWORK_LOG_WRN("RX queue full for conn_id %d, dropping message", conn);
                         }
                     }
-                    std::string payload(buf.begin(), buf.end());
+                    std::string_view payload(reinterpret_cast<const char*>(buf.data()), buf.size());
                     if (on_data_received_) {
                         on_data_received_(conn, payload, static_cast<uint16_t>(buf.size()));
                     }
@@ -945,10 +949,10 @@ void NetworkLte::execute_actions() {
                     }
                     QueueMessage msg;
                     while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
-                        NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.data.size()));
+                        NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.length));
                         NETWORK_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
                         if (serverInfo[id - 1].protocol == "UDP") {
-                            auto status = modem_.udp_send(id, msg.data);
+                            auto status = modem_.udp_send(id, msg.data.data(), msg.length);
                             if (status != ModemStatus::ok) {
                                 NETWORK_LOG_ERR("Failed to send UDP data on conn_id %d", id);
                             }
@@ -964,10 +968,13 @@ void NetworkLte::execute_actions() {
         case ModemAction::read_data:
             // for testing, we can just read data from the modem and print it, in real implementation, we would pass it to a buffer
             {
-                std::vector<uint8_t> buf;
+                StaticVector<uint8_t, xE310::UDP_MAX_BYTES> buf;
                 if (modem_.udp_receive(lteConfig.conn_id, buf) == ModemStatus::ok && !buf.empty()) {
-                    std::string payload(buf.begin(), buf.end());
-                    NETWORK_LOG_INF("Received data: %s", payload.c_str());
+                    char payload[xE310::UDP_MAX_BYTES + 1];
+                    size_t len = std::min(buf.size(), sizeof(payload) - 1);
+                    std::memcpy(payload, buf.data(), len);
+                    payload[len] = '\0';
+                    NETWORK_LOG_INF("Received data: %s", payload);
                 } else {
                     NETWORK_LOG_ERR("Failed to read data or no data available");
                     // flag error
@@ -1126,55 +1133,57 @@ void NetworkLte::change_state(NetworkLteState new_state) {
     }
 }
 
-void NetworkLte::handle_urc(const std::string& urc) {
+void NetworkLte::handle_urc(std::string_view urc) {
     // +CREG / +CEREG URC can be either:
     //   +CEREG: <stat>,<tac>,<ci>,<AcT>...
     // or (query-style payload):
     //   +CEREG: <n>,<stat>...
-    NETWORK_LOG_DBG("Handle URC: %s", urc.c_str());
-    if (urc.rfind("+CREG:", 0) == 0 || urc.rfind("+CEREG:", 0) == 0) {
+    NETWORK_LOG_DBG("Handle URC: %.*s", static_cast<int>(urc.size()), urc.data());
+    if (urc.substr(0, 6) == "+CREG:" || urc.substr(0, 7) == "+CEREG:") {
         // Extract numeric CSV fields after ':' while preserving empty/quoted fields.
         int stat = -1;
         auto colon = urc.find(':');
-        if (colon == std::string::npos) {
+        if (colon == std::string_view::npos) {
             return;
         }
 
-        auto trim = [](std::string s) {
-            while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.erase(0, 1);
-            while (!s.empty() && (s.back()  == ' ' || s.back()  == '\t' || s.back()  == '\r')) s.pop_back();
+        auto trim_sv = [](std::string_view s) -> std::string_view {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
+            while (!s.empty() && (s.back()  == ' ' || s.back()  == '\t' || s.back()  == '\r')) s.remove_suffix(1);
             return s;
         };
 
-        auto is_uint = [](const std::string& s) {
+        auto is_uint_sv = [](std::string_view s) {
             if (s.empty()) return false;
-            return std::all_of(s.begin(), s.end(), [](char c) {
-                return c >= '0' && c <= '9';
-            });
+            for (char c : s) { if (c < '0' || c > '9') return false; }
+            return true;
         };
 
-        std::string payload = urc.substr(colon + 1);
-        std::vector<std::string> fields;
+        std::string_view payload = urc.substr(colon + 1);
+        // Parse CSV fields into a small fixed array
+        constexpr size_t MAX_FIELDS = 8;
+        std::string_view fields[MAX_FIELDS];
+        size_t field_count = 0;
         size_t pos = 0;
-        while (pos <= payload.size()) {
+        while (pos <= payload.size() && field_count < MAX_FIELDS) {
             auto comma = payload.find(',', pos);
-            if (comma == std::string::npos) {
-                fields.push_back(trim(payload.substr(pos)));
+            if (comma == std::string_view::npos) {
+                fields[field_count++] = trim_sv(payload.substr(pos));
                 break;
             }
-            fields.push_back(trim(payload.substr(pos, comma - pos)));
+            fields[field_count++] = trim_sv(payload.substr(pos, comma - pos));
             pos = comma + 1;
         }
 
-        if (!fields.empty() && is_uint(fields[0])) {
+        if (field_count > 0 && is_uint_sv(fields[0])) {
             // Default for URC format: first field is <stat>.
-            stat = std::atoi(fields[0].c_str());
+            stat = std::atoi(std::string(fields[0]).c_str());
 
             // Query-style payload is <n>,<stat> with both numeric first fields.
             // In this case use second field as registration status.
-            if (fields.size() > 1 && is_uint(fields[1])) {
-                int first = std::atoi(fields[0].c_str());
-                int second = std::atoi(fields[1].c_str());
+            if (field_count > 1 && is_uint_sv(fields[1])) {
+                int first = std::atoi(std::string(fields[0]).c_str());
+                int second = std::atoi(std::string(fields[1]).c_str());
                 if (first >= 0 && first <= 5 && second >= 0 && second <= 10) {
                     stat = second;
                 }
@@ -1190,37 +1199,37 @@ void NetworkLte::handle_urc(const std::string& urc) {
         return;
     }
     // +CGEV: various PDP/PS events
-    if (urc.rfind("+CGEV:", 0) == 0) {
+    if (urc.substr(0, 6) == "+CGEV:") {
         // body is everything after "+CGEV:" with leading space stripped
-        std::string body = urc.substr(6);
+        std::string_view body = urc.substr(6);
         auto s = body.find_first_not_of(' ');
-        const std::string ev = (s == std::string::npos) ? "" : body.substr(s);
+        std::string_view ev = (s == std::string_view::npos) ? std::string_view{} : body.substr(s);
 
-        if (ev.rfind("NW_DEACT", 0) == 0 ||   // network forced context deactivation
-            ev.rfind("ME DEACT",  0) == 0) {   // ME forced context deactivation
+        if (ev.substr(0, 8) == "NW_DEACT" ||   // network forced context deactivation
+            ev.substr(0, 8) == "ME DEACT") {    // ME forced context deactivation
             on_event(NetworkLteEvent::context_closed);
-        } else if (ev.rfind("NW_DETACH", 0) == 0 ||  // network PS detach (all contexts lost)
-                   ev.rfind("ME_DETACH",  0) == 0 ||
-                   ev.rfind("ME DETACH",  0) == 0){  // ME PS detach (all contexts lost)
+        } else if (ev.substr(0, 9) == "NW_DETACH" ||  // network PS detach (all contexts lost)
+                   ev.substr(0, 9) == "ME_DETACH" ||
+                   ev.substr(0, 9) == "ME DETACH"){    // ME PS detach (all contexts lost)
             on_event(NetworkLteEvent::network_detached);
-        } else if (ev.rfind("REJECT", 0) == 0) {     // context activation rejected
+        } else if (ev.substr(0, 6) == "REJECT") {     // context activation rejected
             on_event(NetworkLteEvent::context_rejected);
         }
         // NW REACT (network requesting reactivation) — no action needed
         return;
     }
     // #PSMURC: <ActiveTime>,<PSMTime>  →  modem entered PSM
-    if (urc.rfind("#PSMURC:", 0) == 0) {
+    if (urc.substr(0, 8) == "#PSMURC:") {
         on_event(NetworkLteEvent::psm_enter);
         return;
     }
     // SRING: <conn_id>  →  new data available on socket
-    if (urc.rfind("SRING:", 0) == 0) {
+    if (urc.substr(0, 6) == "SRING:") {
         NETWORK_LOG_DBG("Data available URC received");
-        std::string body = urc.substr(6);
+        std::string_view body = urc.substr(6);
         auto s = body.find_first_not_of(' ');
-        if (s != std::string::npos) {
-            int id = std::stoi(body.substr(s));
+        if (s != std::string_view::npos) {
+            int id = std::atoi(std::string(body.substr(s)).c_str());
             last_data_conn_id_ = static_cast<uint8_t>(id);
             NETWORK_LOG_DBG("Data available on id: %d", id);
             on_event(NetworkLteEvent::data_available);

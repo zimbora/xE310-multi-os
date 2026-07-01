@@ -59,7 +59,10 @@ private:
             if (!ok) return QueueError::timeout;
         }
 
-        q.push_back(QueueMessage{std::vector<uint8_t>(data, data + length)});
+        q.push_back(QueueMessage{});
+        auto& msg = q.back();
+        msg.length = std::min(length, MAX_MSG_DATA);
+        std::memcpy(msg.data.data(), data, msg.length);
         cv_push_.notify_one();
         return QueueError::ok;
     }

@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include <thread>
-#include <vector>
 #include <cstring>
 
 IpcServer::IpcServer(uint16_t port, MessageCallback on_message, Mode mode)
@@ -103,14 +102,15 @@ void IpcServer::client_loop_framed(int fd) {
                        (static_cast<uint16_t>(hdr[1]) << 8);
         if (len == 0) continue;
 
-        std::vector<uint8_t> buf(len);
+        uint8_t buf[4096];
+        size_t recv_len = (len <= sizeof(buf)) ? len : sizeof(buf);
         ssize_t total = 0;
-        while (total < static_cast<ssize_t>(len)) {
-            ssize_t n = recv(fd, buf.data() + total, len - total, 0);
+        while (total < static_cast<ssize_t>(recv_len)) {
+            ssize_t n = recv(fd, buf + total, recv_len - total, 0);
             if (n <= 0) return;
             total += n;
         }
-        if (on_message_) on_message_(buf.data(), len);
+        if (on_message_) on_message_(buf, recv_len);
     }
 }
 

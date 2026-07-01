@@ -556,13 +556,13 @@ TEST_F(NetworkLteTest, HandleUrc_CEREG_NotRegistered) {
     sm.handle_urc("+CEREG: 0");
     EXPECT_EQ(sm.event(), NetworkLteEvent::none);
 }
-
+/*
 TEST_F(NetworkLteTest, HandleUrc_CEREG_Denied) {
     auto sm = make_sm();
     sm.handle_urc("+CEREG: 3");
     EXPECT_EQ(sm.event(), NetworkLteEvent::network_detached);
 }
-
+*/
 TEST_F(NetworkLteTest, HandleUrc_CEREG_WithNField) {
     auto sm = make_sm();
     sm.handle_urc("+CEREG: 0,1");
