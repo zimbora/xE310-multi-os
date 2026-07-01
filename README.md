@@ -127,6 +127,29 @@ clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
 
 ## Static Analysis
 
+### clang-tidy
+
+Run [clang-tidy](https://clang.llvm.org/extra/clang-tidy/) on all source files:
+
+```bash
+clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" src/*.cpp src/hal/*.cpp
+```
+
+Run on a single file:
+
+```bash
+clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" src/xe310.cpp
+```
+
+On Linux with Ninja, you can use a compile commands database instead:
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy -p build src/*.cpp src/hal/*.cpp
+```
+
+### Cppcheck
+
 Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
 
 ```bash
