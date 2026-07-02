@@ -129,6 +129,23 @@ This project follows the [Conventional Commits](https://www.conventionalcommits.
 | `ci`       | Changes to GitHub Actions workflows only                                    |
 | `revert`   | Reverts a previous commit (reference the reverted SHA in the footer)        |
 
+### Changelog Generation
+
+A changelog is automatically generated when a tag is pushed (via the `changelog.yml` workflow).
+
+To generate a changelog locally:
+
+```bash
+# Changes since the last tag
+bash scripts/generate_changelog.sh
+
+# Changes since a specific tag
+bash scripts/generate_changelog.sh v1.0.0
+
+# Changes between two tags
+bash scripts/generate_changelog.sh v1.0.0 v2.0.0
+```
+
 ## Conventions
 
 - AT commands are sent as null-terminated strings over UART

@@ -1,0 +1,33 @@
+name: Changelog
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          CHANGELOG=$(bash scripts/generate_changelog.sh)
+          # Write to file for the release body (handles multi-line).
+          echo "$CHANGELOG" > /tmp/changelog.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          body_path: /tmp/changelog.md
