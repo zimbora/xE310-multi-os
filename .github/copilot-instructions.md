@@ -35,6 +35,14 @@ All code must compile and run correctly on every target platform.
 - Zephyr builds integrate via Zephyr's CMake system
 - Desktop builds use standard CMake workflows
 
+## Conventional Commits
+
+This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+Use the format: `<type>(<optional scope>): <description>`
+
+Allowed types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `style`, `chore`, `ci`, `revert`.
+
 ## Conventions
 
 - AT commands are sent as null-terminated strings over UART
