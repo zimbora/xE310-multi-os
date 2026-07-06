@@ -153,7 +153,7 @@ struct NetworkLteConfig {
         300; ///< Timeout for transparent mode in seconds, adjust as needed based on expected time to send AT commands
              ///< and receive responses in transparent mode
     uint8_t max_network_attempts = 2; ///< Timeout for server connection and data transfer
-    uint8_t max_attach_retries = 2;
+    uint8_t max_attach_retries = 1;
     uint8_t max_pdp_retries = 2;
 
     uint64_t default_lte_bands = DEFAULT_LTE_BANDS;
