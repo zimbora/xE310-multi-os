@@ -21,40 +21,7 @@ All code must compile and run correctly on every target platform.
 
 ## Code Style
 
-- C++17 standard (compatible with Zephyr's toolchain)
-- Use `#pragma once` for include guards
-- Keep headers minimal — forward-declare where possible
-- No exceptions on embedded targets — use error codes or `std::expected`-style patterns
-- No dynamic memory allocation in hot paths on embedded targets
-
-### Naming Conventions
-
-| Entity             | Convention                                                              |
-|--------------------|-------------------------------------------------------------------------|
-| Functions          | `snake_case` (e.g. `read_sensor_value`, `process_frame`)               |
-| Variables          | `camelCase` (e.g. `sampleCount`, `rxBuffer`)                           |
-| Bool variables     | `fPascalCase` (e.g. `fIsConnected`, `fHasData`, `fEnabled`)            |
-| Global variables   | `g_` prefix + `camelCase` (e.g. `g_sensorState`, `g_txBuffer`)         |
-| Static variables   | `s_` prefix + `camelCase` (e.g. `s_instanceCount`, `s_cachedValue`)    |
-| Types (class/struct) | `PascalCase` (e.g. `SensorDriver`, `FrameHeader`)                    |
-| Enums              | `PascalCase` for type, `PascalCase` for values (e.g. `Error::HardwareFault`) |
-| Constants / macros | `UPPER_SNAKE_CASE` (e.g. `MAX_FRAME_SIZE`, `DEFAULT_TIMEOUT_MS`)       |
-| Namespaces         | `snake_case` (e.g. `anova::sensor_driver`)                             |
-| Template params    | `PascalCase` (e.g. `template <typename ValueType>`)                    |
-
-### Style Checker
-
-Run the naming convention checker:
-
-```bash
-python3 scripts/check_code_style.py
-```
-
-With verbose output and summary:
-
-```bash
-python3 scripts/check_code_style.py --verbose --summary
-```
+Code style, naming conventions, formatting, and static analysis rules are documented in [CodePolicy.md](CodePolicy.md).
 
 ## Build System
 
@@ -62,89 +29,11 @@ python3 scripts/check_code_style.py --verbose --summary
 - Zephyr builds integrate via Zephyr's CMake system
 - Desktop builds use standard CMake workflows
 
-### Desktop (Windows)
-```bash
-.\build_vs.ps1
-.\build_vs.ps1 -Clean # clean build
-.\build_vs.ps1 -Clean -Test # build and run tests
-.\build_vs.ps1 -Clean -Config Debug -Test # clean, debug build, tests
-.\build_vs.ps1  -Clean -NoTests
-.\build_vs.ps1 -DTEST=OFF
-```
+Build commands and log-level build examples are documented in [Build.md](Build.md).
 
-### Linux
-```bash
-.\build_linux.ps1
-```
+## Contributions
 
-### Embedded (Zephyr)
-```bash
-.\build_zephyr.ps1
-```
-
-### Log Levels
-
-Log verbosity is selected at compile time with CMake cache variables:
-
-- `MODEM_LOG_LEVEL` for `MODEM_LOG_*`
-- `NETWORK_LOG_LEVEL` for `NETWORK_LOG_*`
-
-Supported values:
-
-- `0` = none
-- `1` = error
-- `2` = warning
-- `3` = info
-- `4` = debug
-
-Example:
-
-```bash
-cmake -S . -B build -DMODEM_LOG_LEVEL=4 -DNETWORK_LOG_LEVEL=2
-cmake --build build --config Release
-```
-
-## Conventional Commits
-
-This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages.
-
-### Format
-
-```
-<type>(<optional scope>): <description>
-```
-
-### Types
-
-| Type       | When to use                                                                 |
-|------------|-----------------------------------------------------------------------------|
-| `feat`     | A new feature or capability visible to consumers of the library             |
-| `fix`      | A bug fix                                                                   |
-| `refactor` | Code change that is neither a feature nor a bug fix (restructuring, renaming) |
-| `perf`     | A change that improves performance                                          |
-| `test`     | Adding or correcting tests — no production code change                      |
-| `docs`     | Documentation only (README, Doxygen comments, inline comments)              |
-| `style`    | Formatting, whitespace, clang-format fixes — no logic change                |
-| `chore`    | Build system, CI config, dependency bumps — no production code change       |
-| `ci`       | Changes to GitHub Actions workflows only                                    |
-| `revert`   | Reverts a previous commit (reference the reverted SHA in the footer)        |
-
-### Changelog Generation
-
-A changelog is automatically generated when a tag is pushed (via the `changelog.yml` workflow).
-
-To generate a changelog locally:
-
-```bash
-# Changes since the last tag
-bash scripts/generate_changelog.sh
-
-# Changes since a specific tag
-bash scripts/generate_changelog.sh v1.0.0
-
-# Changes between two tags
-bash scripts/generate_changelog.sh v1.0.0 v2.0.0
-```
+Contribution workflow, commit message rules, changelog generation, and validation commands are documented in [Contributions.md](Contributions.md).
 
 ## Conventions
 
@@ -155,60 +44,11 @@ bash scripts/generate_changelog.sh v1.0.0 v2.0.0
 
 ## Code Formatting
 
-Format all source files with [clang-format](https://clang.llvm.org/docs/ClangFormat.html):
-
-```bash
-clang-format -i src/*.cpp src/hal/*.cpp include/modem/*.h
-```
-
-Check formatting without modifying files:
-
-```bash
-clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
-```
+See [CodePolicy.md](CodePolicy.md) for code formatting rules and commands.
 
 ## Static Analysis
 
-### clang-tidy
-
-Run [clang-tidy](https://clang.llvm.org/extra/clang-tidy/) on all source files:
-
-```bash
-clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp
-```
-
-Run on a single file:
-
-```bash
-clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" src/xe310.cpp
-```
-
-On Linux with Ninja, you can use a compile commands database instead:
-
-```bash
-cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-clang-tidy -p build src/*.cpp
-```
-
-### Cppcheck
-
-Install [Cppcheck](https://cppcheck.sourceforge.io/) and run:
-
-```bash
-cppcheck --enable=all --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1 --std=c++17 -I include src/ include/
-```
-
-To generate a detailed checkers report:
-
-### Desktop (Windows)
-```bash
-cppcheck --project=cppcheck-windows.cppcheck --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --error-exitcode=1 --std=c++17
-```
-
-### Embedded (Zephyr)
-```bash
-cppcheck --project=cppcheck-zephyr.cppcheck --std=c++17 --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --error-exitcode=1 --std=c++17
-```
+See [CodePolicy.md](CodePolicy.md) for clang-format, clang-tidy, and cppcheck usage.
 
 ## Testing
 

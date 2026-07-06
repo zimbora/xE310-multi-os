@@ -39,9 +39,7 @@ All code must compile and run correctly on every target platform.
 
 This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification.
 
-Use the format: `<type>(<optional scope>): <description>`
-
-Allowed types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `style`, `chore`, `ci`, `revert`.
+See [Contributions.md](../Contributions.md) for commit message rules, allowed types, and contribution workflow.
 
 ## Conventions
 
