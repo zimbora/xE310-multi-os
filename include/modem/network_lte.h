@@ -153,7 +153,7 @@ struct NetworkLteConfig {
         300; ///< Timeout for transparent mode in seconds, adjust as needed based on expected time to send AT commands
              ///< and receive responses in transparent mode
     uint8_t max_network_attempts = 2; ///< Timeout for server connection and data transfer
-    uint8_t max_attach_retries = 1;
+    uint8_t max_attach_retries = 2;
     uint8_t max_pdp_retries = 2;
 
     uint64_t default_lte_bands = DEFAULT_LTE_BANDS;
@@ -167,8 +167,8 @@ struct NetworkLteConfig {
     FixedString<MODEM_SHORT_STR> plmn{
         DEFAULT_PLMN}; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
 
-    bool fPsmEnable = true;   ///< Whether to use PSM if available on the network
-    bool fCfunSleep = true; ///< Whether to use CFUN=4 + CFUN=11 to enter sleep mode (if supported by modem)
+    bool fPsmEnable = true;    ///< Whether to use PSM if available on the network
+    bool fCfunSleep = true;    ///< Whether to use CFUN=4 + CFUN=11 to enter sleep mode (if supported by modem)
     uint32_t psm_t3412 = 3600; ///< Sleep time in PSM mode, in seconds
     uint32_t psm_t3324 = 60;   ///< Active time in PSM mode, in seconds
 

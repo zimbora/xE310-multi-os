@@ -56,6 +56,15 @@ Allowed types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `style`, `chor
 - Mock the HAL interface for testability
 - Integration tests run against real hardware or a modem simulator
 
+## Validation Checklist
+
+- Before considering a task complete, run static analysis checks when code changes affect C++ sources or headers.
+- Required checks:
+  - `clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h`
+  - `clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp`
+  - `cppcheck --enable=all --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1 --std=c++17 -I include src/ include/`
+- If any check cannot be run, explicitly state why and what remains unvalidated.
+
 ## Directory Structure
 
 ```
