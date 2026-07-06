@@ -706,13 +706,21 @@ void NetworkLte::execute_actions() {
         } break;
         case ModemAction::switch_off_radio: {
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
-            modem_.shutdown();
-            change_state(NetworkLteState::off_mode);
+            if(lteConfig.fCfunSleep){
+                modem_.shutdown();
+                change_state(NetworkLteState::off_mode);
+            }else{
+                // Don't shutdown bcs then modem cannot be waked up
+                NETWORK_LOG_INF("Fake shutdown!!");
+            } 
 #else
-            modem_.shutdown();
-            change_state(NetworkLteState::off_mode);
-            // Don't shutdown bcs then modem cannot be waked up
-            // NETWORK_LOG_INF("Fake shutdown!!");
+            if(lteConfig.fCfunSleep){
+                modem_.shutdown();
+                change_state(NetworkLteState::off_mode);
+            }else{
+                // Don't shutdown bcs then modem cannot be waked up
+                NETWORK_LOG_INF("Fake shutdown!!");
+            } 
 #endif
         } break;
         case ModemAction::enter_sleep: {

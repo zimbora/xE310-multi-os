@@ -167,7 +167,8 @@ struct NetworkLteConfig {
     FixedString<MODEM_SHORT_STR> plmn{
         DEFAULT_PLMN}; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
 
-    bool fPsmEnable = false;   ///< Whether to use PSM if available on the network
+    bool fPsmEnable = true;   ///< Whether to use PSM if available on the network
+    bool fCfunSleep = true; ///< Whether to use CFUN=4 + CFUN=11 to enter sleep mode (if supported by modem)
     uint32_t psm_t3412 = 3600; ///< Sleep time in PSM mode, in seconds
     uint32_t psm_t3324 = 60;   ///< Active time in PSM mode, in seconds
 
