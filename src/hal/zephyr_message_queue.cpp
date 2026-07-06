@@ -5,7 +5,6 @@
 #include <zephyr/kernel.h>
 #include <cstring>
 #include <array>
-#include <vector>
 
 namespace modem {
 
@@ -16,14 +15,13 @@ class ZephyrMessageQueue : public MessageQueueInterface {
 public:
     static constexpr size_t MAX_MSG_SIZE = 256;                          // max payload per message
     static constexpr size_t SLOT_SIZE = MAX_MSG_SIZE + sizeof(uint16_t); // header + payload
+    static constexpr size_t MAX_QUEUE_CAPACITY = DEFAULT_CAPACITY;
 
-    explicit ZephyrMessageQueue(size_t capacity)
-        : capacity_(capacity) {
+    explicit ZephyrMessageQueue(size_t capacity) {
+        queue_capacity_ = (capacity == 0U || capacity > MAX_QUEUE_CAPACITY) ? MAX_QUEUE_CAPACITY : capacity;
         for (uint8_t i = 0; i < MAX_CONNECTIONS; ++i) {
-            tx_bufs_[i].resize(SLOT_SIZE * capacity);
-            rx_bufs_[i].resize(SLOT_SIZE * capacity);
-            k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, capacity);
-            k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), SLOT_SIZE, capacity);
+            k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, queue_capacity_);
+            k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), SLOT_SIZE, queue_capacity_);
         }
     }
 
@@ -56,6 +54,22 @@ public:
     }
 
 private:
+    static k_timeout_t to_timeout(uint32_t timeout_ms) { return (timeout_ms == 0U) ? K_NO_WAIT : K_MSEC(timeout_ms); }
+
+    static QueueError map_put_result(int ret) {
+        if (ret == 0) return QueueError::ok;
+        if (ret == -EAGAIN) return QueueError::timeout;
+        if (ret == -ENOMSG) return QueueError::full;
+        return QueueError::full;
+    }
+
+    static QueueError map_get_result(int ret) {
+        if (ret == 0) return QueueError::ok;
+        if (ret == -EAGAIN) return QueueError::timeout;
+        if (ret == -ENOMSG) return QueueError::empty;
+        return QueueError::empty;
+    }
+
     QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, const uint8_t* data,
                        size_t length, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
@@ -66,11 +80,8 @@ private:
         std::memcpy(slot, &len16, sizeof(len16));
         std::memcpy(slot + sizeof(len16), data, length);
 
-        k_timeout_t tout = (timeout_ms == 0) ? K_NO_WAIT : K_MSEC(timeout_ms);
-        int ret = k_msgq_put(&queues[conn_id - 1], slot, tout);
-        if (ret == -ENOMSG || ret == -EAGAIN) return QueueError::full;
-        if (ret == -EAGAIN) return QueueError::timeout;
-        return QueueError::ok;
+        int ret = k_msgq_put(&queues[conn_id - 1], slot, to_timeout(timeout_ms));
+        return map_put_result(ret);
     }
 
     QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, QueueMessage& msg,
@@ -78,9 +89,9 @@ private:
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
 
         uint8_t slot[SLOT_SIZE];
-        k_timeout_t tout = (timeout_ms == 0) ? K_NO_WAIT : K_MSEC(timeout_ms);
-        int ret = k_msgq_get(&queues[conn_id - 1], slot, tout);
-        if (ret == -ENOMSG || ret == -EAGAIN) return QueueError::empty;
+        int ret = k_msgq_get(&queues[conn_id - 1], slot, to_timeout(timeout_ms));
+        QueueError qerr = map_get_result(ret);
+        if (qerr != QueueError::ok) return qerr;
 
         uint16_t len16 = 0;
         std::memcpy(&len16, slot, sizeof(len16));
@@ -89,11 +100,11 @@ private:
         return QueueError::ok;
     }
 
-    size_t capacity_;
     std::array<struct k_msgq, MAX_CONNECTIONS> tx_queues_{};
     std::array<struct k_msgq, MAX_CONNECTIONS> rx_queues_{};
-    std::array<std::vector<char>, MAX_CONNECTIONS> tx_bufs_;
-    std::array<std::vector<char>, MAX_CONNECTIONS> rx_bufs_;
+    std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> tx_bufs_{};
+    std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> rx_bufs_{};
+    size_t queue_capacity_ = MAX_QUEUE_CAPACITY;
 };
 
 } // namespace modem
