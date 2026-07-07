@@ -16,6 +16,18 @@ To prevent dynamic memory allocation in embedded and hot-path code, avoid the fo
 
 Use fixed-size or static-capacity alternatives where possible.
 
+Enforcement command:
+
+```bash
+python3 scripts/check_dynamic_memory_policy.py
+```
+
+For justified exceptions at platform-factory boundaries, add an inline marker:
+
+```cpp
+// dynamic-memory-allow: <reason>
+```
+
 ## Code Style
 
 - C++17 standard (compatible with Zephyr's toolchain)
@@ -68,6 +80,12 @@ clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
 ```
 
 ## Static Analysis
+
+Run the dynamic-memory policy check:
+
+```bash
+python3 scripts/check_dynamic_memory_policy.py
+```
 
 ### clang-tidy
 
