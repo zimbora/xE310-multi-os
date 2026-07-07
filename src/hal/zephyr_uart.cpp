@@ -105,7 +105,7 @@ private:
 namespace modem {
 
 std::unique_ptr<UartInterface> create_platform_uart() {
-    return std::make_unique<ZephyrUart>();
+    return std::make_unique<ZephyrUart>(); // dynamic-memory-allow: factory boundary
 }
 
 } // namespace modem
