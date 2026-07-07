@@ -9,7 +9,7 @@ struct UartHandleDeleter {
     bool owns = true;
     void operator()(UartInterface* ptr) const {
         if (owns) {
-            delete ptr;
+            std::default_delete<UartInterface>{}(ptr);
         }
     }
 };

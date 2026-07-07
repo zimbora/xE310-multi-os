@@ -9,7 +9,7 @@ struct TimerHandleDeleter {
     bool owns = true;
     void operator()(TimerInterface* ptr) const {
         if (owns) {
-            delete ptr;
+            std::default_delete<TimerInterface>{}(ptr);
         }
     }
 };
