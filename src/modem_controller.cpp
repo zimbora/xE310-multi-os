@@ -6,8 +6,12 @@
 
 namespace modem {
 
-ModemController::ModemController(std::unique_ptr<UartInterface> uart, std::unique_ptr<TimerInterface> timer)
+ModemController::ModemController(UartHandle uart, TimerHandle timer)
     : uart_(std::move(uart)), cmd_timer_(timer ? std::move(timer) : create_platform_timer()) {}
+
+ModemController::ModemController(std::unique_ptr<UartInterface> uart, std::unique_ptr<TimerInterface> timer)
+    : uart_(UartHandle(uart.release(), UartHandleDeleter{})),
+      cmd_timer_(timer ? TimerHandle(timer.release(), TimerHandleDeleter{}) : create_platform_timer()) {}
 
 ModemStatus ModemController::connect(const char* port, const UartConfig& config) {
     IoLockGuard lock(io_mutex_);

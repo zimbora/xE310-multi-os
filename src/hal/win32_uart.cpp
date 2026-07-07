@@ -142,8 +142,8 @@ private:
 
 namespace modem {
 
-std::unique_ptr<UartInterface> create_platform_uart() {
-    return std::make_unique<Win32Uart>();
+UartHandle create_platform_uart() {
+    return UartHandle(new Win32Uart(), UartHandleDeleter{});
 }
 
 } // namespace modem

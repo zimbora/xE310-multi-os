@@ -20,7 +20,7 @@ protected:
     void SetUp() override {
         queue = create_platform_message_queue(4); // capacity of 4 messages per queue
     }
-    std::unique_ptr<MessageQueueInterface> queue;
+    MessageQueueHandle queue;
 };
 
 // --- Basic TX push / pop ---

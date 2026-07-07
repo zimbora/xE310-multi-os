@@ -5,8 +5,17 @@
 
 namespace modem {
 
+struct MessageQueueHandleDeleter {
+    bool owns = true;
+    void operator()(MessageQueueInterface* ptr) const {
+        if (owns) {
+            delete ptr;
+        }
+    }
+};
+using MessageQueueHandle = std::unique_ptr<MessageQueueInterface, MessageQueueHandleDeleter>;
+
 /// Creates the platform-appropriate message queue implementation.
-std::unique_ptr<MessageQueueInterface>
-create_platform_message_queue(size_t capacity = MessageQueueInterface::DEFAULT_CAPACITY);
+MessageQueueHandle create_platform_message_queue(size_t capacity = MessageQueueInterface::DEFAULT_CAPACITY);
 
 } // namespace modem

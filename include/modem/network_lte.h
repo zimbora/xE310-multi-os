@@ -1,8 +1,8 @@
 #pragma once
 
+#include "modem/message_queue_factory.h"
+#include "modem/timer_factory.h"
 #include "modem/xe310.h"
-#include "modem/timer_interface.h"
-#include "modem/message_queue_interface.h"
 #include "modem_controller.h"
 #include "xe310.h"
 
@@ -203,8 +203,7 @@ public:
     using DataReceivedCallback = std::function<void(uint8_t cid, std::string_view data, uint16_t n_bytes)>;
 
     explicit NetworkLte(xE310& modem, const NetworkLteConfig& config = {},
-                        DataReceivedCallback on_data_received = nullptr,
-                        std::unique_ptr<TimerInterface> timer = nullptr);
+                        DataReceivedCallback on_data_received = nullptr, TimerHandle timer = TimerHandle{});
 
     NetworkLteState state() const;
     NetworkLteEvent event() const;
@@ -418,8 +417,8 @@ private:
     uint8_t nAttachRetries = 0;   // number of consecutive attach attempts
     uint8_t nPdpRetries = 0;      // number of consecutive PDP activation attempts
 
-    std::unique_ptr<TimerInterface> timer_;
-    std::unique_ptr<MessageQueueInterface> message_queue_;
+    TimerHandle timer_;
+    MessageQueueHandle message_queue_;
     uint8_t last_data_conn_id_ = 0; ///< Connection ID from the most recent SRING URC
 
     /// Called by the timer when it expires; injects a timeout modem event.
@@ -434,8 +433,7 @@ private:
     bool fChangeRAT = false;   ///< Whether to change RAT after a failed attach attempt (for testing purposes, since in
                                ///< some networks changing RAT can help with attach success)
 
-    std::unique_ptr<TimerInterface>
-        st_timer; ///< Timer for state timeouts (e.g. attach, PDP activation, server connection)
+    TimerHandle st_timer; ///< Timer for state timeouts (e.g. attach, PDP activation, server connection)
 };
 
 } // namespace modem
