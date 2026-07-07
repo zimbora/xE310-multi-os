@@ -9,7 +9,7 @@ struct MessageQueueHandleDeleter {
     bool owns = true;
     void operator()(MessageQueueInterface* ptr) const {
         if (owns) {
-            delete ptr;
+            std::default_delete<MessageQueueInterface>{}(ptr);
         }
     }
 };
