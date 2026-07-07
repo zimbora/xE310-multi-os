@@ -7,6 +7,15 @@ on:
     branches: ["**"]
 
 jobs:
+  dynamic-memory-policy:
+    name: Dynamic Memory Policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dynamic memory policy
+        run: python3 scripts/check_dynamic_memory_policy.py
+
   clang-format:
     name: Code Formatting
     runs-on: ubuntu-latest
