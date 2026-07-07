@@ -11,7 +11,7 @@ namespace modem {
 static const char* action_to_str(ModemAction a);
 
 NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
-                       std::unique_ptr<TimerInterface> timer)
+                       TimerHandle timer)
     : modem_(modem),
       lteConfig(config),
       on_data_received_(std::move(on_data_received)),

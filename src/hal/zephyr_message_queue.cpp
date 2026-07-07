@@ -113,8 +113,9 @@ private:
 
 namespace modem {
 
-std::unique_ptr<MessageQueueInterface> create_platform_message_queue(size_t capacity) {
-    return std::make_unique<ZephyrMessageQueue>(capacity); // dynamic-memory-allow: factory boundary
+MessageQueueHandle create_platform_message_queue(size_t capacity) {
+    static ZephyrMessageQueue queue_instance(capacity);
+    return MessageQueueHandle(&queue_instance, MessageQueueHandleDeleter{false});
 }
 
 } // namespace modem

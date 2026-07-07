@@ -19,15 +19,9 @@ All code must compile and run correctly on every target platform.
 - Core modem logic (AT command parsing, state machine) must be **platform-independent**
 - Prefer composition over inheritance for platform abstractions
 
-## Code Style
+## Code Policy
 
-- C++17 standard (compatible with Zephyr's toolchain)
-- Use `snake_case` for functions and variables, `PascalCase` for classes and structs
-- Use `#pragma once` for include guards
-- Keep headers minimal — forward-declare where possible
-- No exceptions on embedded targets — use error codes or `std::expected`-style patterns
-- No dynamic memory allocation in hot paths on embedded targets
-- All code must conform to the `.clang-format` file at the project root
+- Follow [CodePolicy.md](../CodePolicy.md) for coding rules, style, and static-analysis requirements.
 
 ## Build System
 

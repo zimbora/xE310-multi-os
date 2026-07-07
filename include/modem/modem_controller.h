@@ -3,8 +3,8 @@
 #include "modem/at_command.h"
 #include "modem/fixed_string.h"
 #include "modem/static_vector.h"
-#include "modem/timer_interface.h"
-#include "modem/uart_interface.h"
+#include "modem/timer_factory.h"
+#include "modem/uart_factory.h"
 
 #include <memory>
 #include <string_view>
@@ -42,6 +42,7 @@ class ModemController {
 public:
     /// Takes ownership of a platform-specific UART implementation.
     /// Optionally accepts a timer; if nullptr, a platform timer is created internally.
+    explicit ModemController(UartHandle uart, TimerHandle timer = TimerHandle{});
     explicit ModemController(std::unique_ptr<UartInterface> uart, std::unique_ptr<TimerInterface> timer = nullptr);
 
     ModemStatus connect(const char* port, const UartConfig& config = {});
@@ -110,8 +111,8 @@ private:
     mutable IoMutex io_mutex_;
     // Accumulates partial URC chunks until a full \r\n-terminated line is available.
     FixedString<URC_RX_BUFFER_MAX> urc_rx_buffer_;
-    std::unique_ptr<UartInterface> uart_;
-    std::unique_ptr<TimerInterface> cmd_timer_;
+    UartHandle uart_;
+    TimerHandle cmd_timer_;
 };
 
 } // namespace modem

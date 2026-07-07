@@ -80,8 +80,9 @@ private:
 
 namespace modem {
 
-std::unique_ptr<TimerInterface> create_platform_timer() {
-    return std::make_unique<ZephyrTimer>(); // dynamic-memory-allow: factory boundary
+TimerHandle create_platform_timer() {
+    static ZephyrTimer timer_instance;
+    return TimerHandle(&timer_instance, TimerHandleDeleter{false});
 }
 
 void delay_ms(uint32_t ms) {

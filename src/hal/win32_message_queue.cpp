@@ -99,8 +99,8 @@ private:
 
 namespace modem {
 
-std::unique_ptr<MessageQueueInterface> create_platform_message_queue(size_t capacity) {
-    return std::make_unique<Win32MessageQueue>(capacity);
+MessageQueueHandle create_platform_message_queue(size_t capacity) {
+    return MessageQueueHandle(new Win32MessageQueue(capacity), MessageQueueHandleDeleter{});
 }
 
 } // namespace modem

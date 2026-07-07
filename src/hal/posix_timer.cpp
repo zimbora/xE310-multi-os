@@ -145,8 +145,8 @@ private:
 
 namespace modem {
 
-std::unique_ptr<TimerInterface> create_platform_timer() {
-    return std::make_unique<PosixTimer>();
+TimerHandle create_platform_timer() {
+    return TimerHandle(new PosixTimer(), TimerHandleDeleter{});
 }
 
 void delay_ms(uint32_t ms) {

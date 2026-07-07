@@ -188,8 +188,8 @@ private:
 
 namespace modem {
 
-std::unique_ptr<UartInterface> create_platform_uart() {
-    return std::make_unique<PosixUart>();
+UartHandle create_platform_uart() {
+    return UartHandle(new PosixUart(), UartHandleDeleter{});
 }
 
 } // namespace modem
