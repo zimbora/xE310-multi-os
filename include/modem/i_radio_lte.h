@@ -129,6 +129,20 @@ public:
         return receive_message(*modem_rx_q, msg, timeout_ms);
     }
 
+    MessageChannelError send_response(bool ok, uint32_t timeout_ms = 0) {
+        ModemResponseMsg msg{};
+        msg.ok = ok;
+        MessageChannelError err = send_message(*modem_rx_q, msg, timeout_ms);
+        if (err == MessageChannelError::ok) {
+            modem_evt->set(MODEM_EVT_RESPONSE);
+        }
+        return err;
+    }
+
+    MessageChannelError recv_response(ModemResponseMsg& msg, uint32_t timeout_ms = 0) {
+        return receive_message(*modem_rx_q, msg, timeout_ms);
+    }
+
     void publish_state(NetworkLteState state, NetworkLteEvent event = static_cast<NetworkLteEvent>(0)) {
         state_msg.state = state;
         state_msg.event = event;
@@ -250,5 +264,9 @@ public:
     /// Replace the active configuration (takes effect on the next step cycle).
     virtual void set_config(const NetworkLteConfig& config) = 0;
 };
+
+/// Process pending radio LTE requests from channels and dispatch them to network.
+/// Call this from the network thread on each iteration to service cross-thread requests.
+void process_radio_requests(RadioLteChannels& channels, IRadioLte& radio);
 
 } // namespace modem

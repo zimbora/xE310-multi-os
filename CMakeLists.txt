@@ -54,6 +54,7 @@ set(MODEM_CORE_SOURCES
     src/modem_controller.cpp
     src/xe310.cpp
     src/network_lte.cpp
+    src/i_radio_lte.cpp
 )
 
 # --- HAL sources (platform-specific) ---

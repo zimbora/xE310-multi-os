@@ -3,6 +3,7 @@
 #include "modem/modem_controller.h"
 #include "modem/uart_factory.h"
 #include "modem/message_queue_interface.h"
+#include "modem/i_radio_lte.h"
 #include "modem/log.h"
 #include "ipc_server.h"
 #include "rpc_helpers.h"
@@ -60,6 +61,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     };
 
     modem::NetworkLte network(modem, lteConfig, on_data_received);
+    modem::RadioLteChannels channels;
     std::atomic_bool network_worker_running{false};
     std::mutex command_queue_mutex;
     std::deque<std::function<void()>> command_queue;
@@ -511,6 +513,12 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 }
 
                 network.loop();
+
+                // Process cross-thread requests via message channels
+                modem::process_radio_requests(channels, network);
+
+                // Publish current state via event flags
+                channels.publish_state(network.state(), network.event());
 
                 // Drain RX queue and forward to IPC client
                 modem::QueueMessage rx_msg;

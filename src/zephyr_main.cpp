@@ -6,6 +6,7 @@
 #include "modem/modem_controller.h"
 #include "modem/uart_factory.h"
 #include "modem/message_queue_interface.h"
+#include "modem/i_radio_lte.h"
 #include "modem/timer_factory.h"
 #include "modem/log.h"
 #include <memory>
@@ -40,6 +41,7 @@ int main() { // NOLINT(bugprone-exception-escape)
     };
 
     modem::NetworkLte network(modem, lteConfig, on_data_received);
+    modem::RadioLteChannels channels;
 
     bool fNetRes = network.network_connect();
     if (!fNetRes) {
@@ -52,6 +54,12 @@ int main() { // NOLINT(bugprone-exception-escape)
 
     while (true) {
         network.loop();
+
+        // Process cross-thread requests via message channels
+        modem::process_radio_requests(channels, network);
+
+        // Publish current state via event flags
+        channels.publish_state(network.state(), network.event());
 
         modem::QueueMessage rx_msg;
         while (network.rx_read(lteConfig.conn_id, rx_msg) == modem::QueueError::ok) {
