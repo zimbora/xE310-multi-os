@@ -151,6 +151,33 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
         return {request->ok, request->payload};
     };
 
+    auto request_registration_info = [&](uint32_t timeout_ms = 5000U) -> std::pair<bool, std::string> {
+        if (!network_worker_running.load()) {
+            std::scoped_lock network_lock(network_mutex);
+            return {true, rpc::to_json(network.registration_info())};
+        }
+
+        modem::MessageChannelError send_err = channels.request_registration_info(timeout_ms);
+        if (send_err != modem::MessageChannelError::ok) {
+            return {false, "ERROR: failed to send get_registration_info request"};
+        }
+
+        uint32_t matched = channels.wait(modem::MODEM_EVT_RESPONSE, true, timeout_ms);
+        if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
+            return {false, "ERROR: timeout waiting registration_info response"};
+        }
+
+        modem::ModemRegistrationInfoMsg reg_msg{};
+        modem::MessageChannelError recv_err = channels.recv_registration_info(reg_msg, 0);
+        if (recv_err != modem::MessageChannelError::ok) {
+            return {false, "ERROR: invalid registration_info response"};
+        }
+        if (!reg_msg.ok) {
+            return {false, "ERROR: get_registration_info failed"};
+        }
+        return {true, rpc::to_json(reg_msg.registration_info)};
+    };
+
     auto run_network_command_sync = [&](auto command) {
         using Result = decltype(command());
         if (!network_worker_running.load()) {
@@ -292,8 +319,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 return request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}).second;
             if (sub == "REGSTATUS")
                 return request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}).second;
-            if (sub == "REGINFO")
-                return request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}).second;
+            if (sub == "REGINFO") return request_registration_info().second;
             if (sub == "NETWORKINFO")
                 return request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}).second;
             if (sub == "SIGNALQUALITY")
@@ -341,7 +367,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 auto sim_status = request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}).second;
                 auto radio_tech = request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}).second;
                 auto reg_status = request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}).second;
-                auto reg_info = request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}).second;
+                auto reg_info = request_registration_info().second;
                 auto network_info = request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}).second;
                 auto signal_quality =
                     request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}).second;
@@ -379,8 +405,10 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
             if (res == "NETWORKCONNECT" || res == "CONNECT") {
                 bool fOk = run_network_command_sync([&]() { return network.network_connect(); });
+                auto [reg_ok, reg_payload] = request_registration_info();
                 return std::string("{") + "\"resource\":\"NETWORKCONNECT\"," +
-                       "\"network_connect\":" + (fOk ? "true" : "false") + "}";
+                       "\"network_connect\":" + (fOk ? "true" : "false") + "," +
+                       "\"reg_info\":" + (reg_ok ? reg_payload : "null") + "}";
             }
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
                 int conn_id = lteConfig.conn_id;
@@ -400,7 +428,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                     }
                 }
 
-                return run_network_command_sync([&, conn_id]() {
+                std::string disconnect_result = run_network_command_sync([&, conn_id]() {
                     bool fServerOk = network.server_disconnect(static_cast<uint8_t>(conn_id));
                     bool fNetworkOk = network.network_disconnect();
 
@@ -409,9 +437,17 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                            "\"server_disconnect\":" + (fServerOk ? "true" : "false") + "," +
                            "\"network_disconnect\":" + (fNetworkOk ? "true" : "false") + "}";
                 });
+                auto [reg_ok, reg_payload] = request_registration_info();
+                if (!disconnect_result.empty() && disconnect_result.back() == '}') {
+                    disconnect_result.pop_back();
+                    disconnect_result += ",\"reg_info\":";
+                    disconnect_result += reg_ok ? reg_payload : "null";
+                    disconnect_result += "}";
+                }
+                return disconnect_result;
             }
             if (res == "CONFIG") {
-                return run_network_command_sync([&, args]() {
+                std::string config_result = run_network_command_sync([&, args]() {
                     auto cfg = network.config();
                     if (rpc::apply_config_fields(args, cfg)) {
                         network.set_config(cfg);
@@ -419,13 +455,19 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                     }
                     return std::string("ERROR: no valid fields provided (use key=value pairs)");
                 });
+                auto [reg_ok, reg_payload] = request_registration_info();
+                if (config_result.rfind("ERROR:", 0) == 0) return config_result;
+                return std::string("{") + "\"resource\":\"CONFIG\"," + "\"config\":" + config_result + "," +
+                       "\"reg_info\":" + (reg_ok ? reg_payload : "null") + "}";
             }
             if (res == "FORCEPSM") {
                 run_network_command_sync([&]() {
                     network.force_psm();
                     return true;
                 });
-                return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
+                auto [reg_ok, reg_payload] = request_registration_info();
+                return std::string("{") + "\"resource\":\"FORCEPSM\"," + "\"status\":\"ok\"," +
+                       "\"reg_info\":" + (reg_ok ? reg_payload : "null") + "}";
             }
             return "ERROR: unknown SET resource";
         }
@@ -499,10 +541,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
             }
 
             if ((matched & modem::MODEM_EVT_RESPONSE) != 0) {
-                modem::ModemResponseMsg resp{};
-                while (channels.recv_response(resp) == modem::MessageChannelError::ok) {
-                    MODEM_LOG_INF("Event thread: response ok=%s", resp.ok ? "true" : "false");
-                }
+                MODEM_LOG_DBG("Event thread: response event signaled");
             }
 
             if ((matched & modem::MODEM_EVT_LOG) != 0) {
