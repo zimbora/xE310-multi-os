@@ -11,6 +11,7 @@
 #include <memory>
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <future>
@@ -62,10 +63,90 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     std::atomic_bool network_worker_running{false};
     std::mutex command_queue_mutex;
     std::deque<std::function<void()>> command_queue;
+    struct RadioStateRequest {
+        modem::RadioLteRequestMsg msg;
+        std::mutex mutex;
+        std::condition_variable event;
+        bool done = false;
+        bool ok = false;
+        std::string payload;
+    };
+    std::mutex radio_state_queue_mutex;
+    std::deque<std::shared_ptr<RadioStateRequest>> radio_state_queue;
 
     auto enqueue_network_command = [&](std::function<void()> command) {
         std::scoped_lock command_queue_lock(command_queue_mutex);
         command_queue.emplace_back(std::move(command));
+    };
+
+    auto process_radio_state_request = [&](const modem::RadioLteRequestMsg& req) -> std::pair<bool, std::string> {
+        switch (req.type) {
+            case modem::RadioLteRequestType::get_registration_info:
+                return {true, rpc::to_json(network.registration_info())};
+            case modem::RadioLteRequestType::get_signal_quality: return {true, rpc::to_json(network.signal_quality())};
+            case modem::RadioLteRequestType::get_iccid:
+                return {true, "\"" + std::string(network.iccid().c_str()) + "\""};
+            case modem::RadioLteRequestType::get_imsi: return {true, "\"" + std::string(network.imsi().c_str()) + "\""};
+            case modem::RadioLteRequestType::get_modem_info: return {true, rpc::to_json(network.modem_info())};
+            case modem::RadioLteRequestType::get_sim_status:
+                return {true, "\"" + std::string(rpc::to_str(network.sim_status())) + "\""};
+            case modem::RadioLteRequestType::get_radio_tech:
+                return {true, "\"" + std::string(rpc::to_str(network.radio_tech())) + "\""};
+            case modem::RadioLteRequestType::get_reg_status:
+                return {true, "\"" + std::string(rpc::to_str(network.reg_status())) + "\""};
+            case modem::RadioLteRequestType::get_network_info: return {true, rpc::to_json(network.network_info())};
+            case modem::RadioLteRequestType::get_psm_mode:
+                return {true, "\"" + std::string(rpc::to_str(network.psm_mode())) + "\""};
+            case modem::RadioLteRequestType::get_cpsms_config: return {true, rpc::to_json(network.cpsms_config())};
+            case modem::RadioLteRequestType::get_telit_cpsms_config:
+                return {true, rpc::to_json(network.telit_cpsms_config())};
+            case modem::RadioLteRequestType::get_telit_cpsms_status:
+                return {true, rpc::to_json(network.telit_cpsms_status())};
+            case modem::RadioLteRequestType::get_network_survey_result:
+                return {true, rpc::to_json(network.network_survey_result())};
+            case modem::RadioLteRequestType::get_available_operators:
+                return {true, rpc::to_json(network.available_operators())};
+            case modem::RadioLteRequestType::get_csurv_result: return {true, rpc::to_json(network.csurv_result())};
+            case modem::RadioLteRequestType::scan_networks:
+                network.scan_networks(req.arg0, req.arg1);
+                return {true, rpc::to_json(network.csurv_result())};
+            case modem::RadioLteRequestType::get_server_info_array: {
+                const auto* arr = network.server_info_array();
+                if (req.arg0 >= 1 && req.arg0 <= MAX_SERVER_CONNECTIONS) {
+                    return {true, rpc::to_json(arr[req.arg0 - 1])};
+                }
+                std::string out = "[";
+                for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
+                    if (i > 0) out += ',';
+                    out += rpc::to_json(arr[i]);
+                }
+                out += "]";
+                return {true, out};
+            }
+            case modem::RadioLteRequestType::get_config: return {true, rpc::config_to_json(network.config())};
+            default: return {false, "ERROR: unsupported request"};
+        }
+    };
+
+    auto request_radio_state = [&](modem::RadioLteRequestMsg msg,
+                                   uint32_t timeout_ms = 5000U) -> std::pair<bool, std::string> {
+        if (!network_worker_running.load()) {
+            std::scoped_lock network_lock(network_mutex);
+            return process_radio_state_request(msg);
+        }
+
+        auto request = std::make_shared<RadioStateRequest>();
+        request->msg = msg;
+        {
+            std::scoped_lock queue_lock(radio_state_queue_mutex);
+            radio_state_queue.emplace_back(request);
+        }
+
+        std::unique_lock<std::mutex> req_lock(request->mutex);
+        bool signaled =
+            request->event.wait_for(req_lock, std::chrono::milliseconds(timeout_ms), [&]() { return request->done; });
+        if (!signaled) return {false, "ERROR: network thread timeout"};
+        return {request->ok, request->payload};
     };
 
     auto run_network_command_sync = [&](auto command) {
@@ -195,31 +276,43 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
         if (cmd == "GET") {
             if (sub == "SCANSURVEY") {
-                return run_network_command_sync([&]() {
-                    network.scan_networks();
-                    return rpc::to_json(network.csurv_result());
-                });
+                auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::scan_networks, 0U, 0U},
+                                                         static_cast<uint32_t>(210000));
+                if (!ok) return payload;
+                return payload;
             }
-
-            std::scoped_lock network_lock(network_mutex);
-            if (sub == "CONFIG") return rpc::config_to_json(network.config());
-            if (sub == "MODEMINFO") return rpc::to_json(network.modem_info());
-            if (sub == "SIMSTATUS") return "\"" + std::string(rpc::to_str(network.sim_status())) + "\"";
-            if (sub == "RADIOTECH") return "\"" + std::string(rpc::to_str(network.radio_tech())) + "\"";
-            if (sub == "REGSTATUS") return "\"" + std::string(rpc::to_str(network.reg_status())) + "\"";
-            if (sub == "REGINFO") return rpc::to_json(network.registration_info());
-            if (sub == "NETWORKINFO") return rpc::to_json(network.network_info());
-            if (sub == "SIGNALQUALITY") return rpc::to_json(network.signal_quality());
-            if (sub == "PSMMODE") return "\"" + std::string(rpc::to_str(network.psm_mode())) + "\"";
-            if (sub == "CPSMSCONFIG") return rpc::to_json(network.cpsms_config());
-            if (sub == "TELITCPSMSCONFIG") return rpc::to_json(network.telit_cpsms_config());
-            if (sub == "TELITCPSMSSTATUS") return rpc::to_json(network.telit_cpsms_status());
-            if (sub == "SURVEYRESULT") return rpc::to_json(network.network_survey_result());
-            if (sub == "OPERATORLIST") return rpc::to_json(network.available_operators());
-            if (sub == "STATE") return "\"" + std::string(rpc::to_str(network.state())) + "\"";
+            if (sub == "CONFIG") return request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}).second;
+            if (sub == "MODEMINFO")
+                return request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}).second;
+            if (sub == "SIMSTATUS")
+                return request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}).second;
+            if (sub == "RADIOTECH")
+                return request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}).second;
+            if (sub == "REGSTATUS")
+                return request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}).second;
+            if (sub == "REGINFO")
+                return request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}).second;
+            if (sub == "NETWORKINFO")
+                return request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}).second;
+            if (sub == "SIGNALQUALITY")
+                return request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}).second;
+            if (sub == "PSMMODE") return request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}).second;
+            if (sub == "CPSMSCONFIG")
+                return request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}).second;
+            if (sub == "TELITCPSMSCONFIG")
+                return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}).second;
+            if (sub == "TELITCPSMSSTATUS")
+                return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}).second;
+            if (sub == "SURVEYRESULT")
+                return request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}).second;
+            if (sub == "OPERATORLIST")
+                return request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}).second;
+            if (sub == "STATE") {
+                return run_network_command_sync(
+                    [&]() { return std::string("\"") + std::string(rpc::to_str(network.state())) + "\""; });
+            }
             if (sub.rfind("SERVERINFO", 0) == 0) {
                 std::string arg = sub.size() > 10 ? sub.substr(11) : "";
-                const auto* arr = network.server_info_array();
                 if (!arg.empty()) {
                     int n = 0;
                     bool fValid = !arg.empty();
@@ -231,71 +324,48 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                         n = (n * 10) + (c - '0');
                     }
                     if (!fValid) return "ERROR: invalid conn_id";
-                    if (n >= 1 && n <= MAX_SERVER_CONNECTIONS) return rpc::to_json(arr[n - 1]);
+                    if (n >= 1 && n <= MAX_SERVER_CONNECTIONS) {
+                        return request_radio_state(
+                                   {modem::RadioLteRequestType::get_server_info_array, static_cast<uint32_t>(n), 0U})
+                            .second;
+                    }
                     return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
                 }
-                std::string r = "[";
-                for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
-                    if (i > 0) r += ',';
-                    r += rpc::to_json(arr[i]);
-                }
-                return r + "]";
+                return request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}).second;
             }
             if (sub == "ALL") {
-                const auto* arr = network.server_info_array();
-                std::string r = "{"
-                                "\"config\":" +
-                                rpc::config_to_json(network.config()) +
-                                ","
-                                "\"state\":\"" +
-                                std::string(rpc::to_str(network.state())) +
-                                "\","
-                                "\"modem_info\":" +
-                                rpc::to_json(network.modem_info()) +
-                                ","
-                                "\"sim_status\":\"" +
-                                std::string(rpc::to_str(network.sim_status())) +
-                                "\","
-                                "\"radio_tech\":\"" +
-                                std::string(rpc::to_str(network.radio_tech())) +
-                                "\","
-                                "\"reg_status\":\"" +
-                                std::string(rpc::to_str(network.reg_status())) +
-                                "\","
-                                "\"reg_info\":" +
-                                rpc::to_json(network.registration_info()) +
-                                ","
-                                "\"network_info\":" +
-                                rpc::to_json(network.network_info()) +
-                                ","
-                                "\"signal_quality\":" +
-                                rpc::to_json(network.signal_quality()) +
-                                ","
-                                "\"psm_mode\":\"" +
-                                std::string(rpc::to_str(network.psm_mode())) +
-                                "\","
-                                "\"cpsms_config\":" +
-                                rpc::to_json(network.cpsms_config()) +
-                                ","
-                                "\"telit_cpsms_config\":" +
-                                rpc::to_json(network.telit_cpsms_config()) +
-                                ","
-                                "\"telit_cpsms_status\":" +
-                                rpc::to_json(network.telit_cpsms_status()) +
-                                ","
-                                "\"survey_result\":" +
-                                rpc::to_json(network.network_survey_result()) +
-                                ","
-                                "\"operator_list\":" +
-                                rpc::to_json(network.available_operators()) +
-                                ","
-                                "\"server_info\":[";
-                for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
-                    if (i > 0) r += ',';
-                    r += rpc::to_json(arr[i]);
-                }
-                r += "]}";
-                return r;
+                auto config = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}).second;
+                auto modem_info = request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}).second;
+                auto sim_status = request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}).second;
+                auto radio_tech = request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}).second;
+                auto reg_status = request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}).second;
+                auto reg_info = request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}).second;
+                auto network_info = request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}).second;
+                auto signal_quality =
+                    request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}).second;
+                auto psm_mode = request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}).second;
+                auto cpsms_config = request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}).second;
+                auto telit_cpsms_config =
+                    request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}).second;
+                auto telit_cpsms_status =
+                    request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}).second;
+                auto survey_result =
+                    request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}).second;
+                auto operator_list =
+                    request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}).second;
+                auto server_info =
+                    request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}).second;
+                auto state =
+                    run_network_command_sync([&]() { return std::string("\"") + rpc::to_str(network.state()) + "\""; });
+
+                return std::string("{") + "\"config\":" + config + "," + "\"state\":" + state + "," +
+                       "\"modem_info\":" + modem_info + "," + "\"sim_status\":" + sim_status + "," +
+                       "\"radio_tech\":" + radio_tech + "," + "\"reg_status\":" + reg_status + "," +
+                       "\"reg_info\":" + reg_info + "," + "\"network_info\":" + network_info + "," +
+                       "\"signal_quality\":" + signal_quality + "," + "\"psm_mode\":" + psm_mode + "," +
+                       "\"cpsms_config\":" + cpsms_config + "," + "\"telit_cpsms_config\":" + telit_cpsms_config + "," +
+                       "\"telit_cpsms_status\":" + telit_cpsms_status + "," + "\"survey_result\":" + survey_result +
+                       "," + "\"operator_list\":" + operator_list + "," + "\"server_info\":" + server_info + "}";
             }
             return "ERROR: unknown GET resource";
         }
@@ -414,15 +484,30 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     std::thread network_thread([&]() {
         while (true) {
             std::deque<std::function<void()>> pending_commands;
+            std::deque<std::shared_ptr<RadioStateRequest>> pending_radio_requests;
             {
                 std::scoped_lock command_queue_lock(command_queue_mutex);
                 pending_commands.swap(command_queue);
+            }
+            {
+                std::scoped_lock radio_state_lock(radio_state_queue_mutex);
+                pending_radio_requests.swap(radio_state_queue);
             }
 
             {
                 std::scoped_lock network_lock(network_mutex);
                 for (const auto& command : pending_commands) {
                     command();
+                }
+                for (const auto& request : pending_radio_requests) {
+                    auto [ok, payload] = process_radio_state_request(request->msg);
+                    {
+                        std::scoped_lock req_lock(request->mutex);
+                        request->ok = ok;
+                        request->payload = std::move(payload);
+                        request->done = true;
+                    }
+                    request->event.notify_one();
                 }
 
                 network.loop();

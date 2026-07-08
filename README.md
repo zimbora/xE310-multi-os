@@ -19,6 +19,8 @@ All code must compile and run correctly on every target platform.
 - Core modem logic (AT command parsing, state machine) must be **platform-independent**
 - Prefer composition over inheritance for platform abstractions
 
+Thread communication responsibilities and event signaling are documented in [ThreadComms.md](ThreadComms.md).
+
 ## Code Style
 
 Code style, naming conventions, formatting, and static analysis rules are documented in [CodePolicy.md](CodePolicy.md).
@@ -41,6 +43,8 @@ Contribution workflow, commit message rules, changelog generation, and validatio
 - All UART operations must support both blocking and non-blocking modes
 - Timeouts must be configurable for every AT command exchange
 - Logging must be abstracted (use Zephyr logging on embedded, stdout/spdlog on desktop)
+
+For thread request/response, socket data queueing, and event-flag signaling guidance, see [ThreadComms.md](ThreadComms.md).
 
 ## Code Formatting
 
