@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -78,7 +79,7 @@ public:
     }
 
     void resize(size_t new_size) noexcept {
-        if (new_size > Capacity) new_size = Capacity;
+        new_size = std::min(new_size, Capacity);
         if (new_size > size_) {
             for (size_t i = size_; i < new_size; ++i) data_[i] = T{};
         }
@@ -86,7 +87,7 @@ public:
     }
 
     void resize(size_t new_size, const T& value) noexcept {
-        if (new_size > Capacity) new_size = Capacity;
+        new_size = std::min(new_size, Capacity);
         if (new_size > size_) {
             for (size_t i = size_; i < new_size; ++i) data_[i] = value;
         }

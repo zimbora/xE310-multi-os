@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <string_view>
@@ -34,7 +35,7 @@ public:
 
     explicit FixedString(std::string_view sv) noexcept
         : size_(detail::fs_min(sv.size(), Capacity)) {
-        std::memcpy(buf_, sv.data(), size_);
+        std::copy_n(sv.begin(), size_, buf_);
         buf_[size_] = '\0';
     }
 
@@ -69,7 +70,7 @@ public:
 
     FixedString& operator=(std::string_view sv) noexcept {
         size_ = detail::fs_min(sv.size(), Capacity);
-        std::memcpy(buf_, sv.data(), size_);
+        std::copy_n(sv.begin(), size_, buf_);
         buf_[size_] = '\0';
         return *this;
     }
