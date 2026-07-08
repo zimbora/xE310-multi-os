@@ -483,6 +483,37 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     });
 
     network_worker_running.store(true);
+
+    // Event consumer thread: waits for RadioLteChannels events and logs state
+    // changes, responses, and log messages published by the network thread.
+    std::thread event_thread([&]() {
+        constexpr uint32_t ALL_EVENTS = modem::MODEM_EVT_STATE | modem::MODEM_EVT_RESPONSE | modem::MODEM_EVT_LOG;
+        while (true) {
+            uint32_t matched = channels.wait(ALL_EVENTS, true, 1000);
+            if (matched == 0) continue;
+
+            if ((matched & modem::MODEM_EVT_STATE) != 0) {
+                const auto& st = channels.current_state();
+                MODEM_LOG_INF("Event thread: state=%u event=%u", static_cast<unsigned>(st.state),
+                              static_cast<unsigned>(st.event));
+            }
+
+            if ((matched & modem::MODEM_EVT_RESPONSE) != 0) {
+                modem::ModemResponseMsg resp{};
+                while (channels.recv_response(resp) == modem::MessageChannelError::ok) {
+                    MODEM_LOG_INF("Event thread: response ok=%s", resp.ok ? "true" : "false");
+                }
+            }
+
+            if ((matched & modem::MODEM_EVT_LOG) != 0) {
+                modem::ModemLogMsg log_msg{};
+                while (channels.recv_log(log_msg) == modem::MessageChannelError::ok) {
+                    MODEM_LOG_INF("Event thread: log: %s", log_msg.text.c_str());
+                }
+            }
+        }
+    });
+
     std::thread network_thread([&]() {
         while (true) {
             std::deque<std::function<void()>> pending_commands;
@@ -538,6 +569,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
         }
     });
 
+    event_thread.join();
     network_thread.join();
     return 0;
 }
