@@ -99,7 +99,7 @@ struct SignalQuality {
     /// Convert raw rsrp to dBm. Returns INT_MIN if unknown (255).
     int rsrp_dbm() const { return rsrp == 255 ? -999 : -140 + rsrp; }
     /// Convert raw rsrq to tenths of dB (e.g. -175 = -17.5 dB). Returns INT_MIN if unknown.
-    int rsrq_tenth_db() const { return rsrq == 255 ? -9999 : -195 + rsrq * 5; }
+    int rsrq_tenth_db() const { return rsrq == 255 ? -9999 : -195 + (rsrq * 5); }
 };
 
 /// PSM mode for AT+CPSMS and AT#CPSMS.

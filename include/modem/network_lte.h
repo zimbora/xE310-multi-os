@@ -25,7 +25,7 @@
 // #define DEFAULT_PLMN "26803" // NOS
 // #define DEFAULT_PLMN "26806" // MEO
 
-#if defined(ONET_PUBLIC)
+#ifdef ONET_PUBLIC
 #define DEFAULT_APN "terminal.apn"
 #define FALLBACK_APN "terminal.apn"
 #elif defined(TELENOR_PUBLIC)
