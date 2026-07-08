@@ -10,6 +10,12 @@
 #include "modem/timer_factory.h"
 #include <memory>
 #include <algorithm>
+#include <atomic>
+#include <deque>
+#include <functional>
+#include <future>
+#include <mutex>
+#include <vector>
 
 #include <thread>
 #include <chrono>
@@ -34,6 +40,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     modem::xE310 modem(modem_controller);
 
     modem::NetworkLteConfig lteConfig;
+    std::mutex network_mutex;
 
     // IPC server: messages from external process (e.g. LwM2M agent) are
     // queued for TX. Wire format: newline-delimited text — compatible with nc.
@@ -52,27 +59,48 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     };
 
     modem::NetworkLte network(modem, lteConfig, on_data_received);
+    std::atomic_bool network_worker_running{false};
+    std::mutex command_queue_mutex;
+    std::deque<std::function<void()>> command_queue;
+
+    auto enqueue_network_command = [&](std::function<void()> command) {
+        std::scoped_lock command_queue_lock(command_queue_mutex);
+        command_queue.emplace_back(std::move(command));
+    };
+
+    auto run_network_command_sync = [&](auto command) {
+        using Result = decltype(command());
+        if (!network_worker_running.load()) {
+            std::scoped_lock network_lock(network_mutex);
+            return command();
+        }
+
+        auto done = std::make_shared<std::promise<Result>>();
+        auto result = done->get_future();
+        enqueue_network_command([command = std::move(command), done]() mutable { done->set_value(command()); });
+        return result.get();
+    };
 
     ipc.set_callback([&](const uint8_t* data, uint16_t len) {
-        if (network.network_connect()) {
-            MODEM_LOG_INF("Successfully connected to network");
-        } else {
-            MODEM_LOG_ERR("Failed to connect to network");
-            // close socket
-            ipc.stop();
-            return 1;
-        }
-        bool fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
-        if (fRes) {
-            network.tx_write(lteConfig.conn_id, data, len);
-            network.call_action(modem::ModemAction::send_data);
-            MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
-        } else {
-            MODEM_LOG_ERR("Failed to connect to server");
-            // close socket
-            ipc.stop();
-            return 1;
-        }
+        std::vector<uint8_t> payload(data, data + len);
+        enqueue_network_command([&, payload = std::move(payload), len]() {
+            if (network.network_connect()) {
+                MODEM_LOG_INF("Successfully connected to network");
+            } else {
+                MODEM_LOG_ERR("Failed to connect to network");
+                ipc.stop();
+                return;
+            }
+            bool fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+            if (fRes) {
+                network.tx_write(lteConfig.conn_id, payload.data(), len);
+                network.call_action(modem::ModemAction::send_data);
+                MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+            } else {
+                MODEM_LOG_ERR("Failed to connect to server");
+                ipc.stop();
+            }
+        });
         return 0;
     });
     if (!ipc.start()) {
@@ -82,9 +110,12 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     }
 
     coap_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
-        network.tx_write(lteConfig.conn_id, data, len);
-        network.call_action(modem::ModemAction::send_data);
-        MODEM_LOG_INF("CoAP IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+        std::vector<uint8_t> payload(data, data + len);
+        enqueue_network_command([&, payload = std::move(payload), len]() {
+            network.tx_write(lteConfig.conn_id, payload.data(), len);
+            network.call_action(modem::ModemAction::send_data);
+            MODEM_LOG_INF("CoAP IPC: queued %u bytes for TX on conn %d", len, lteConfig.conn_id);
+        });
     });
     if (!coap_ipc.start()) {
         MODEM_LOG_WRN("CoAP IPC server failed to start on port 9001 (continuing without it)");
@@ -98,38 +129,42 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     // On disconnect → modem leaves transparent mode.
     IpcServer at_ipc(9002, nullptr, IpcServer::Mode::line);
     at_ipc.set_connect_callback([&]() {
-        MODEM_LOG_INF("AT IPC: client connected, entering transparent mode");
-        // Use call_action + execute_actions instead of the blocking enter_transparent_mode()
-        // to avoid stalling the IPC thread before client_loop starts receiving data.
-        network
-            .enter_transparent_mode(); // this will internally call the modem action to enter transparent mode, but we
-                                       // need to call execute_actions here to actually perform the action and change
-                                       // the modem state before we start receiving AT commands from the client
+        enqueue_network_command([&]() {
+            MODEM_LOG_INF("AT IPC: client connected, entering transparent mode");
+            network.enter_transparent_mode();
+        });
     });
     at_ipc.set_callback([&](const uint8_t* data, uint16_t len) {
-        std::string_view cmd(reinterpret_cast<const char*>(data), len);
-        modem::FixedString<modem::AT_RESPONSE_MAX> response;
-        MODEM_LOG_INF("AT IPC >> %.*s", static_cast<int>(cmd.size()), cmd.data());
-        if (network.send_at_command(cmd, response, (uint32_t)210000)) {
-            // parse_response() strips the status line into AtResponse::status,
-            // so response.body is empty for simple commands (e.g. AT → OK).
-            // Re-append the status line so the nc client sees a complete reply.
-            if (!response.empty()) response.append("\r\n");
-            response.append("OK\r\n");
-            MODEM_LOG_INF("AT IPC << %s", response.c_str());
-            at_ipc.send(reinterpret_cast<const uint8_t*>(response.c_str()), static_cast<uint16_t>(response.size()));
-        } else {
-            MODEM_LOG_ERR("AT IPC: command failed");
-            at_ipc.send(reinterpret_cast<const uint8_t*>(response.c_str()), static_cast<uint16_t>(response.size()));
-        }
+        struct AtCommandResult {
+            bool ok = false;
+            std::string response;
+        };
+
+        std::string cmd(reinterpret_cast<const char*>(data), len);
+        AtCommandResult cmd_result = run_network_command_sync([&]() {
+            modem::FixedString<modem::AT_RESPONSE_MAX> response;
+            MODEM_LOG_INF("AT IPC >> %s", cmd.c_str());
+            AtCommandResult result{};
+            result.ok = network.send_at_command(cmd, response, static_cast<uint32_t>(210000));
+            if (result.ok) {
+                if (!response.empty()) response.append("\r\n");
+                response.append("OK\r\n");
+                MODEM_LOG_INF("AT IPC << %s", response.c_str());
+            } else {
+                MODEM_LOG_ERR("AT IPC: command failed");
+            }
+            result.response = response.c_str();
+            return result;
+        });
+
+        at_ipc.send(reinterpret_cast<const uint8_t*>(cmd_result.response.data()),
+                    static_cast<uint16_t>(cmd_result.response.size()));
     });
     at_ipc.set_disconnect_callback([&]() {
-        MODEM_LOG_INF("AT IPC: client disconnected, leaving transparent mode");
-        network.leave_transparent_mode(); // this will internally call the modem action to leave transparent mode, but
-                                          // we need to call execute_actions here to actually perform the action and
-                                          // change the modem state before we can send AT commands in normal mode again
-        // network.call_action(modem::ModemAction::leave_transparent_mode);
-        // network.execute_actions();
+        enqueue_network_command([&]() {
+            MODEM_LOG_INF("AT IPC: client disconnected, leaving transparent mode");
+            network.leave_transparent_mode();
+        });
     });
     if (!at_ipc.start()) {
         MODEM_LOG_WRN("AT IPC server failed to start on port 9002 (continuing without it)");
@@ -159,6 +194,14 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
         std::string sub = to_upper(sub_orig);
 
         if (cmd == "GET") {
+            if (sub == "SCANSURVEY") {
+                return run_network_command_sync([&]() {
+                    network.scan_networks();
+                    return rpc::to_json(network.csurv_result());
+                });
+            }
+
+            std::scoped_lock network_lock(network_mutex);
             if (sub == "CONFIG") return rpc::config_to_json(network.config());
             if (sub == "MODEMINFO") return rpc::to_json(network.modem_info());
             if (sub == "SIMSTATUS") return "\"" + std::string(rpc::to_str(network.sim_status())) + "\"";
@@ -173,10 +216,6 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
             if (sub == "TELITCPSMSSTATUS") return rpc::to_json(network.telit_cpsms_status());
             if (sub == "SURVEYRESULT") return rpc::to_json(network.network_survey_result());
             if (sub == "OPERATORLIST") return rpc::to_json(network.available_operators());
-            if (sub == "SCANSURVEY") {
-                network.scan_networks();
-                return rpc::to_json(network.csurv_result());
-            }
             if (sub == "STATE") return "\"" + std::string(rpc::to_str(network.state())) + "\"";
             if (sub.rfind("SERVERINFO", 0) == 0) {
                 std::string arg = sub.size() > 10 ? sub.substr(11) : "";
@@ -267,7 +306,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
             std::string args =
                 sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
             if (res == "NETWORKCONNECT" || res == "CONNECT") {
-                bool fOk = network.network_connect();
+                bool fOk = run_network_command_sync([&]() { return network.network_connect(); });
                 return std::string("{") + "\"resource\":\"NETWORKCONNECT\"," +
                        "\"network_connect\":" + (fOk ? "true" : "false") + "}";
             }
@@ -289,24 +328,31 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                     }
                 }
 
-                bool fServerOk = network.server_disconnect(static_cast<uint8_t>(conn_id));
-                bool fNetworkOk = network.network_disconnect();
+                return run_network_command_sync([&, conn_id]() {
+                    bool fServerOk = network.server_disconnect(static_cast<uint8_t>(conn_id));
+                    bool fNetworkOk = network.network_disconnect();
 
-                return std::string("{") + "\"resource\":\"NETWORKDISCONNECT\"," +
-                       "\"conn_id\":" + std::to_string(conn_id) + "," +
-                       "\"server_disconnect\":" + (fServerOk ? "true" : "false") + "," +
-                       "\"network_disconnect\":" + (fNetworkOk ? "true" : "false") + "}";
+                    return std::string("{") + "\"resource\":\"NETWORKDISCONNECT\"," +
+                           "\"conn_id\":" + std::to_string(conn_id) + "," +
+                           "\"server_disconnect\":" + (fServerOk ? "true" : "false") + "," +
+                           "\"network_disconnect\":" + (fNetworkOk ? "true" : "false") + "}";
+                });
             }
             if (res == "CONFIG") {
-                auto cfg = network.config();
-                if (rpc::apply_config_fields(args, cfg)) {
-                    network.set_config(cfg);
-                    return rpc::config_to_json(network.config());
-                }
-                return "ERROR: no valid fields provided (use key=value pairs)";
+                return run_network_command_sync([&, args]() {
+                    auto cfg = network.config();
+                    if (rpc::apply_config_fields(args, cfg)) {
+                        network.set_config(cfg);
+                        return rpc::config_to_json(network.config());
+                    }
+                    return std::string("ERROR: no valid fields provided (use key=value pairs)");
+                });
             }
             if (res == "FORCEPSM") {
-                network.force_psm();
+                run_network_command_sync([&]() {
+                    network.force_psm();
+                    return true;
+                });
                 return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
             }
             return "ERROR: unknown SET resource";
@@ -328,18 +374,27 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
         MODEM_LOG_INF("RPC IPC server listening on localhost:9003 (RPC get/set)");
     }
 
-    bool fNetRes = network.network_connect();
+    bool fNetRes = false;
+    {
+        std::scoped_lock network_lock(network_mutex);
+        fNetRes = network.network_connect();
+    }
     if (!fNetRes) {
         MODEM_LOG_ERR("Failed to connect to network");
         // modem_controller.disconnect();
         // return 1;
     }
 
-    bool fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+    bool fRes = false;
+    {
+        std::scoped_lock network_lock(network_mutex);
+        fRes = network.server_connect(lteConfig.conn_id, "UDP", "185.205.209.91", 10000);
+    }
     if (fRes) {
         MODEM_LOG_INF("Connected to server successfully");
         // Queue initial message for TX
         std::string hello = "Hello, World!";
+        std::scoped_lock network_lock(network_mutex);
         network.tx_write(lteConfig.conn_id, reinterpret_cast<const uint8_t*>(hello.data()), hello.size());
         network.call_action(modem::ModemAction::send_data);
         MODEM_LOG_INF("Initial message queued for TX");
@@ -350,58 +405,46 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
     auto timer = modem::create_platform_timer();
 
-    bool fForcePsmMode = false;
+    std::atomic_bool fForcePsmMode{false};
     timer->start(15000, [&]() {
         // fForcePsmMode = true;
     });
 
-    while (true) {
-        network.loop();
-
-        // Drain RX queue and forward to IPC client
-        modem::QueueMessage rx_msg;
-        while (network.rx_read(lteConfig.conn_id, rx_msg) == modem::QueueError::ok) {
-            std::string payload(rx_msg.data.begin(), rx_msg.data.end());
-            MODEM_LOG_INF("RX queue [conn %d]: %s (%zu bytes)", lteConfig.conn_id, payload.c_str(), rx_msg.data.size());
-            ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
-        }
-
-        // cppcheck-suppress knownConditionTrueFalse
-        if (fForcePsmMode) {
-            MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
-            fForcePsmMode = false;
-            network.force_psm();
-        }
-        /*
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        count++;
-
-        // Queue a TX message every 5 seconds
-        if(count%5==0){
-            std::string msg = "msg : " + std::to_string(count/5);
-            network.tx_write(lteConfig.conn_id, reinterpret_cast<const uint8_t*>(msg.data()), msg.size());
-            MODEM_LOG_INF("Queued TX message: %s", msg.c_str());
-            // Trigger send_data action to drain TX queues
-            network.call_action(modem::ModemAction::send_data);
-        }
-
-        if(count%30==0){
-
-            if(network.server_disconnect(1))
-                MODEM_LOG_INF("Disconnected from server successfully");
-            else
-                MODEM_LOG_ERR("Failed to disconnect from server");
-            MODEM_LOG_INF("Attempting to enter sleep mode...");
-            return 0;
-
-            if(network.enter_sleep()){
-                MODEM_LOG_INF("Successfully entered sleep mode");
-            }else{
-                MODEM_LOG_ERR("Failed to enter sleep mode");
+    network_worker_running.store(true);
+    std::thread network_thread([&]() {
+        while (true) {
+            std::deque<std::function<void()>> pending_commands;
+            {
+                std::scoped_lock command_queue_lock(command_queue_mutex);
+                pending_commands.swap(command_queue);
             }
 
+            {
+                std::scoped_lock network_lock(network_mutex);
+                for (const auto& command : pending_commands) {
+                    command();
+                }
+
+                network.loop();
+
+                // Drain RX queue and forward to IPC client
+                modem::QueueMessage rx_msg;
+                while (network.rx_read(lteConfig.conn_id, rx_msg) == modem::QueueError::ok) {
+                    std::string payload(rx_msg.data.begin(), rx_msg.data.end());
+                    MODEM_LOG_INF("RX queue [conn %d]: %s (%zu bytes)", lteConfig.conn_id, payload.c_str(),
+                                  rx_msg.data.size());
+                    ipc.send(rx_msg.data.data(), static_cast<uint16_t>(rx_msg.data.size()));
+                }
+
+                if (fForcePsmMode.exchange(false)) {
+                    MODEM_LOG_INF("Forcing PSM mode for testing purposes...");
+                    network.force_psm();
+                }
+            }
+            modem::delay_ms(10);
         }
-        */
-    }
+    });
+
+    network_thread.join();
     return 0;
 }
