@@ -36,11 +36,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install clang-tidy
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy
+      - name: Install clang-tidy (pinned)
+        run: |
+          python3 -m pip install --user clang-tidy==22.1.3
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Generate compile_commands.json
+        run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Run clang-tidy
-        run: clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp
+        run: clang-tidy -p build --warnings-as-errors="*" src/*.cpp
 
   cppcheck:
     name: Cppcheck Static Analysis
