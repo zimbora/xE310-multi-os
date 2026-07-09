@@ -3,6 +3,7 @@
 #include "modem/event_flags_factory.h"
 #include "modem/fixed_string.h"
 #include "modem/message_channel_factory.h"
+#include "modem/network_lte_config.h"
 #include "modem/static_vector.h"
 #include "modem/xe310.h"
 
@@ -15,7 +16,6 @@ namespace modem {
 
 enum class NetworkLteState : uint8_t;
 enum class NetworkLteEvent : uint8_t;
-struct NetworkLteConfig;
 struct ServerInfo;
 
 /// Event bits posted on modem_evt to synchronize modem requests, responses and notifications.
@@ -48,6 +48,10 @@ enum class RadioLteRequestType : uint8_t {
     get_server_info_array,
     get_config,
     set_config,
+    network_connect,
+    network_disconnect,
+    server_disconnect,
+    force_psm,
 };
 
 /// Fixed-size command message submitted to modem_tx_q.
@@ -57,19 +61,17 @@ struct ModemTxMsg {
     uint32_t arg1 = 0;
 };
 
-using RadioLteRequestMsg = ModemTxMsg;
-
-/// Generic status response for command completion signaling.
-struct ModemResponseMsg {
-    bool ok = false;
+struct ModemSetConfigMsg {
+    RadioLteRequestType type = RadioLteRequestType::set_config;
+    NetworkLteConfig config{};
 };
 
-using RadioLteResponseMsg = ModemResponseMsg;
+using RadioLteRequestMsg = ModemTxMsg;
 
-/// Response payload sent back on modem_rx_q when registration_info is requested.
-struct ModemRegistrationInfoMsg {
+template<typename ValueType>
+struct ModemTypedResponseMsg {
     bool ok = false;
-    RegistrationInfo registration_info{};
+    ValueType value{};
 };
 
 /// Event payload describing the current LTE state machine snapshot.
@@ -96,28 +98,27 @@ public:
           modem_log_q(create_platform_message_channel(MODEM_LOG_Q_DEPTH)),
           modem_evt(create_platform_event_flags()) {}
 
-    MessageChannelError request_registration_info(uint32_t timeout_ms = 0) {
-        ModemTxMsg msg{};
-        msg.type = RadioLteRequestType::get_registration_info;
-        return send_request(msg, timeout_ms);
+    MessageChannelError send_request(const ModemTxMsg& msg, uint32_t timeout_ms = 0) {
+        return send_request_message(msg, timeout_ms);
     }
 
-    MessageChannelError send_request(const ModemTxMsg& msg, uint32_t timeout_ms = 0) {
-        MessageChannelError err = send_message(*modem_tx_q, msg, timeout_ms);
-        if (err == MessageChannelError::ok) {
-            modem_evt->set(MODEM_EVT_REQUEST);
-        }
-        return err;
+    MessageChannelError send_request(const ModemSetConfigMsg& msg, uint32_t timeout_ms = 0) {
+        return send_request_message(msg, timeout_ms);
     }
 
     MessageChannelError recv_request(ModemTxMsg& msg, uint32_t timeout_ms = 0) {
         return receive_message(*modem_tx_q, msg, timeout_ms);
     }
 
-    MessageChannelError publish_registration_info(const RegistrationInfo& info, uint32_t timeout_ms = 0) {
-        ModemRegistrationInfoMsg msg{};
+    MessageChannelError recv_request_frame(MessageFrame& frame, uint32_t timeout_ms = 0) {
+        return modem_tx_q->receive(frame, timeout_ms);
+    }
+
+    template<typename ValueType>
+    MessageChannelError publish_typed_response(const ValueType& value, uint32_t timeout_ms = 0) {
+        ModemTypedResponseMsg<ValueType> msg{};
         msg.ok = true;
-        msg.registration_info = info;
+        msg.value = value;
         MessageChannelError err = send_message(*modem_rx_q, msg, timeout_ms);
         if (err == MessageChannelError::ok) {
             modem_evt->set(MODEM_EVT_RESPONSE);
@@ -125,21 +126,8 @@ public:
         return err;
     }
 
-    MessageChannelError recv_registration_info(ModemRegistrationInfoMsg& msg, uint32_t timeout_ms = 0) {
-        return receive_message(*modem_rx_q, msg, timeout_ms);
-    }
-
-    MessageChannelError send_response(bool ok, uint32_t timeout_ms = 0) {
-        ModemResponseMsg msg{};
-        msg.ok = ok;
-        MessageChannelError err = send_message(*modem_rx_q, msg, timeout_ms);
-        if (err == MessageChannelError::ok) {
-            modem_evt->set(MODEM_EVT_RESPONSE);
-        }
-        return err;
-    }
-
-    MessageChannelError recv_response(ModemResponseMsg& msg, uint32_t timeout_ms = 0) {
+    template<typename ValueType>
+    MessageChannelError recv_typed_response(ModemTypedResponseMsg<ValueType>& msg, uint32_t timeout_ms = 0) {
         return receive_message(*modem_rx_q, msg, timeout_ms);
     }
 
@@ -172,6 +160,14 @@ public:
     void clear(uint32_t events) { modem_evt->clear(events); }
 
 private:
+    template<typename RequestType>
+    MessageChannelError send_request_message(const RequestType& msg, uint32_t timeout_ms) {
+        MessageChannelError err = send_message(*modem_tx_q, msg, timeout_ms);
+        if (err == MessageChannelError::ok) {
+            modem_evt->set(MODEM_EVT_REQUEST);
+        }
+        return err;
+    }
     template<typename MessageType>
     static MessageChannelError send_message(MessageChannelInterface& channel, const MessageType& msg,
                                             uint32_t timeout_ms) {
@@ -202,6 +198,18 @@ private:
 class IRadioLte {
 public:
     virtual ~IRadioLte() = default;
+
+    /// Attach to network and establish default PDP connectivity.
+    virtual bool network_connect() = 0;
+
+    /// Disconnect from network and deactivate connectivity.
+    virtual bool network_disconnect() = 0;
+
+    /// Disconnect server socket for the given connection id.
+    virtual bool server_disconnect(uint8_t conn_id) = 0;
+
+    /// Force modem into PSM flow according to current configuration.
+    virtual bool force_psm() = 0;
 
     /// Last registration info read from the modem.
     virtual const RegistrationInfo& registration_info() const = 0;

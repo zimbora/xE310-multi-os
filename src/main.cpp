@@ -12,7 +12,6 @@
 #include <memory>
 #include <algorithm>
 #include <atomic>
-#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <future>
@@ -65,90 +64,197 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     std::atomic_bool network_worker_running{false};
     std::mutex command_queue_mutex;
     std::deque<std::function<void()>> command_queue;
-    struct RadioStateRequest {
-        modem::RadioLteRequestMsg msg;
-        std::mutex mutex;
-        std::condition_variable event;
-        bool done = false;
-        bool ok = false;
-        std::string payload;
-    };
-    std::mutex radio_state_queue_mutex;
-    std::deque<std::shared_ptr<RadioStateRequest>> radio_state_queue;
 
     auto enqueue_network_command = [&](std::function<void()> command) {
         std::scoped_lock command_queue_lock(command_queue_mutex);
         command_queue.emplace_back(std::move(command));
     };
 
-    auto process_radio_state_request = [&](const modem::RadioLteRequestMsg& req) -> std::pair<bool, std::string> {
-        switch (req.type) {
-            case modem::RadioLteRequestType::get_registration_info:
-                return {true, rpc::to_json(network.registration_info())};
-            case modem::RadioLteRequestType::get_signal_quality: return {true, rpc::to_json(network.signal_quality())};
-            case modem::RadioLteRequestType::get_iccid:
-                return {true, "\"" + std::string(network.iccid().c_str()) + "\""};
-            case modem::RadioLteRequestType::get_imsi: return {true, "\"" + std::string(network.imsi().c_str()) + "\""};
-            case modem::RadioLteRequestType::get_modem_info: return {true, rpc::to_json(network.modem_info())};
-            case modem::RadioLteRequestType::get_sim_status:
-                return {true, "\"" + std::string(rpc::to_str(network.sim_status())) + "\""};
-            case modem::RadioLteRequestType::get_radio_tech:
-                return {true, "\"" + std::string(rpc::to_str(network.radio_tech())) + "\""};
-            case modem::RadioLteRequestType::get_reg_status:
-                return {true, "\"" + std::string(rpc::to_str(network.reg_status())) + "\""};
-            case modem::RadioLteRequestType::get_network_info: return {true, rpc::to_json(network.network_info())};
-            case modem::RadioLteRequestType::get_psm_mode:
-                return {true, "\"" + std::string(rpc::to_str(network.psm_mode())) + "\""};
-            case modem::RadioLteRequestType::get_cpsms_config: return {true, rpc::to_json(network.cpsms_config())};
-            case modem::RadioLteRequestType::get_telit_cpsms_config:
-                return {true, rpc::to_json(network.telit_cpsms_config())};
-            case modem::RadioLteRequestType::get_telit_cpsms_status:
-                return {true, rpc::to_json(network.telit_cpsms_status())};
-            case modem::RadioLteRequestType::get_network_survey_result:
-                return {true, rpc::to_json(network.network_survey_result())};
-            case modem::RadioLteRequestType::get_available_operators:
-                return {true, rpc::to_json(network.available_operators())};
-            case modem::RadioLteRequestType::get_csurv_result: return {true, rpc::to_json(network.csurv_result())};
-            case modem::RadioLteRequestType::scan_networks:
-                network.scan_networks(req.arg0, req.arg1);
-                return {true, rpc::to_json(network.csurv_result())};
+    std::function<std::pair<bool, std::string>(modem::RadioLteRequestMsg, uint32_t)> request_radio_state_impl;
+    request_radio_state_impl = [&](modem::RadioLteRequestMsg msg,
+                                   uint32_t timeout_ms) -> std::pair<bool, std::string> {
+        if (!network_worker_running.load()) {
+            std::scoped_lock network_lock(network_mutex);
+            return {false, "ERROR: network worker not running"};
+        }
+
+        modem::MessageChannelError send_err = channels.send_request(msg, timeout_ms);
+        if (send_err != modem::MessageChannelError::ok) {
+            return {false, "ERROR: failed to send request"};
+        }
+
+        uint32_t matched = channels.wait(modem::MODEM_EVT_RESPONSE, true, timeout_ms);
+        if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
+            return {false, "ERROR: timeout waiting response"};
+        }
+
+        switch (msg.type) {
+            case modem::RadioLteRequestType::get_registration_info: {
+                modem::ModemTypedResponseMsg<modem::RegistrationInfo> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid registration_info response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_signal_quality: {
+                modem::ModemTypedResponseMsg<modem::SignalQuality> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid signal_quality response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_iccid: {
+                modem::ModemTypedResponseMsg<modem::FixedString<modem::MODEM_SHORT_STR>> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid iccid response"};
+                }
+                return {resp.ok, "\"" + std::string(resp.value.c_str()) + "\""};
+            }
+            case modem::RadioLteRequestType::get_imsi: {
+                modem::ModemTypedResponseMsg<modem::FixedString<modem::MODEM_SHORT_STR>> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid imsi response"};
+                }
+                return {resp.ok, "\"" + std::string(resp.value.c_str()) + "\""};
+            }
+            case modem::RadioLteRequestType::get_modem_info: {
+                modem::ModemTypedResponseMsg<modem::ModemInfo> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid modem_info response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_sim_status: {
+                modem::ModemTypedResponseMsg<modem::SimStatus> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid sim_status response"};
+                }
+                return {resp.ok, "\"" + std::string(rpc::to_str(resp.value)) + "\""};
+            }
+            case modem::RadioLteRequestType::get_radio_tech: {
+                modem::ModemTypedResponseMsg<modem::RadioTech> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid radio_tech response"};
+                }
+                return {resp.ok, "\"" + std::string(rpc::to_str(resp.value)) + "\""};
+            }
+            case modem::RadioLteRequestType::get_reg_status: {
+                modem::ModemTypedResponseMsg<modem::RegStatus> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid reg_status response"};
+                }
+                return {resp.ok, "\"" + std::string(rpc::to_str(resp.value)) + "\""};
+            }
+            case modem::RadioLteRequestType::get_network_info: {
+                modem::ModemTypedResponseMsg<modem::NetworkInfo> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid network_info response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_psm_mode: {
+                modem::ModemTypedResponseMsg<modem::PsmMode> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid psm_mode response"};
+                }
+                return {resp.ok, "\"" + std::string(rpc::to_str(resp.value)) + "\""};
+            }
+            case modem::RadioLteRequestType::get_cpsms_config: {
+                modem::ModemTypedResponseMsg<modem::CpsmsConfig> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid cpsms_config response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_telit_cpsms_config: {
+                modem::ModemTypedResponseMsg<modem::TelitCpsmsConfig> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid telit_cpsms_config response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_telit_cpsms_status: {
+                modem::ModemTypedResponseMsg<modem::TelitCpsmsStatus> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid telit_cpsms_status response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_network_survey_result: {
+                modem::ModemTypedResponseMsg<modem::NetworkSurveyResult> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid network_survey_result response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_available_operators: {
+                modem::ModemTypedResponseMsg<modem::StaticVector<modem::Operator, modem::xE310::MAX_OPERATORS>> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid available_operators response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::get_csurv_result: {
+                modem::ModemTypedResponseMsg<modem::CsurvResult> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid csurv_result response"};
+                }
+                return {resp.ok, rpc::to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::scan_networks: {
+                modem::ModemTypedResponseMsg<bool> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid scan_networks response"};
+                }
+                if (!resp.ok || !resp.value) {
+                    return {false, "ERROR: scan_networks failed"};
+                }
+                return request_radio_state_impl({modem::RadioLteRequestType::get_csurv_result, 0U, 0U}, timeout_ms);
+            }
             case modem::RadioLteRequestType::get_server_info_array: {
-                const auto* arr = network.server_info_array();
-                if (req.arg0 >= 1 && req.arg0 <= MAX_SERVER_CONNECTIONS) {
-                    return {true, rpc::to_json(arr[req.arg0 - 1])};
+                modem::ModemTypedResponseMsg<const modem::ServerInfo*> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid server_info_array response"};
+                }
+                if (!resp.ok || resp.value == nullptr) {
+                    return {false, "ERROR: server_info_array unavailable"};
+                }
+                if (msg.arg0 >= 1 && msg.arg0 <= MAX_SERVER_CONNECTIONS) {
+                    return {true, rpc::to_json(resp.value[msg.arg0 - 1])};
                 }
                 std::string out = "[";
                 for (int i = 0; i < MAX_SERVER_CONNECTIONS; ++i) {
                     if (i > 0) out += ',';
-                    out += rpc::to_json(arr[i]);
+                    out += rpc::to_json(resp.value[i]);
                 }
                 out += "]";
                 return {true, out};
             }
-            case modem::RadioLteRequestType::get_config: return {true, rpc::config_to_json(network.config())};
-            default: return {false, "ERROR: unsupported request"};
+            case modem::RadioLteRequestType::get_config: {
+                modem::ModemTypedResponseMsg<modem::NetworkLteConfig> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid config response"};
+                }
+                return {resp.ok, rpc::config_to_json(resp.value)};
+            }
+            case modem::RadioLteRequestType::set_config:
+            case modem::RadioLteRequestType::network_connect:
+            case modem::RadioLteRequestType::network_disconnect:
+            case modem::RadioLteRequestType::server_disconnect:
+            case modem::RadioLteRequestType::force_psm:
+            default: {
+                modem::ModemTypedResponseMsg<bool> resp{};
+                if (channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                    return {false, "ERROR: invalid response"};
+                }
+                return {resp.ok && resp.value, resp.value ? "true" : "false"};
+            }
         }
     };
 
     auto request_radio_state = [&](modem::RadioLteRequestMsg msg,
                                    uint32_t timeout_ms = 5000U) -> std::pair<bool, std::string> {
-        if (!network_worker_running.load()) {
-            std::scoped_lock network_lock(network_mutex);
-            return process_radio_state_request(msg);
-        }
-
-        auto request = std::make_shared<RadioStateRequest>();
-        request->msg = msg;
-        {
-            std::scoped_lock queue_lock(radio_state_queue_mutex);
-            radio_state_queue.emplace_back(request);
-        }
-
-        std::unique_lock<std::mutex> req_lock(request->mutex);
-        bool signaled =
-            request->event.wait_for(req_lock, std::chrono::milliseconds(timeout_ms), [&]() { return request->done; });
-        if (!signaled) return {false, "ERROR: network thread timeout"};
-        return {request->ok, request->payload};
+        return request_radio_state_impl(msg, timeout_ms);
     };
 
     auto run_network_command_sync = [&](auto command) {
@@ -378,9 +484,10 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
             std::string args =
                 sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1); // preserve original case for values
             if (res == "NETWORKCONNECT" || res == "CONNECT") {
-                bool fOk = run_network_command_sync([&]() { return network.network_connect(); });
+                auto [fOk, payload] = request_radio_state({modem::RadioLteRequestType::network_connect, 0U, 0U});
+                if (!fOk) return payload;
                 return std::string("{") + "\"resource\":\"NETWORKCONNECT\"," +
-                       "\"network_connect\":" + (fOk ? "true" : "false") + "}";
+                       "\"network_connect\":" + payload + "}";
             }
             if (res == "NETWORKDISCONNECT" || res == "DISCONNECT") {
                 int conn_id = lteConfig.conn_id;
@@ -400,32 +507,55 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                     }
                 }
 
-                return run_network_command_sync([&, conn_id]() {
-                    bool fServerOk = network.server_disconnect(static_cast<uint8_t>(conn_id));
-                    bool fNetworkOk = network.network_disconnect();
+                auto [server_ok, server_payload] = request_radio_state(
+                    {modem::RadioLteRequestType::server_disconnect, static_cast<uint32_t>(conn_id), 0U});
+                if (!server_ok) return server_payload;
 
-                    return std::string("{") + "\"resource\":\"NETWORKDISCONNECT\"," +
-                           "\"conn_id\":" + std::to_string(conn_id) + "," +
-                           "\"server_disconnect\":" + (fServerOk ? "true" : "false") + "," +
-                           "\"network_disconnect\":" + (fNetworkOk ? "true" : "false") + "}";
-                });
+                auto [network_ok, network_payload] =
+                    request_radio_state({modem::RadioLteRequestType::network_disconnect, 0U, 0U});
+                if (!network_ok) return network_payload;
+
+                return std::string("{") + "\"resource\":\"NETWORKDISCONNECT\"," +
+                       "\"conn_id\":" + std::to_string(conn_id) + "," +
+                       "\"server_disconnect\":" + server_payload + "," +
+                       "\"network_disconnect\":" + network_payload + "}";
             }
             if (res == "CONFIG") {
-                return run_network_command_sync([&, args]() {
-                    auto cfg = network.config();
-                    if (rpc::apply_config_fields(args, cfg)) {
-                        network.set_config(cfg);
-                        return rpc::config_to_json(network.config());
-                    }
-                    return std::string("ERROR: no valid fields provided (use key=value pairs)");
-                });
+                modem::ModemSetConfigMsg cfg_req{};
+
+                {
+                    std::scoped_lock network_lock(network_mutex);
+                    cfg_req.config = network.config();
+                }
+
+                if (!rpc::apply_config_fields(args, cfg_req.config)) {
+                    return "ERROR: no valid fields provided (use key=value pairs)";
+                }
+
+                modem::MessageChannelError send_err = channels.send_request(cfg_req, 5000U);
+                if (send_err != modem::MessageChannelError::ok) {
+                    return "ERROR: failed to send set_config request";
+                }
+
+                uint32_t matched = channels.wait(modem::MODEM_EVT_RESPONSE, true, 5000U);
+                if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
+                    return "ERROR: timeout waiting set_config response";
+                }
+
+                modem::ModemTypedResponseMsg<bool> set_resp{};
+                if (channels.recv_typed_response(set_resp, 0) != modem::MessageChannelError::ok || !set_resp.ok ||
+                    !set_resp.value) {
+                    return "ERROR: no valid fields provided (use key=value pairs)";
+                }
+
+                auto [cfg_ok, cfg_payload] = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U});
+                if (!cfg_ok) return cfg_payload;
+                return cfg_payload;
             }
             if (res == "FORCEPSM") {
-                run_network_command_sync([&]() {
-                    network.force_psm();
-                    return true;
-                });
-                return "{\"resource\":\"FORCEPSM\",\"status\":\"ok\"}";
+                auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::force_psm, 0U, 0U});
+                if (!ok) return payload;
+                return std::string("{") + "\"resource\":\"FORCEPSM\"," + "\"status\":" + payload + "}";
             }
             return "ERROR: unknown SET resource";
         }
@@ -487,7 +617,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     // Event consumer thread: waits for RadioLteChannels events and logs state
     // changes, responses, and log messages published by the network thread.
     std::thread event_thread([&]() {
-        constexpr uint32_t ALL_EVENTS = modem::MODEM_EVT_STATE | modem::MODEM_EVT_RESPONSE | modem::MODEM_EVT_LOG;
+        constexpr uint32_t ALL_EVENTS = modem::MODEM_EVT_STATE | modem::MODEM_EVT_LOG;
         while (true) {
             uint32_t matched = channels.wait(ALL_EVENTS, true, 1000);
             if (matched == 0) continue;
@@ -496,13 +626,6 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 const auto& st = channels.current_state();
                 MODEM_LOG_INF("Event thread: state=%u event=%u", static_cast<unsigned>(st.state),
                               static_cast<unsigned>(st.event));
-            }
-
-            if ((matched & modem::MODEM_EVT_RESPONSE) != 0) {
-                modem::ModemResponseMsg resp{};
-                while (channels.recv_response(resp) == modem::MessageChannelError::ok) {
-                    MODEM_LOG_INF("Event thread: response ok=%s", resp.ok ? "true" : "false");
-                }
             }
 
             if ((matched & modem::MODEM_EVT_LOG) != 0) {
@@ -517,30 +640,15 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     std::thread network_thread([&]() {
         while (true) {
             std::deque<std::function<void()>> pending_commands;
-            std::deque<std::shared_ptr<RadioStateRequest>> pending_radio_requests;
             {
                 std::scoped_lock command_queue_lock(command_queue_mutex);
                 pending_commands.swap(command_queue);
-            }
-            {
-                std::scoped_lock radio_state_lock(radio_state_queue_mutex);
-                pending_radio_requests.swap(radio_state_queue);
             }
 
             {
                 std::scoped_lock network_lock(network_mutex);
                 for (const auto& command : pending_commands) {
                     command();
-                }
-                for (const auto& request : pending_radio_requests) {
-                    auto [ok, payload] = process_radio_state_request(request->msg);
-                    {
-                        std::scoped_lock req_lock(request->mutex);
-                        request->ok = ok;
-                        request->payload = std::move(payload);
-                        request->done = true;
-                    }
-                    request->event.notify_one();
                 }
 
                 network.loop();

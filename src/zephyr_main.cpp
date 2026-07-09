@@ -27,7 +27,7 @@ static struct k_thread event_thread_data;
 /// changes, responses, and log messages published by the network thread.
 static void event_thread_entry(void* p1, void* /*p2*/, void* /*p3*/) {
     auto* channels = static_cast<modem::RadioLteChannels*>(p1);
-    constexpr uint32_t ALL_EVENTS = modem::MODEM_EVT_STATE | modem::MODEM_EVT_RESPONSE | modem::MODEM_EVT_LOG;
+    constexpr uint32_t ALL_EVENTS = modem::MODEM_EVT_STATE | modem::MODEM_EVT_LOG;
 
     while (true) {
         uint32_t matched = channels->wait(ALL_EVENTS, true, 1000);
@@ -37,13 +37,6 @@ static void event_thread_entry(void* p1, void* /*p2*/, void* /*p3*/) {
             const auto& st = channels->current_state();
             MODEM_LOG_INF("Event thread: state=%u event=%u", static_cast<unsigned>(st.state),
                           static_cast<unsigned>(st.event));
-        }
-
-        if ((matched & modem::MODEM_EVT_RESPONSE) != 0) {
-            modem::ModemResponseMsg resp{};
-            while (channels->recv_response(resp) == modem::MessageChannelError::ok) {
-                MODEM_LOG_INF("Event thread: response ok=%s", resp.ok ? "true" : "false");
-            }
         }
 
         if ((matched & modem::MODEM_EVT_LOG) != 0) {
