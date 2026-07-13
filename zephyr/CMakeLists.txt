@@ -9,9 +9,12 @@ zephyr_library_named(modem_xe310)
 
 zephyr_library_sources(
     ../src/at_command.cpp
+    ../src/i_radio_lte.cpp
     ../src/modem_controller.cpp
     ../src/network_lte.cpp
     ../src/xe310.cpp
+    ../src/hal/zephyr_event_flags.cpp
+    ../src/hal/zephyr_message_channel.cpp
     ../src/hal/zephyr_uart.cpp
     ../src/hal/zephyr_timer.cpp
     ../src/hal/zephyr_message_queue.cpp
