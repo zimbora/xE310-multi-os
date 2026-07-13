@@ -37,6 +37,8 @@ void process_radio_requests(RadioLteChannels& channels, IRadioLte& radio) {
 
             case RadioLteRequestType::get_imsi: channels.publish_typed_response(radio.imsi()); break;
 
+            case RadioLteRequestType::get_clock: channels.publish_typed_response(radio.clock()); break;
+
             case RadioLteRequestType::get_modem_info: channels.publish_typed_response(radio.modem_info()); break;
 
             case RadioLteRequestType::get_sim_status: channels.publish_typed_response(radio.sim_status()); break;

@@ -170,6 +170,21 @@ TEST_F(Xe310Test, GetImeiError) {
     EXPECT_TRUE(imei.empty());
 }
 
+TEST_F(Xe310Test, GetClock) {
+    expect_command_ok("AT+CCLK?", "+CCLK: \"26/07/13,21:00:00+00\"");
+    FixedString<MODEM_SHORT_STR> clock;
+    auto status = modem_->get_clock(clock);
+    EXPECT_EQ(status, ModemStatus::ok);
+    EXPECT_EQ(clock, "26/07/13,21:00:00+00");
+}
+
+TEST_F(Xe310Test, GetClockError) {
+    expect_command_error("AT+CCLK?");
+    FixedString<MODEM_SHORT_STR> clock;
+    EXPECT_EQ(modem_->get_clock(clock), ModemStatus::at_error);
+    EXPECT_TRUE(clock.empty());
+}
+
 TEST_F(Xe310Test, RequestSwPackageVersion) {
     expect_command_ok("AT#SWPKGV",
                       "17.00.xx4-B006\r\n17.00.xx4\r\nB006\r\nSW_V001");

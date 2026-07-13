@@ -30,6 +30,7 @@ enum class RadioLteRequestType : uint8_t {
     get_signal_quality,
     get_iccid,
     get_imsi,
+    get_clock,
     get_modem_info,
     get_sim_status,
     get_radio_tech,
@@ -230,6 +231,9 @@ public:
 
     /// SIM IMSI read at power-on.
     virtual const FixedString<MODEM_SHORT_STR>& imsi() const = 0;
+
+    /// Last modem clock read from AT+CCLK?.
+    virtual const FixedString<MODEM_SHORT_STR>& clock() const = 0;
 
     /// Full modem identification info read at power-on.
     virtual const ModemInfo& modem_info() const = 0;

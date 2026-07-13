@@ -281,6 +281,9 @@ public:
     /// AT+CGSN — Request IMEI (Product Serial Number).
     ModemStatus get_imei(FixedString<MODEM_SHORT_STR>& imei);
 
+    /// AT+CCLK? — Read modem clock.
+    ModemStatus get_clock(FixedString<MODEM_SHORT_STR>& clock);
+
     // --- SIM Card ---
 
     /// AT#CCID — Read SIM ICCID.
