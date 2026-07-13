@@ -292,37 +292,6 @@ std::string RpcServer::handle_request(const std::string& request) {
             return request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}, 5000U).second;
         }
 
-        if (sub == "ALL") {
-            std::string cfg = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, 5000U).second;
-            std::string modem_info = request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}, 5000U).second;
-            std::string sim_status = request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}, 5000U).second;
-            std::string radio_tech = request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}, 5000U).second;
-            std::string reg_status = request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}, 5000U).second;
-            std::string reg_info = request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}, 5000U).second;
-            std::string network_info = request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}, 5000U).second;
-            std::string signal_quality = request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}, 5000U).second;
-            std::string psm_mode = request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}, 5000U).second;
-            std::string cpsms_config = request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}, 5000U).second;
-            std::string telit_cpsms_config =
-                request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}, 5000U).second;
-            std::string telit_cpsms_status =
-                request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}, 5000U).second;
-            std::string survey_result =
-                request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}, 5000U).second;
-            std::string operator_list =
-                request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}, 5000U).second;
-            std::string server_info =
-                request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}, 5000U).second;
-            return std::string("{") + "\"config\":" + cfg + "," + "\"modem_info\":" + modem_info + "," +
-                   "\"sim_status\":" + sim_status + "," + "\"radio_tech\":" + radio_tech + "," +
-                   "\"reg_status\":" + reg_status + "," + "\"reg_info\":" + reg_info + "," +
-                   "\"network_info\":" + network_info + "," + "\"signal_quality\":" + signal_quality + "," +
-                   "\"psm_mode\":" + psm_mode + "," + "\"cpsms_config\":" + cpsms_config + "," +
-                   "\"telit_cpsms_config\":" + telit_cpsms_config + "," +
-                   "\"telit_cpsms_status\":" + telit_cpsms_status + "," + "\"survey_result\":" + survey_result +
-                   "," + "\"operator_list\":" + operator_list + "," + "\"server_info\":" + server_info + "}";
-        }
-
         return "ERROR: unknown GET resource";
     }
 
