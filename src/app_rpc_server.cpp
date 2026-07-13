@@ -13,6 +13,11 @@ namespace app {
 
 namespace {
 
+constexpr uint32_t RPC_TIMEOUT_DEFAULT_MS = 5000U;
+constexpr uint32_t RPC_TIMEOUT_CONNECT_MS = 210000U;
+constexpr uint32_t RPC_TIMEOUT_DISCONNECT_MS = 60000U;
+constexpr uint32_t RPC_TIMEOUT_FORCE_PSM_MS = 30000U;
+
 std::string to_upper(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
@@ -272,35 +277,35 @@ std::string RpcServer::handle_request(const std::string& request) {
             if (!ok) return payload;
             return payload;
         }
-        if (sub == "CONFIG") return request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, 5000U).second;
-        if (sub == "MODEMINFO") return request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}, 5000U).second;
-        if (sub == "SIMSTATUS") return request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}, 5000U).second;
-        if (sub == "RADIOTECH") return request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}, 5000U).second;
-        if (sub == "REGSTATUS") return request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}, 5000U).second;
+        if (sub == "CONFIG") return request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
+        if (sub == "MODEMINFO") return request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
+        if (sub == "SIMSTATUS") return request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
+        if (sub == "RADIOTECH") return request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
+        if (sub == "REGSTATUS") return request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         if (sub == "REGINFO") {
-            return request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "NETWORKINFO") {
-            return request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "SIGNALQUALITY") {
-            return request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
-        if (sub == "PSMMODE") return request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}, 5000U).second;
+        if (sub == "PSMMODE") return request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         if (sub == "CPSMSCONFIG") {
-            return request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "TELITCPSMSCONFIG") {
-            return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "TELITCPSMSSTATUS") {
-            return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "SURVEYRESULT") {
-            return request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "OPERATORLIST") {
-            return request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
         if (sub == "STATE") {
             return context_.get_network_state();
@@ -320,12 +325,12 @@ std::string RpcServer::handle_request(const std::string& request) {
                 if (!is_valid) return "ERROR: invalid conn_id";
                 if (n >= 1 && n <= MAX_SERVER_CONNECTIONS) {
                     return request_radio_state(
-                               {modem::RadioLteRequestType::get_server_info_array, static_cast<uint32_t>(n), 0U}, 5000U)
+                               {modem::RadioLteRequestType::get_server_info_array, static_cast<uint32_t>(n), 0U}, RPC_TIMEOUT_DEFAULT_MS)
                         .second;
                 }
                 return "ERROR: conn_id out of range (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
             }
-            return request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}, 5000U).second;
+            return request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         }
 
         return "ERROR: unknown GET resource";
@@ -363,13 +368,13 @@ std::string RpcServer::handle_request(const std::string& request) {
                 return "ERROR: no valid fields provided (use key=value pairs)";
             }
 
-            auto [cfg_ok, cfg_payload] = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, 5000U);
+            auto [cfg_ok, cfg_payload] = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS);
             if (!cfg_ok) return cfg_payload;
             return cfg_payload;
         };
 
         if (res == "NETWORKCONNECT" || res == "CONNECT") {
-            auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::network_connect, 0U, 0U}, 5000U);
+            auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::network_connect, 0U, 0U}, RPC_TIMEOUT_CONNECT_MS);
             if (!ok) return payload;
             return std::string("{") + "\"resource\":\"NETWORKCONNECT\"," + "\"network_connect\":" + payload + "}";
         }
@@ -393,11 +398,11 @@ std::string RpcServer::handle_request(const std::string& request) {
             }
 
             auto [server_ok, server_payload] =
-                request_radio_state({modem::RadioLteRequestType::server_disconnect, static_cast<uint32_t>(conn_id), 0U}, 5000U);
+                request_radio_state({modem::RadioLteRequestType::server_disconnect, static_cast<uint32_t>(conn_id), 0U}, RPC_TIMEOUT_DISCONNECT_MS);
             if (!server_ok) return server_payload;
 
             auto [network_ok, network_payload] =
-                request_radio_state({modem::RadioLteRequestType::network_disconnect, 0U, 0U}, 5000U);
+                request_radio_state({modem::RadioLteRequestType::network_disconnect, 0U, 0U}, RPC_TIMEOUT_DISCONNECT_MS);
             if (!network_ok) return network_payload;
 
             return std::string("{") + "\"resource\":\"NETWORKDISCONNECT\"," +
@@ -419,7 +424,7 @@ std::string RpcServer::handle_request(const std::string& request) {
         }
 
         if (res == "FORCEPSM") {
-            auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::force_psm, 0U, 0U}, 5000U);
+            auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::force_psm, 0U, 0U}, RPC_TIMEOUT_FORCE_PSM_MS);
             if (!ok) return payload;
             return std::string("{") + "\"resource\":\"FORCEPSM\"," + "\"status\":" + payload + "}";
         }
