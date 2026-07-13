@@ -1,6 +1,7 @@
 #include "app_ipc_servers.h"
 
 #include "modem/log.h"
+#include "rpc_helpers.h"
 
 #include <cstdint>
 #include <future>
@@ -113,22 +114,24 @@ void IpcServers::configure_data_ipc() {
     ipc_.set_callback([this](const uint8_t* data, uint16_t len) {
         std::vector<uint8_t> payload(data, data + len);
         enqueue_network_command([this, payload = std::move(payload), len]() {
-            if (context_.network.network_connect()) {
-                MODEM_LOG_INF("Successfully connected to network");
-            } else {
-                MODEM_LOG_ERR("Failed to connect to network");
-                ipc_.stop();
+            if (context_.network.state() != modem::NetworkLteState::data_ready) {
+                const std::string error = std::string("ERROR: network not ready, state=") +
+                                          rpc::to_str(context_.network.state());
+                MODEM_LOG_WRN("IPC: %s", error.c_str());
+                ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;
             }
 
-            bool connected = context_.network.server_connect(context_.lte_config.conn_id, "UDP", "185.205.209.91", 10000);
-            if (!connected) {
-                MODEM_LOG_ERR("Failed to connect to server");
-                ipc_.stop();
+            modem::QueueError queue_err =
+                context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
+            if (queue_err != modem::QueueError::ok) {
+                const std::string error = std::string("ERROR: tx_write failed, code=") +
+                                          std::to_string(static_cast<int>(queue_err));
+                MODEM_LOG_ERR("IPC: %s", error.c_str());
+                ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;
             }
 
-            context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
             context_.network.call_action(modem::ModemAction::send_data);
             MODEM_LOG_INF("IPC: queued %u bytes for TX on conn %d", len, context_.lte_config.conn_id);
         });
@@ -140,7 +143,24 @@ void IpcServers::configure_coap_ipc() {
     coap_ipc_.set_callback([this](const uint8_t* data, uint16_t len) {
         std::vector<uint8_t> payload(data, data + len);
         enqueue_network_command([this, payload = std::move(payload), len]() {
-            context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
+            if (context_.network.state() != modem::NetworkLteState::data_ready) {
+                const std::string error = std::string("ERROR: network not ready, state=") +
+                                          rpc::to_str(context_.network.state());
+                MODEM_LOG_WRN("CoAP IPC: %s", error.c_str());
+                coap_ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
+                return;
+            }
+
+            modem::QueueError queue_err =
+                context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
+            if (queue_err != modem::QueueError::ok) {
+                const std::string error = std::string("ERROR: tx_write failed, code=") +
+                                          std::to_string(static_cast<int>(queue_err));
+                MODEM_LOG_ERR("CoAP IPC: %s", error.c_str());
+                coap_ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
+                return;
+            }
+
             context_.network.call_action(modem::ModemAction::send_data);
             MODEM_LOG_INF("CoAP IPC: queued %u bytes for TX on conn %d", len, context_.lte_config.conn_id);
         });
