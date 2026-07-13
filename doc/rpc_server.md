@@ -56,7 +56,6 @@ Commands are case-insensitive. Values in `SET CONFIG` preserve their original ca
 | `GET OPERATORLIST` | array | Last operator list from `AT+COPS=?` (cached; does **not** trigger a new scan) |
 | `GET SERVERINFO` | array | All 5 `ServerInfo` entries |
 | `GET SERVERINFO <n>` | object | Single entry for connection ID `n` (1–5) |
-| `GET ALL` | object | Single response containing all of the above |
 
 ### Examples
 
@@ -79,8 +78,6 @@ GET SCANSURVEY
 GET OPERATORLIST
 [{"long_name":"Vodafone PT","short_name":"Vodafone","numeric":"26801","act":"cat_m1"},{"long_name":"NOS","short_name":"NOS","numeric":"26803","act":"cat_m1"}]
 
-GET ALL
-{ ... full snapshot ... }
 ```
 
 ---

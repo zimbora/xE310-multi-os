@@ -441,40 +441,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 }
                 return request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}).second;
             }
-            if (sub == "ALL") {
-                auto config = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}).second;
-                auto modem_info = request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}).second;
-                auto sim_status = request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}).second;
-                auto radio_tech = request_radio_state({modem::RadioLteRequestType::get_radio_tech, 0U, 0U}).second;
-                auto reg_status = request_radio_state({modem::RadioLteRequestType::get_reg_status, 0U, 0U}).second;
-                auto reg_info = request_radio_state({modem::RadioLteRequestType::get_registration_info, 0U, 0U}).second;
-                auto network_info = request_radio_state({modem::RadioLteRequestType::get_network_info, 0U, 0U}).second;
-                auto signal_quality =
-                    request_radio_state({modem::RadioLteRequestType::get_signal_quality, 0U, 0U}).second;
-                auto psm_mode = request_radio_state({modem::RadioLteRequestType::get_psm_mode, 0U, 0U}).second;
-                auto cpsms_config = request_radio_state({modem::RadioLteRequestType::get_cpsms_config, 0U, 0U}).second;
-                auto telit_cpsms_config =
-                    request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_config, 0U, 0U}).second;
-                auto telit_cpsms_status =
-                    request_radio_state({modem::RadioLteRequestType::get_telit_cpsms_status, 0U, 0U}).second;
-                auto survey_result =
-                    request_radio_state({modem::RadioLteRequestType::get_network_survey_result, 0U, 0U}).second;
-                auto operator_list =
-                    request_radio_state({modem::RadioLteRequestType::get_available_operators, 0U, 0U}).second;
-                auto server_info =
-                    request_radio_state({modem::RadioLteRequestType::get_server_info_array, 0U, 0U}).second;
-                auto state =
-                    run_network_command_sync([&]() { return std::string("\"") + rpc::to_str(network.state()) + "\""; });
 
-                return std::string("{") + "\"config\":" + config + "," + "\"state\":" + state + "," +
-                       "\"modem_info\":" + modem_info + "," + "\"sim_status\":" + sim_status + "," +
-                       "\"radio_tech\":" + radio_tech + "," + "\"reg_status\":" + reg_status + "," +
-                       "\"reg_info\":" + reg_info + "," + "\"network_info\":" + network_info + "," +
-                       "\"signal_quality\":" + signal_quality + "," + "\"psm_mode\":" + psm_mode + "," +
-                       "\"cpsms_config\":" + cpsms_config + "," + "\"telit_cpsms_config\":" + telit_cpsms_config + "," +
-                       "\"telit_cpsms_status\":" + telit_cpsms_status + "," + "\"survey_result\":" + survey_result +
-                       "," + "\"operator_list\":" + operator_list + "," + "\"server_info\":" + server_info + "}";
-            }
             return "ERROR: unknown GET resource";
         }
 
@@ -624,8 +591,10 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
             if ((matched & modem::MODEM_EVT_STATE) != 0) {
                 const auto& st = channels.current_state();
+                /*
                 MODEM_LOG_INF("Event thread: state=%u event=%u", static_cast<unsigned>(st.state),
                               static_cast<unsigned>(st.event));
+                */
             }
 
             if ((matched & modem::MODEM_EVT_LOG) != 0) {
