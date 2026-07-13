@@ -25,12 +25,15 @@ Each line sent to the server is one request. Each response is one JSON line foll
 ```
 GET <RESOURCE>
 SET CONFIG <key>=<value> [<key>=<value> ...]
+SET <CONFIG_FIELD> <value>
 SET NETWORKCONNECT
 SET NETWORKDISCONNECT [conn_id]
 SET FORCEPSM
 ```
 
 Commands are case-insensitive. Values in `SET CONFIG` preserve their original case (important for strings like `default_apn`).
+
+`SET <CONFIG_FIELD> <value>` is a shorthand for single-field config updates and returns the full updated config JSON.
 
 ---
 
@@ -112,8 +115,62 @@ Changes take effect on the next `network.loop()` iteration. They do not automati
 | `fallback_iot_tech` | string | `cat_m1` | IoT tech for fallback |
 | `fallback_apn` | string | `anova.apn` | APN for fallback |
 | `plmn` | string | `26801` | PLMN for manual operator selection (empty = auto) |
+| `fPsmEnable` | bool | `true` | Enable/disable PSM flow |
+| `fCfunSleep` | bool | `false` | Enable/disable CFUN sleep mode |
 | `psm_t3412` | uint32 | `3600` | T3412 sleep timer (seconds) |
-| `psm_t3324` | uint32 | `300` | T3324 active timer (seconds) |
+| `psm_t3324` | uint32 | `60` | T3324 active timer (seconds) |
+
+Accepted bool values: `1`/`0`, `true`/`false`, `on`/`off`.
+
+### Per-field SET shorthand
+
+You can set any config field directly using:
+
+```
+SET <CONFIG_FIELD> <value>
+```
+
+Examples:
+
+```
+SET CID 2
+SET DEFAULT_APN internet
+SET F_PSM_ENABLE true
+SET F_CFUN_SLEEP 0
+SET PSM_T3412 7200
+```
+
+Notes:
+
+- Field names are case-insensitive.
+- `_` and `-` are ignored in field names (for example, `F_PSM_ENABLE`, `fpsmenable`, and `f-psm-enable` are treated equivalently).
+
+### Config field alias quick reference
+
+The following `SET <CONFIG_FIELD> <value>` tokens are mapped to the underlying `SET CONFIG` keys:
+
+| `SET <CONFIG_FIELD>` token | Mapped config key |
+|---|---|
+| `CID` | `cid` |
+| `ATTACH_TIMEOUT_SEC` | `attach_timeout_sec` |
+| `PDP_TIMEOUT_SEC` | `pdp_timeout_sec` |
+| `DATA_READY_TIMEOUT_SEC` | `data_ready_timeout_sec` |
+| `TRANSPARENT_TIMEOUT_SEC` | `transparent_timeout_sec` |
+| `MAX_NETWORK_ATTEMPTS` | `max_network_attempts` |
+| `MAX_ATTACH_RETRIES` | `max_attach_retries` |
+| `MAX_PDP_RETRIES` | `max_pdp_retries` |
+| `DEFAULT_LTE_BANDS` | `default_lte_bands` |
+| `DEFAULT_IOT_TECH` | `default_iot_tech` |
+| `DEFAULT_APN` | `default_apn` |
+| `FALLBACK_LTE_BANDS` | `fallback_lte_bands` |
+| `FALLBACK_IOT_TECH` | `fallback_iot_tech` |
+| `FALLBACK_APN` | `fallback_apn` |
+| `PLMN` | `plmn` |
+| `F_PSM_ENABLE` / `PSM_ENABLE` | `fPsmEnable` |
+| `F_CFUN_SLEEP` / `CFUN_SLEEP` | `fCfunSleep` |
+| `PSM_T3412` | `psm_t3412` |
+| `PSM_T3324` | `psm_t3324` |
+| `CONN_ID` | `conn_id` |
 
 ### Examples
 
@@ -176,11 +233,12 @@ All errors are returned as a plain string (not JSON):
 | Response | Cause |
 |---|---|
 | `ERROR: unknown GET resource` | Unrecognised resource name |
-| `ERROR: unknown SET resource` | Only `CONFIG`, `NETWORKCONNECT`, `NETWORKDISCONNECT`, and `FORCEPSM` are settable |
+| `ERROR: unknown SET resource` | Unknown `SET` target (not a known action and not a config field) |
 | `ERROR: no valid fields provided (use key=value pairs)` | Malformed or unrecognised keys |
+| `ERROR: missing value` | `SET <CONFIG_FIELD>` was sent without `<value>` |
 | `ERROR: invalid conn_id` | Non-numeric argument to `GET SERVERINFO <n>` |
 | `ERROR: conn_id out of range (1-5)` | Index outside `[1, MAX_SERVER_CONNECTIONS]` |
-| `ERROR: unknown command — use GET <resource> or SET CONFIG <key>=<value>` | First token is neither `GET` nor `SET` |
+| `ERROR: unknown command - use GET <resource>, SET CONFIG <key>=<value>, or SET NETWORKDISCONNECT [conn_id]` | First token is neither `GET` nor `SET` |
 
 ---
 

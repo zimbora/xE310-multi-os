@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
 MODEM_LOG_MODULE_REGISTER(app_rpc_server);
 
@@ -16,6 +17,41 @@ std::string to_upper(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return value;
+}
+
+std::string normalize_token(std::string_view token) {
+    std::string out;
+    out.reserve(token.size());
+    for (char c : token) {
+        if (c == '_' || c == '-') continue;
+        out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+    }
+    return out;
+}
+
+std::string config_key_from_resource(std::string_view resource) {
+    const std::string key = normalize_token(resource);
+    if (key == "CID") return "cid";
+    if (key == "ATTACHTIMEOUTSEC") return "attach_timeout_sec";
+    if (key == "PDPTIMEOUTSEC") return "pdp_timeout_sec";
+    if (key == "DATAREADYTIMEOUTSEC") return "data_ready_timeout_sec";
+    if (key == "TRANSPARENTTIMEOUTSEC") return "transparent_timeout_sec";
+    if (key == "MAXNETWORKATTEMPTS") return "max_network_attempts";
+    if (key == "MAXATTACHRETRIES") return "max_attach_retries";
+    if (key == "MAXPDPRETRIES") return "max_pdp_retries";
+    if (key == "DEFAULTLTEBANDS") return "default_lte_bands";
+    if (key == "DEFAULTIOTTECH") return "default_iot_tech";
+    if (key == "DEFAULTAPN") return "default_apn";
+    if (key == "FALLBACKLTEBANDS") return "fallback_lte_bands";
+    if (key == "FALLBACKIOTTECH") return "fallback_iot_tech";
+    if (key == "FALLBACKAPN") return "fallback_apn";
+    if (key == "PLMN") return "plmn";
+    if (key == "FPSMENABLE" || key == "PSMENABLE") return "fPsmEnable";
+    if (key == "FCFUNSLEEP" || key == "CFUNSLEEP") return "fCfunSleep";
+    if (key == "PSMT3412") return "psm_t3412";
+    if (key == "PSMT3324") return "psm_t3324";
+    if (key == "CONNID") return "conn_id";
+    return "";
 }
 
 } // namespace
@@ -300,6 +336,38 @@ std::string RpcServer::handle_request(const std::string& request) {
         std::string res = sub.substr(0, sp2 == std::string::npos ? sub.size() : sp2);
         std::string args = sp2 == std::string::npos ? "" : sub_orig.substr(sp2 + 1);
 
+        auto apply_config_update = [&](const std::string& update_expr) -> std::string {
+            modem::ModemSetConfigMsg cfg_request{};
+            {
+                std::scoped_lock network_lock(context_.network_mutex);
+                cfg_request.config = context_.network.config();
+            }
+
+            if (!rpc::apply_config_fields(update_expr, cfg_request.config)) {
+                return "ERROR: no valid fields provided (use key=value pairs)";
+            }
+
+            modem::MessageChannelError send_err = context_.channels.send_request(cfg_request, 5000U);
+            if (send_err != modem::MessageChannelError::ok) {
+                return "ERROR: failed to send set_config request";
+            }
+
+            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, 5000U);
+            if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
+                return "ERROR: timeout waiting set_config response";
+            }
+
+            modem::ModemTypedResponseMsg<bool> set_response{};
+            if (context_.channels.recv_typed_response(set_response, 0) != modem::MessageChannelError::ok ||
+                !set_response.ok || !set_response.value) {
+                return "ERROR: no valid fields provided (use key=value pairs)";
+            }
+
+            auto [cfg_ok, cfg_payload] = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, 5000U);
+            if (!cfg_ok) return cfg_payload;
+            return cfg_payload;
+        };
+
         if (res == "NETWORKCONNECT" || res == "CONNECT") {
             auto [ok, payload] = request_radio_state({modem::RadioLteRequestType::network_connect, 0U, 0U}, 5000U);
             if (!ok) return payload;
@@ -339,35 +407,15 @@ std::string RpcServer::handle_request(const std::string& request) {
         }
 
         if (res == "CONFIG") {
-            modem::ModemSetConfigMsg cfg_request{};
-            {
-                std::scoped_lock network_lock(context_.network_mutex);
-                cfg_request.config = context_.network.config();
-            }
+            return apply_config_update(args);
+        }
 
-            if (!rpc::apply_config_fields(args, cfg_request.config)) {
-                return "ERROR: no valid fields provided (use key=value pairs)";
+        const std::string config_key = config_key_from_resource(res);
+        if (!config_key.empty()) {
+            if (args.empty()) {
+                return "ERROR: missing value";
             }
-
-            modem::MessageChannelError send_err = context_.channels.send_request(cfg_request, 5000U);
-            if (send_err != modem::MessageChannelError::ok) {
-                return "ERROR: failed to send set_config request";
-            }
-
-            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, 5000U);
-            if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
-                return "ERROR: timeout waiting set_config response";
-            }
-
-            modem::ModemTypedResponseMsg<bool> set_response{};
-            if (context_.channels.recv_typed_response(set_response, 0) != modem::MessageChannelError::ok ||
-                !set_response.ok || !set_response.value) {
-                return "ERROR: no valid fields provided (use key=value pairs)";
-            }
-
-            auto [cfg_ok, cfg_payload] = request_radio_state({modem::RadioLteRequestType::get_config, 0U, 0U}, 5000U);
-            if (!cfg_ok) return cfg_payload;
-            return cfg_payload;
+            return apply_config_update(config_key + "=" + args);
         }
 
         if (res == "FORCEPSM") {

@@ -291,7 +291,7 @@ inline std::string config_to_json(const modem::NetworkLteConfig& c) {
         "\"max_network_attempts\":%u,\"max_attach_retries\":%u,\"max_pdp_retries\":%u,"
         "\"default_lte_bands\":%llu,\"default_iot_tech\":\"%s\",\"default_apn\":%s,"
         "\"fallback_lte_bands\":%llu,\"fallback_iot_tech\":\"%s\",\"fallback_apn\":%s,"
-        "\"plmn\":%s,\"psm_t3412\":%u,\"psm_t3324\":%u,\"conn_id\":%u}",
+        "\"plmn\":%s,\"fPsmEnable\":%s,\"fCfunSleep\":%s,\"psm_t3412\":%u,\"psm_t3324\":%u,\"conn_id\":%u}",
         (unsigned)c.cid,
         (unsigned)c.attach_timeout_sec, (unsigned)c.pdp_timeout_sec,
         (unsigned)c.data_ready_timeout_sec, (unsigned)c.transparent_timeout_sec,
@@ -301,7 +301,10 @@ inline std::string config_to_json(const modem::NetworkLteConfig& c) {
         json_str(c.default_apn).c_str(),
         (unsigned long long)c.fallback_lte_bands, to_str(c.fallback_iot_tech),
         json_str(c.fallback_apn).c_str(),
-        json_str(c.plmn).c_str(), c.psm_t3412, c.psm_t3324, (unsigned)c.conn_id);
+        json_str(c.plmn).c_str(),
+        c.fPsmEnable ? "true" : "false",
+        c.fCfunSleep ? "true" : "false",
+        c.psm_t3412, c.psm_t3324, (unsigned)c.conn_id);
     return buf;
 }
 
@@ -313,6 +316,18 @@ inline modem::RadioTech radio_tech_from_str(const std::string& s) {
     if (s == "cat_m1") return modem::RadioTech::cat_m1;
     if (s == "nb_iot") return modem::RadioTech::nb_iot;
     return modem::RadioTech::cat_m1;
+}
+
+inline bool bool_from_str(const std::string& s, bool& value) {
+    if (s == "1" || s == "true" || s == "TRUE" || s == "on" || s == "ON") {
+        value = true;
+        return true;
+    }
+    if (s == "0" || s == "false" || s == "FALSE" || s == "off" || s == "OFF") {
+        value = false;
+        return true;
+    }
+    return false;
 }
 
 // Parse "key=value [key=value ...]" and apply matched fields to cfg.
@@ -352,6 +367,8 @@ inline bool apply_config_fields(const std::string& args, modem::NetworkLteConfig
             else if (key == "fallback_iot_tech")        { cfg.fallback_iot_tech        = radio_tech_from_str(val);  fChanged = true; }
             else if (key == "fallback_apn")             { cfg.fallback_apn             = val;                       fChanged = true; }
             else if (key == "plmn")                     { cfg.plmn                     = val;                       fChanged = true; }
+            else if (key == "fPsmEnable")               { bool parsed = false; if (bool_from_str(val, parsed)) { cfg.fPsmEnable = parsed; fChanged = true; } }
+            else if (key == "fCfunSleep")               { bool parsed = false; if (bool_from_str(val, parsed)) { cfg.fCfunSleep = parsed; fChanged = true; } }
             else if (key == "psm_t3412")                { cfg.psm_t3412                = std::stoul(val);           fChanged = true; }
             else if (key == "psm_t3324")                { cfg.psm_t3324                = std::stoul(val);           fChanged = true; }
             else if (key == "conn_id")                  { cfg.conn_id                  = (uint8_t)std::stoul(val);  fChanged = true; }
