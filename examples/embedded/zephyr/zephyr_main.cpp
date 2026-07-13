@@ -1,5 +1,5 @@
 /// Zephyr application entry point for the modem controller.
-/// Desktop entry point is src/main.cpp (not compiled for Zephyr).
+/// Desktop entry point is examples/desktop/main.cpp (not compiled for Zephyr).
 
 #include "modem/network_lte.h"
 #include "modem/xe310.h"
