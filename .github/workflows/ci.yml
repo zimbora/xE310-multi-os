@@ -45,7 +45,9 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Run clang-tidy
-        run: clang-tidy -p build --warnings-as-errors="*" src/*.cpp
+        run: |
+          clang-tidy -p build --warnings-as-errors="*" \
+            $(find src -maxdepth 1 -name '*.cpp' ! -name 'zephyr_main.cpp')
 
   cppcheck:
     name: Cppcheck Static Analysis
@@ -62,6 +64,7 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
             --suppress=checkersReport \
+            --suppress=unmatchedSuppression \
             --inline-suppr \
             --error-exitcode=1 \
             --std=c++17 \

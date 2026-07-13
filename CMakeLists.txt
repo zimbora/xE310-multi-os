@@ -54,15 +54,34 @@ set(MODEM_CORE_SOURCES
     src/modem_controller.cpp
     src/xe310.cpp
     src/network_lte.cpp
+    src/i_radio_lte.cpp
 )
 
 # --- HAL sources (platform-specific) ---
 if(MODEM_PLATFORM STREQUAL "zephyr")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/zephyr_uart.cpp src/hal/zephyr_timer.cpp src/hal/zephyr_message_queue.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES
+        src/hal/zephyr_uart.cpp
+        src/hal/zephyr_timer.cpp
+        src/hal/zephyr_message_queue.cpp
+        src/hal/zephyr_message_channel.cpp
+        src/hal/zephyr_event_flags.cpp
+    )
 elseif(MODEM_PLATFORM STREQUAL "windows")
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/win32_uart.cpp src/hal/win32_timer.cpp src/hal/win32_message_queue.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES
+        src/hal/win32_uart.cpp
+        src/hal/win32_timer.cpp
+        src/hal/win32_message_queue.cpp
+        src/hal/win32_message_channel.cpp
+        src/hal/win32_event_flags.cpp
+    )
 else()
-    list(APPEND MODEM_PLATFORM_SOURCES src/hal/posix_uart.cpp src/hal/posix_timer.cpp src/hal/posix_message_queue.cpp)
+    list(APPEND MODEM_PLATFORM_SOURCES
+        src/hal/posix_uart.cpp
+        src/hal/posix_timer.cpp
+        src/hal/posix_message_queue.cpp
+        src/hal/posix_message_channel.cpp
+        src/hal/posix_event_flags.cpp
+    )
 endif()
 
 # --- Library target ---
@@ -126,11 +145,13 @@ if(NOT MODEM_PLATFORM STREQUAL "zephyr")
         set(IPC_SOURCE examples/desktop/posix/posix_ipc_server.cpp)
     endif()
 
-    add_executable(modem_app examples/desktop/main.cpp ${IPC_SOURCE})
-    target_include_directories(modem_app PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/examples/desktop
+    add_executable(modem_app
+        examples/desktop/main.cpp
+        examples/desktop/app_ipc_servers.cpp
+        examples/desktop/app_rpc_server.cpp
+        ${IPC_SOURCE}
     )
+    target_include_directories(modem_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples/desktop)
     target_link_libraries(modem_app PRIVATE modem_xe310)
     if(MODEM_PLATFORM STREQUAL "windows")
         target_link_libraries(modem_app PRIVATE Ws2_32)

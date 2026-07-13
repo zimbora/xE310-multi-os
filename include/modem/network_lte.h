@@ -1,5 +1,6 @@
 #pragma once
 
+#include "modem/i_radio_lte.h"
 #include "modem/message_queue_factory.h"
 #include "modem/timer_factory.h"
 #include "modem/xe310.h"
@@ -12,49 +13,6 @@
 #include <string_view>
 
 #define MAX_SERVER_CONNECTIONS 5
-
-// Choose one MVNO
-// #define IDEMIA_PUBLIC
-#define TELENOR_PUBLIC
-// #define ONET_PUBLIC
-//  --- --- ---
-#define COUNTRY_CODE 268
-#define DEFAULT_IOT_TECH RadioTech::cat_m1
-#define FALLBACK_IOT_TECH RadioTech::cat_m1
-#define DEFAULT_PLMN "26801" // VDF
-// #define DEFAULT_PLMN "26803" // NOS
-// #define DEFAULT_PLMN "26806" // MEO
-
-#ifdef ONET_PUBLIC
-#define DEFAULT_APN "terminal.apn"
-#define FALLBACK_APN "terminal.apn"
-#elif defined(TELENOR_PUBLIC)
-#define DEFAULT_APN "connect.cxn"
-#define FALLBACK_APN "connect.cxn"
-#elif defined(IDEMIA_PUBLIC)
-#define DEFAULT_APN "lpwa.vodafone.iot"
-#define FALLBACK_APN "lpwa.vodafone.iot"
-#else
-#define DEFAULT_APN "anova.apn"
-#define FALLBACK_APN "anova.apn"
-#endif
-
-#define B8_20_BAND_MASK 524416
-#define B3_8_20_BAND_MASK 524420
-#define B1_3_8_20_28_BAND_MASK 134742149
-
-// PT
-// MEO CATM1 BANDS: 20
-// Vodafone CATM1 BANDS: 8, 20
-// NOS CATM1 BANDS: 3, 20
-
-#if defined(COUNTRY_CODE) && COUNTRY_CODE == 268
-#define DEFAULT_LTE_BANDS B8_20_BAND_MASK
-#define FALLBACK_LTE_BANDS B3_8_20_BAND_MASK
-#else
-#define DEFAULT_LTE_BANDS B3_8_20_BAND_MASK
-#define FALLBACK_LTE_BANDS B1_3_8_20_28_BAND_MASK
-#endif
 
 namespace modem {
 
@@ -143,38 +101,6 @@ enum class ModemAction : uint8_t {
     leave_transparent_mode, // trigger exit transparent mode flow (if supported by modem)
 };
 
-/// Configuration for the LTE network state machine.
-struct NetworkLteConfig {
-    uint8_t cid = 1;                     ///< PDP context ID to use for LTE data connection (default 1, must be >0)
-    uint8_t attach_timeout_sec = 120;    ///< Timeout for network attach in seconds
-    uint8_t pdp_timeout_sec = 15;        ///< Timeout for PDP context
-    uint8_t data_ready_timeout_sec = 30; ///< Timeout for server connection in seconds
-    uint16_t transparent_timeout_sec =
-        300; ///< Timeout for transparent mode in seconds, adjust as needed based on expected time to send AT commands
-             ///< and receive responses in transparent mode
-    uint8_t max_network_attempts = 2; ///< Timeout for server connection and data transfer
-    uint8_t max_attach_retries = 2;
-    uint8_t max_pdp_retries = 2;
-
-    uint64_t default_lte_bands = DEFAULT_LTE_BANDS;
-    RadioTech default_iot_tech = DEFAULT_IOT_TECH;
-    FixedString<MODEM_MEDIUM_STR> default_apn{DEFAULT_APN}; // 1oT
-
-    uint64_t fallback_lte_bands = FALLBACK_LTE_BANDS;
-    RadioTech fallback_iot_tech = FALLBACK_IOT_TECH;
-    FixedString<MODEM_MEDIUM_STR> fallback_apn{FALLBACK_APN}; // telenor private;  connect.cxn telenor public
-
-    FixedString<MODEM_SHORT_STR> plmn{
-        DEFAULT_PLMN}; ///< Optional PLMN to attach to (e.g. "26801" for VDF PT). If empty, modem default will be used.
-
-    bool fPsmEnable = true;    ///< Whether to use PSM if available on the network
-    bool fCfunSleep = true;    ///< Whether to use CFUN=4 + CFUN=11 to enter sleep mode (if supported by modem)
-    uint32_t psm_t3412 = 3600; ///< Sleep time in PSM mode, in seconds
-    uint32_t psm_t3324 = 60;   ///< Active time in PSM mode, in seconds
-
-    uint8_t conn_id = 1; ///< Connection ID to query for server connection status (e.g. for UDP sockets)
-};
-
 enum class ServerState : int8_t {
     unknown = -1,
     disconnected,
@@ -198,7 +124,7 @@ struct ServerInfo {
 };
 
 /// LTE network state machine — drives modem attach, PDP activation and server registration.
-class NetworkLte {
+class NetworkLte : public IRadioLte {
 public:
     using DataReceivedCallback = std::function<void(uint8_t cid, std::string_view data, uint16_t n_bytes)>;
 
@@ -238,8 +164,8 @@ public:
     NetworkLteState loop(NetworkLteState target_state = NetworkLteState::none);
 
     /// register on network
-    bool network_connect();
-    bool network_disconnect();
+    bool network_connect() override;
+    bool network_disconnect() override;
 
     /// Configure a new server connection with the given parameters. Does not trigger any state changes by itself.
     void new_connection(uint8_t conn_id, std::string_view protocol, std::string_view ip, std::string_view port);
@@ -247,7 +173,7 @@ public:
     /// reached.
     bool server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
-    bool server_disconnect(uint8_t conn_id);
+    bool server_disconnect(uint8_t conn_id) override;
 
     /// Write data into the TX queue for the given connection ID (1-based).
     QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length);
@@ -258,7 +184,7 @@ public:
     /// Try to register on a network with PSM enabled, by checking the current network registration and PSM
     /// configuration, and iterating through available operators if registration or PSM is not available with the
     /// current one. Returns true if successfully registered on a network with PSM enabled, false otherwise.
-    bool force_psm();
+    bool force_psm() override;
     /// Enter sleep mode (PSM).
     bool enter_sleep();
     /// Enter transparent mode (if supported by the modem).
@@ -280,65 +206,65 @@ public:
     // --- Cached modem state accessors ---
 
     /// Last registration info read from the modem.
-    const RegistrationInfo& registration_info() const;
+    const RegistrationInfo& registration_info() const override;
 
     /// Last signal quality read from the modem.
-    const SignalQuality& signal_quality() const;
+    const SignalQuality& signal_quality() const override;
 
     /// SIM ICCID read at power-on.
-    const FixedString<MODEM_SHORT_STR>& iccid() const;
+    const FixedString<MODEM_SHORT_STR>& iccid() const override;
 
     /// SIM IMSI read at power-on.
-    const FixedString<MODEM_SHORT_STR>& imsi() const;
+    const FixedString<MODEM_SHORT_STR>& imsi() const override;
 
     /// Full modem identification info read at power-on.
-    const ModemInfo& modem_info() const;
+    const ModemInfo& modem_info() const override;
 
     /// Last known SIM status.
-    SimStatus sim_status() const;
+    SimStatus sim_status() const override;
 
     /// Last known radio access technology.
-    RadioTech radio_tech() const;
+    RadioTech radio_tech() const override;
 
     /// Last known registration status (from URC or query).
-    RegStatus reg_status() const;
+    RegStatus reg_status() const override;
 
     /// Last known network/PDP context info.
-    const NetworkInfo& network_info() const;
+    const NetworkInfo& network_info() const override;
 
     /// Last known PSM mode.
-    PsmMode psm_mode() const;
+    PsmMode psm_mode() const override;
 
     /// Last known 3GPP PSM configuration.
-    const CpsmsConfig& cpsms_config() const;
+    const CpsmsConfig& cpsms_config() const override;
 
     /// Last known Telit PSM configuration.
-    const TelitCpsmsConfig& telit_cpsms_config() const;
+    const TelitCpsmsConfig& telit_cpsms_config() const override;
 
     /// Last known Telit PSM network status.
-    const TelitCpsmsStatus& telit_cpsms_status() const;
+    const TelitCpsmsStatus& telit_cpsms_status() const override;
 
     /// Last network survey result (populated after a survey action).
-    const NetworkSurveyResult& network_survey_result() const;
+    const NetworkSurveyResult& network_survey_result() const override;
 
     /// List of operators found by the last AT+COPS=? scan.
-    const StaticVector<Operator, xE310::MAX_OPERATORS>& available_operators() const;
+    const StaticVector<Operator, xE310::MAX_OPERATORS>& available_operators() const override;
 
     /// Result of the last AT#CSURV scan (populated by scan_networks()).
-    const CsurvResult& csurv_result() const;
+    const CsurvResult& csurv_result() const override;
 
     /// Run AT#CSURVF=2 + AT#CSURV and store results internally.
     /// Optionally restrict to channels [start_ch, end_ch]; pass 0 for both to scan full band.
-    bool scan_networks(uint32_t start_ch = 0, uint32_t end_ch = 0);
+    bool scan_networks(uint32_t start_ch = 0, uint32_t end_ch = 0) override;
 
     /// Pointer to the internal server info array (MAX_SERVER_CONNECTIONS entries, 0-based).
-    const ServerInfo* server_info_array() const;
+    const ServerInfo* server_info_array() const override;
 
     /// Active configuration.
-    const NetworkLteConfig& config() const;
+    const NetworkLteConfig& config() const override;
 
     /// Replace the active configuration (takes effect on the next step cycle).
-    void set_config(const NetworkLteConfig& config);
+    void set_config(const NetworkLteConfig& config) override;
 
     // !! private functions but set as public for testing purposes, since we want to be able to call them directly from
     // unit tests to test specific state transitions and flows without having to go through the whole state machine loop

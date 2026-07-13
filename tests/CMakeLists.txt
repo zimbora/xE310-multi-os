@@ -47,3 +47,25 @@ target_link_libraries(test_message_queue PRIVATE
 )
 
 gtest_discover_tests(test_message_queue)
+
+add_executable(test_message_channel
+    test_message_channel.cpp
+)
+
+target_link_libraries(test_message_channel PRIVATE
+    modem_xe310
+    GTest::gtest_main
+)
+
+gtest_discover_tests(test_message_channel)
+
+add_executable(test_event_flags
+    test_event_flags.cpp
+)
+
+target_link_libraries(test_event_flags PRIVATE
+    modem_xe310
+    GTest::gtest_main
+)
+
+gtest_discover_tests(test_event_flags)

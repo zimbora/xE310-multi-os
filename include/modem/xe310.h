@@ -327,10 +327,10 @@ public:
     // --- Power ---
 
     /// Power on the module (hardware power-up sequence).
-    void power_on();
+    static void power_on();
 
     /// Power off the module (hardware power-down sequence).
-    void power_off();
+    static void power_off();
 
     /// AT+CFUN=1 — Power on the radio (full functionality).
     ModemStatus power_radio();

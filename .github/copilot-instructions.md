@@ -42,6 +42,8 @@ See [Contributions.md](../Contributions.md) for commit message rules, allowed ty
 - Timeouts must be configurable for every AT command exchange
 - Logging must be abstracted (use Zephyr logging on embedded, stdout/spdlog on desktop)
 
+Thread communication roles for `message_channel`, `message_queue`, and event flags are documented in [ThreadComms.md](../ThreadComms.md).
+
 ## Testing
 
 - Unit tests use Google Test (desktop only)
