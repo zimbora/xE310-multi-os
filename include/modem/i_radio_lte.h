@@ -71,8 +71,7 @@ static_assert(sizeof(ModemSetConfigMsg) <= MESSAGE_CHANNEL_MAX_DATA,
 
 using RadioLteRequestMsg = ModemTxMsg;
 
-template<typename ValueType>
-struct ModemTypedResponseMsg {
+template<typename ValueType> struct ModemTypedResponseMsg {
     bool ok = false;
     ValueType value{};
 };

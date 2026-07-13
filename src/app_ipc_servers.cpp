@@ -115,18 +115,17 @@ void IpcServers::configure_data_ipc() {
         std::vector<uint8_t> payload(data, data + len);
         enqueue_network_command([this, payload = std::move(payload), len]() {
             if (context_.network.state() != modem::NetworkLteState::data_ready) {
-                const std::string error = std::string("ERROR: network not ready, state=") +
-                                          rpc::to_str(context_.network.state());
+                const std::string error =
+                    std::string("ERROR: network not ready, state=") + rpc::to_str(context_.network.state());
                 MODEM_LOG_WRN("IPC: %s", error.c_str());
                 ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;
             }
 
-            modem::QueueError queue_err =
-                context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
+            modem::QueueError queue_err = context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
             if (queue_err != modem::QueueError::ok) {
-                const std::string error = std::string("ERROR: tx_write failed, code=") +
-                                          std::to_string(static_cast<int>(queue_err));
+                const std::string error =
+                    std::string("ERROR: tx_write failed, code=") + std::to_string(static_cast<int>(queue_err));
                 MODEM_LOG_ERR("IPC: %s", error.c_str());
                 ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;
@@ -144,18 +143,17 @@ void IpcServers::configure_coap_ipc() {
         std::vector<uint8_t> payload(data, data + len);
         enqueue_network_command([this, payload = std::move(payload), len]() {
             if (context_.network.state() != modem::NetworkLteState::data_ready) {
-                const std::string error = std::string("ERROR: network not ready, state=") +
-                                          rpc::to_str(context_.network.state());
+                const std::string error =
+                    std::string("ERROR: network not ready, state=") + rpc::to_str(context_.network.state());
                 MODEM_LOG_WRN("CoAP IPC: %s", error.c_str());
                 coap_ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;
             }
 
-            modem::QueueError queue_err =
-                context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
+            modem::QueueError queue_err = context_.network.tx_write(context_.lte_config.conn_id, payload.data(), len);
             if (queue_err != modem::QueueError::ok) {
-                const std::string error = std::string("ERROR: tx_write failed, code=") +
-                                          std::to_string(static_cast<int>(queue_err));
+                const std::string error =
+                    std::string("ERROR: tx_write failed, code=") + std::to_string(static_cast<int>(queue_err));
                 MODEM_LOG_ERR("CoAP IPC: %s", error.c_str());
                 coap_ipc_.send(reinterpret_cast<const uint8_t*>(error.data()), static_cast<uint16_t>(error.size()));
                 return;

@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 modem::process_radio_requests(channels, network);
 
                 // Publish current state via event flags
-                //channels.publish_state(network.state(), network.event());
+                // channels.publish_state(network.state(), network.event());
 
                 // Drain RX queue and forward to IPC client
                 modem::QueueMessage rx_msg;

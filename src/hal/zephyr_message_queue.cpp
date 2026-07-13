@@ -70,8 +70,8 @@ private:
         return QueueError::empty;
     }
 
-    QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, const uint8_t* data,
-                       size_t length, uint32_t timeout_ms) {
+    static QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, const uint8_t* data,
+                              size_t length, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         if (length > MAX_MSG_SIZE) return QueueError::full;
 
@@ -84,8 +84,8 @@ private:
         return map_put_result(ret);
     }
 
-    QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, QueueMessage& msg,
-                        uint32_t timeout_ms) {
+    static QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, QueueMessage& msg,
+                               uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
 
         uint8_t slot[SLOT_SIZE];

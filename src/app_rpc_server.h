@@ -33,6 +33,7 @@ private:
     std::string handle_request(const std::string& request);
     std::pair<bool, std::string> request_radio_state(modem::RadioLteRequestMsg msg, uint32_t timeout_ms = 5000U);
     std::pair<bool, std::string> request_radio_state_impl(modem::RadioLteRequestMsg msg, uint32_t timeout_ms);
+    std::pair<bool, std::string> request_csurv_result(uint32_t timeout_ms);
 
     RpcServerContext context_;
     IpcServer rpc_ipc_;

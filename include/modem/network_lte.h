@@ -164,8 +164,8 @@ public:
     NetworkLteState loop(NetworkLteState target_state = NetworkLteState::none);
 
     /// register on network
-    bool network_connect();
-    bool network_disconnect();
+    bool network_connect() override;
+    bool network_disconnect() override;
 
     /// Configure a new server connection with the given parameters. Does not trigger any state changes by itself.
     void new_connection(uint8_t conn_id, std::string_view protocol, std::string_view ip, std::string_view port);
@@ -173,7 +173,7 @@ public:
     /// reached.
     bool server_connect(uint8_t conn_id, std::string_view protocol, std::string_view ip, uint16_t port);
     /// Disconnect from the network and server. Blocks until disconnected.
-    bool server_disconnect(uint8_t conn_id);
+    bool server_disconnect(uint8_t conn_id) override;
 
     /// Write data into the TX queue for the given connection ID (1-based).
     QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length);
@@ -184,7 +184,7 @@ public:
     /// Try to register on a network with PSM enabled, by checking the current network registration and PSM
     /// configuration, and iterating through available operators if registration or PSM is not available with the
     /// current one. Returns true if successfully registered on a network with PSM enabled, false otherwise.
-    bool force_psm();
+    bool force_psm() override;
     /// Enter sleep mode (PSM).
     bool enter_sleep();
     /// Enter transparent mode (if supported by the modem).
