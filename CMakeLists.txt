@@ -6,7 +6,7 @@ if(DEFINED ZEPHYR_BASE OR DEFINED ENV{ZEPHYR_BASE})
     set(EXTRA_ZEPHYR_MODULES ${CMAKE_CURRENT_SOURCE_DIR})
     find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
     project(modem_xe310 VERSION 1.0.0)
-    target_sources(app PRIVATE src/zephyr_main.cpp)
+    target_sources(app PRIVATE examples/embedded/zephyr/zephyr_main.cpp)
     target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(app PRIVATE modem_xe310)
     return()
@@ -121,19 +121,22 @@ install(EXPORT modem_xe310-targets
 # --- Application executable (desktop only) ---
 if(NOT MODEM_PLATFORM STREQUAL "zephyr")
     if(MODEM_PLATFORM STREQUAL "windows")
-        set(IPC_SOURCE src/win32_ipc_server.cpp)
+        set(IPC_SOURCE examples/desktop/win32/win32_ipc_server.cpp)
     else()
-        set(IPC_SOURCE src/posix_ipc_server.cpp)
+        set(IPC_SOURCE examples/desktop/posix/posix_ipc_server.cpp)
     endif()
 
-    add_executable(modem_app src/main.cpp ${IPC_SOURCE})
-    target_include_directories(modem_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    add_executable(modem_app examples/desktop/main.cpp ${IPC_SOURCE})
+    target_include_directories(modem_app PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/examples/desktop
+    )
     target_link_libraries(modem_app PRIVATE modem_xe310)
     if(MODEM_PLATFORM STREQUAL "windows")
         target_link_libraries(modem_app PRIVATE Ws2_32)
     endif()
 
-    add_executable(test_xe310 src/test_xe310.cpp)
+    add_executable(test_xe310 examples/desktop/test_xe310.cpp)
     target_link_libraries(test_xe310 PRIVATE modem_xe310)
 endif()
 
