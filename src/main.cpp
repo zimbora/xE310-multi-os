@@ -119,6 +119,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     });
 
     // thread to process network events and handle IPC requests
+    network_worker_running.store(true); // Set to true to indicate that the network worker thread is running
     std::thread network_thread([&]() {
         while (true) {
             {
@@ -151,6 +152,5 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
     event_thread.join();
     network_thread.join();
-    network_worker_running.store(true); // Set to true to indicate that the network worker thread is running
     return 0;
 }
