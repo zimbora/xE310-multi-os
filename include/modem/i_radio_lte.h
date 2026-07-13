@@ -19,12 +19,10 @@ enum class NetworkLteEvent : uint8_t;
 struct ServerInfo;
 
 /// Event bits posted on modem_evt to synchronize modem requests, responses and notifications.
-enum ModemEvtBits : uint32_t {
-    MODEM_EVT_REQUEST = (1U << 0),
-    MODEM_EVT_RESPONSE = (1U << 1),
-    MODEM_EVT_STATE = (1U << 2),
-    MODEM_EVT_LOG = (1U << 3),
-};
+constexpr uint32_t MODEM_EVT_REQUEST = (1U << 0);
+constexpr uint32_t MODEM_EVT_RESPONSE = (1U << 1);
+constexpr uint32_t MODEM_EVT_STATE = (1U << 2);
+constexpr uint32_t MODEM_EVT_LOG = (1U << 3);
 
 /// Request message type for cross-thread radio LTE state queries/actions.
 enum class RadioLteRequestType : uint8_t {
@@ -87,7 +85,7 @@ struct ModemStateMsg {
 
 /// Fixed-size log line forwarded through modem_log_q.
 struct ModemLogMsg {
-    FixedString<MODEM_LONG_STR> text{};
+    FixedString<MODEM_LONG_STR> text;
 };
 
 /// Cross-platform transport objects for LTE requests, state notifications and logs.
@@ -176,14 +174,14 @@ private:
     template<typename MessageType>
     static MessageChannelError send_message(MessageChannelInterface& channel, const MessageType& msg,
                                             uint32_t timeout_ms) {
-        static_assert(std::is_trivially_copyable<MessageType>::value, "MessageType must be trivially copyable");
+        static_assert(std::is_trivially_copyable_v<MessageType>, "MessageType must be trivially copyable");
         return channel.send(reinterpret_cast<const uint8_t*>(&msg), sizeof(MessageType), timeout_ms);
     }
 
     template<typename MessageType>
     static MessageChannelError receive_message(MessageChannelInterface& channel, MessageType& msg,
                                                uint32_t timeout_ms) {
-        static_assert(std::is_trivially_copyable<MessageType>::value, "MessageType must be trivially copyable");
+        static_assert(std::is_trivially_copyable_v<MessageType>, "MessageType must be trivially copyable");
         MessageFrame frame{};
         MessageChannelError err = channel.receive(frame, timeout_ms);
         if (err != MessageChannelError::ok) return err;
@@ -202,6 +200,11 @@ private:
 /// Interface that exposes the last known LTE radio/modem state.
 class IRadioLte {
 public:
+    IRadioLte() = default;
+    IRadioLte(const IRadioLte&) = delete;
+    IRadioLte& operator=(const IRadioLte&) = delete;
+    IRadioLte(IRadioLte&&) = delete;
+    IRadioLte& operator=(IRadioLte&&) = delete;
     virtual ~IRadioLte() = default;
 
     /// Attach to network and establish default PDP connectivity.
