@@ -66,6 +66,9 @@ struct ModemSetConfigMsg {
     NetworkLteConfig config{};
 };
 
+static_assert(sizeof(ModemSetConfigMsg) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemSetConfigMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
+
 using RadioLteRequestMsg = ModemTxMsg;
 
 template<typename ValueType>
@@ -73,6 +76,9 @@ struct ModemTypedResponseMsg {
     bool ok = false;
     ValueType value{};
 };
+
+static_assert(sizeof(ModemTypedResponseMsg<NetworkLteConfig>) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemTypedResponseMsg<NetworkLteConfig> exceeds MESSAGE_CHANNEL_MAX_DATA");
 
 /// Event payload describing the current LTE state machine snapshot.
 struct ModemStateMsg {

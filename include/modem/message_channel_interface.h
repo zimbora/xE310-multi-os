@@ -15,7 +15,7 @@ enum class MessageChannelError : uint8_t {
     invalid_size,
 };
 
-static constexpr size_t MESSAGE_CHANNEL_MAX_DATA = 256;
+static constexpr size_t MESSAGE_CHANNEL_MAX_DATA = 512;
 
 struct MessageFrame {
     std::array<uint8_t, MESSAGE_CHANNEL_MAX_DATA> data{};
