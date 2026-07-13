@@ -147,11 +147,11 @@ if(NOT MODEM_PLATFORM STREQUAL "zephyr")
 
     add_executable(modem_app
         examples/desktop/main.cpp
-        src/app_ipc_servers.cpp
-        src/app_rpc_server.cpp
+        examples/desktop/app_ipc_servers.cpp
+        examples/desktop/app_rpc_server.cpp
         ${IPC_SOURCE}
     )
-    target_include_directories(modem_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(modem_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples/desktop)
     target_link_libraries(modem_app PRIVATE modem_xe310)
     if(MODEM_PLATFORM STREQUAL "windows")
         target_link_libraries(modem_app PRIVATE Ws2_32)
