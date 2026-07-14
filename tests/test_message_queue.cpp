@@ -9,7 +9,8 @@ using namespace modem;
 
 namespace {
 // Helper: compare QueueMessage content with expected bytes.
-void expect_msg_eq(const QueueMessage& msg, const uint8_t* expected, size_t expected_len) {
+void expect_msg_eq(const QueueMessage& msg, uint8_t expected_cid, const uint8_t* expected, size_t expected_len) {
+    EXPECT_EQ(msg.cid, expected_cid);
     EXPECT_EQ(msg.length, expected_len);
     EXPECT_EQ(std::memcmp(msg.data.data(), expected, expected_len), 0);
 }
@@ -18,7 +19,7 @@ void expect_msg_eq(const QueueMessage& msg, const uint8_t* expected, size_t expe
 class MessageQueueTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        queue = create_platform_message_queue(4); // capacity of 4 messages per queue
+        queue = create_platform_message_queue(); // default capacity of 5 messages per direction
     }
     MessageQueueHandle queue;
 };
@@ -32,7 +33,7 @@ TEST_F(MessageQueueTest, TxPushPopSingleMessage) {
 
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(1, msg), QueueError::ok);
-    expect_msg_eq(msg, data, sizeof(data));
+    expect_msg_eq(msg, 1, data, sizeof(data));
     EXPECT_EQ(queue->tx_count(1), 0u);
 }
 
@@ -43,8 +44,8 @@ TEST_F(MessageQueueTest, TxPopEmptyReturnsEmpty) {
 
 TEST_F(MessageQueueTest, TxPushFullReturnsFull) {
     uint8_t data[] = {0xAA};
-    for (int i = 0; i < 4; ++i) {
-        EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::ok);
+    for (uint8_t id = 1; id <= 5; ++id) {
+        EXPECT_EQ(queue->tx_push(id, data, sizeof(data)), QueueError::ok);
     }
     EXPECT_EQ(queue->tx_push(1, data, sizeof(data)), QueueError::full);
 }
@@ -58,7 +59,7 @@ TEST_F(MessageQueueTest, RxPushPopSingleMessage) {
 
     QueueMessage msg;
     EXPECT_EQ(queue->rx_pop(2, msg), QueueError::ok);
-    expect_msg_eq(msg, data, sizeof(data));
+    expect_msg_eq(msg, 2, data, sizeof(data));
 }
 
 TEST_F(MessageQueueTest, RxPopEmptyReturnsEmpty) {
@@ -101,11 +102,11 @@ TEST_F(MessageQueueTest, FifoOrdering) {
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    expect_msg_eq(msg, a, sizeof(a));
+    expect_msg_eq(msg, 1, a, sizeof(a));
     queue->tx_pop(1, msg);
-    expect_msg_eq(msg, b, sizeof(b));
+    expect_msg_eq(msg, 1, b, sizeof(b));
     queue->tx_pop(1, msg);
-    expect_msg_eq(msg, c, sizeof(c));
+    expect_msg_eq(msg, 1, c, sizeof(c));
 }
 
 // --- Independence between connection IDs ---
@@ -122,9 +123,9 @@ TEST_F(MessageQueueTest, QueuesAreIndependentPerConnId) {
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    expect_msg_eq(msg, d1, sizeof(d1));
+    expect_msg_eq(msg, 1, d1, sizeof(d1));
     queue->tx_pop(2, msg);
-    expect_msg_eq(msg, d2, sizeof(d2));
+    expect_msg_eq(msg, 2, d2, sizeof(d2));
 }
 
 // --- TX and RX are independent ---
@@ -141,9 +142,9 @@ TEST_F(MessageQueueTest, TxAndRxAreIndependent) {
 
     QueueMessage msg;
     queue->tx_pop(1, msg);
-    expect_msg_eq(msg, tx_data, sizeof(tx_data));
+    expect_msg_eq(msg, 1, tx_data, sizeof(tx_data));
     queue->rx_pop(1, msg);
-    expect_msg_eq(msg, rx_data, sizeof(rx_data));
+    expect_msg_eq(msg, 1, rx_data, sizeof(rx_data));
 }
 
 // --- All 5 connection IDs work ---
@@ -157,9 +158,9 @@ TEST_F(MessageQueueTest, AllFiveConnectionIds) {
     for (uint8_t id = 1; id <= 5; ++id) {
         QueueMessage msg;
         EXPECT_EQ(queue->tx_pop(id, msg), QueueError::ok);
-        expect_msg_eq(msg, &id, 1);
+        expect_msg_eq(msg, id, &id, 1);
         EXPECT_EQ(queue->rx_pop(id, msg), QueueError::ok);
-        expect_msg_eq(msg, &id, 1);
+        expect_msg_eq(msg, id, &id, 1);
     }
 }
 
@@ -180,7 +181,7 @@ TEST_F(MessageQueueTest, PopWithTimeoutWaitsForPush) {
 
     uint8_t expected[] = {0xDE, 0xAD};
     EXPECT_EQ(err, QueueError::ok);
-    expect_msg_eq(msg, expected, sizeof(expected));
+    expect_msg_eq(msg, 1, expected, sizeof(expected));
 }
 
 // --- Timeout expires when no data arrives ---
@@ -210,5 +211,42 @@ TEST_F(MessageQueueTest, LargeMessage) {
     QueueMessage msg;
     EXPECT_EQ(queue->tx_pop(1, msg), QueueError::ok);
     EXPECT_EQ(msg.length, 200u);
-    expect_msg_eq(msg, data, sizeof(data));
+    expect_msg_eq(msg, 1, data, sizeof(data));
+}
+
+TEST_F(MessageQueueTest, TxPopNextPreservesGlobalFifoAcrossConnIds) {
+    uint8_t first[] = {0x01};
+    uint8_t second[] = {0x02};
+    uint8_t third[] = {0x03};
+
+    ASSERT_EQ(queue->tx_push(2, first, sizeof(first)), QueueError::ok);
+    ASSERT_EQ(queue->tx_push(1, second, sizeof(second)), QueueError::ok);
+    ASSERT_EQ(queue->tx_push(2, third, sizeof(third)), QueueError::ok);
+
+    QueueMessage msg;
+    ASSERT_EQ(queue->tx_pop_next(msg), QueueError::ok);
+    expect_msg_eq(msg, 2, first, sizeof(first));
+    ASSERT_EQ(queue->tx_pop_next(msg), QueueError::ok);
+    expect_msg_eq(msg, 1, second, sizeof(second));
+    ASSERT_EQ(queue->tx_pop_next(msg), QueueError::ok);
+    expect_msg_eq(msg, 2, third, sizeof(third));
+}
+
+TEST_F(MessageQueueTest, TxPopRemovesOrderEntryForMatchingConnId) {
+    uint8_t first[] = {0x0A};
+    uint8_t second[] = {0x0B};
+    uint8_t third[] = {0x0C};
+
+    ASSERT_EQ(queue->tx_push(1, first, sizeof(first)), QueueError::ok);
+    ASSERT_EQ(queue->tx_push(2, second, sizeof(second)), QueueError::ok);
+    ASSERT_EQ(queue->tx_push(1, third, sizeof(third)), QueueError::ok);
+
+    QueueMessage msg;
+    ASSERT_EQ(queue->tx_pop(1, msg), QueueError::ok);
+    expect_msg_eq(msg, 1, first, sizeof(first));
+
+    ASSERT_EQ(queue->tx_pop_next(msg), QueueError::ok);
+    expect_msg_eq(msg, 2, second, sizeof(second));
+    ASSERT_EQ(queue->tx_pop_next(msg), QueueError::ok);
+    expect_msg_eq(msg, 1, third, sizeof(third));
 }
