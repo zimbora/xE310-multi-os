@@ -27,6 +27,18 @@ Relevant interfaces:
 
 Use `message_queue` for payload data that goes to or comes from network sockets.
 
+Queue messages carry:
+
+- `cid`: 1-based socket/server context identifier.
+- `payload`: copied socket bytes.
+- `length`: payload length stored with the message.
+
+Behavior:
+
+- TX messages are processed by the server/network thread in the same FIFO order they were queued, even when different connection IDs are interleaved.
+- TX and RX queues each allow up to 5 in-flight messages at a time.
+- New messages are dropped when a queue is full.
+
 Examples:
 
 - TX data queued by app code before `udp_send`.

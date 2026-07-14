@@ -19,20 +19,27 @@ public:
 
     explicit ZephyrMessageQueue(size_t capacity) {
         queue_capacity_ = (capacity == 0U || capacity > MAX_QUEUE_CAPACITY) ? MAX_QUEUE_CAPACITY : capacity;
+        k_mutex_init(&mutex_);
         for (uint8_t i = 0; i < MAX_CONNECTIONS; ++i) {
             k_msgq_init(&tx_queues_[i], tx_bufs_[i].data(), SLOT_SIZE, queue_capacity_);
             k_msgq_init(&rx_queues_[i], rx_bufs_[i].data(), SLOT_SIZE, queue_capacity_);
         }
+        k_msgq_init(&tx_order_queue_, tx_order_buf_.data(), sizeof(uint8_t), queue_capacity_);
+        k_msgq_init(&rx_order_queue_, rx_order_buf_.data(), sizeof(uint8_t), queue_capacity_);
     }
 
     ~ZephyrMessageQueue() override = default;
 
     QueueError tx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
-        return push_to(tx_queues_, conn_id, data, length, timeout_ms);
+        return push_to(tx_queues_, tx_order_queue_, conn_id, data, length, timeout_ms);
     }
 
     QueueError tx_pop(uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) override {
-        return pop_from(tx_queues_, conn_id, msg, timeout_ms);
+        return pop_from(tx_queues_, tx_order_queue_, conn_id, msg, timeout_ms);
+    }
+
+    QueueError tx_pop_next(QueueMessage& msg, uint32_t timeout_ms) override {
+        return pop_next_from(tx_queues_, tx_order_queue_, msg, timeout_ms);
     }
 
     size_t tx_count(uint8_t conn_id) const override {
@@ -41,11 +48,11 @@ public:
     }
 
     QueueError rx_push(uint8_t conn_id, const uint8_t* data, size_t length, uint32_t timeout_ms) override {
-        return push_to(rx_queues_, conn_id, data, length, timeout_ms);
+        return push_to(rx_queues_, rx_order_queue_, conn_id, data, length, timeout_ms);
     }
 
     QueueError rx_pop(uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms) override {
-        return pop_from(rx_queues_, conn_id, msg, timeout_ms);
+        return pop_from(rx_queues_, rx_order_queue_, conn_id, msg, timeout_ms);
     }
 
     size_t rx_count(uint8_t conn_id) const override {
@@ -54,56 +61,105 @@ public:
     }
 
 private:
-    static k_timeout_t to_timeout(uint32_t timeout_ms) { return (timeout_ms == 0U) ? K_NO_WAIT : K_MSEC(timeout_ms); }
-
-    static QueueError map_put_result(int ret) {
-        if (ret == 0) return QueueError::ok;
-        if (ret == -EAGAIN) return QueueError::timeout;
-        if (ret == -ENOMSG) return QueueError::full;
-        return QueueError::full;
-    }
-
-    static QueueError map_get_result(int ret) {
-        if (ret == 0) return QueueError::ok;
-        if (ret == -EAGAIN) return QueueError::timeout;
-        if (ret == -ENOMSG) return QueueError::empty;
-        return QueueError::empty;
-    }
-
-    static QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, const uint8_t* data,
-                              size_t length, uint32_t timeout_ms) {
+    QueueError push_to(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, struct k_msgq& order_queue, uint8_t conn_id,
+                       const uint8_t* data, size_t length, uint32_t /*timeout_ms*/) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
         if (length > MAX_MSG_SIZE) return QueueError::full;
+        k_mutex_lock(&mutex_, K_FOREVER);
+        if (k_msgq_num_used_get(&queues[conn_id - 1]) >= queue_capacity_ || k_msgq_num_used_get(&order_queue) >= queue_capacity_) {
+            k_mutex_unlock(&mutex_);
+            return QueueError::full;
+        }
 
         uint8_t slot[SLOT_SIZE];
         auto len16 = static_cast<uint16_t>(length);
         std::memcpy(slot, &len16, sizeof(len16));
         std::memcpy(slot + sizeof(len16), data, length);
 
-        int ret = k_msgq_put(&queues[conn_id - 1], slot, to_timeout(timeout_ms));
-        return map_put_result(ret);
+        int payload_ret = k_msgq_put(&queues[conn_id - 1], slot, K_NO_WAIT);
+        int order_ret = (payload_ret == 0) ? k_msgq_put(&order_queue, &conn_id, K_NO_WAIT) : payload_ret;
+        k_mutex_unlock(&mutex_);
+        return (payload_ret == 0 && order_ret == 0) ? QueueError::ok : QueueError::full;
     }
 
-    static QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, uint8_t conn_id, QueueMessage& msg,
-                               uint32_t timeout_ms) {
+    QueueError pop_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, struct k_msgq& order_queue, uint8_t conn_id,
+                        QueueMessage& msg, uint32_t timeout_ms) {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return QueueError::invalid_id;
+        const int64_t deadline = k_uptime_get() + static_cast<int64_t>(timeout_ms);
+        while (true) {
+            k_mutex_lock(&mutex_, K_FOREVER);
+            uint8_t slot[SLOT_SIZE];
+            int ret = k_msgq_get(&queues[conn_id - 1], slot, K_NO_WAIT);
+            if (ret == 0) {
+                remove_order_entry(order_queue, conn_id);
+                k_mutex_unlock(&mutex_);
+                decode_slot(conn_id, slot, msg);
+                return QueueError::ok;
+            }
+            k_mutex_unlock(&mutex_);
+            if (timeout_ms == 0U) return QueueError::empty;
+            if (k_uptime_get() >= deadline) return QueueError::timeout;
+            k_sleep(K_MSEC(1));
+        }
+    }
 
-        uint8_t slot[SLOT_SIZE];
-        int ret = k_msgq_get(&queues[conn_id - 1], slot, to_timeout(timeout_ms));
-        QueueError qerr = map_get_result(ret);
-        if (qerr != QueueError::ok) return qerr;
+    QueueError pop_next_from(std::array<struct k_msgq, MAX_CONNECTIONS>& queues, struct k_msgq& order_queue,
+                             QueueMessage& msg, uint32_t timeout_ms) {
+        const int64_t deadline = k_uptime_get() + static_cast<int64_t>(timeout_ms);
+        while (true) {
+            k_mutex_lock(&mutex_, K_FOREVER);
+            uint8_t conn_id = 0;
+            int order_ret = k_msgq_get(&order_queue, &conn_id, K_NO_WAIT);
+            if (order_ret == 0) {
+                uint8_t slot[SLOT_SIZE];
+                int payload_ret = k_msgq_get(&queues[conn_id - 1], slot, K_NO_WAIT);
+                k_mutex_unlock(&mutex_);
+                if (payload_ret != 0) return QueueError::empty;
+                decode_slot(conn_id, slot, msg);
+                return QueueError::ok;
+            }
+            k_mutex_unlock(&mutex_);
+            if (timeout_ms == 0U) return QueueError::empty;
+            if (k_uptime_get() >= deadline) return QueueError::timeout;
+            k_sleep(K_MSEC(1));
+        }
+    }
 
+    static void decode_slot(uint8_t conn_id, const uint8_t* slot, QueueMessage& msg) {
         uint16_t len16 = 0;
         std::memcpy(&len16, slot, sizeof(len16));
+        msg.cid = conn_id;
         msg.length = std::min(static_cast<size_t>(len16), MAX_MSG_DATA);
         std::memcpy(msg.data.data(), slot + sizeof(len16), msg.length);
-        return QueueError::ok;
+    }
+
+    static void remove_order_entry(struct k_msgq& order_queue, uint8_t conn_id) {
+        std::array<uint8_t, MAX_QUEUE_CAPACITY> deferred{};
+        size_t deferred_count = 0;
+        bool removed = false;
+        uint8_t queued_conn_id = 0;
+        while (k_msgq_get(&order_queue, &queued_conn_id, K_NO_WAIT) == 0) {
+            if (!removed && queued_conn_id == conn_id) {
+                removed = true;
+                continue;
+            }
+            deferred[deferred_count++] = queued_conn_id;
+        }
+
+        for (size_t i = 0; i < deferred_count; ++i) {
+            k_msgq_put(&order_queue, &deferred[i], K_NO_WAIT);
+        }
     }
 
     std::array<struct k_msgq, MAX_CONNECTIONS> tx_queues_{};
     std::array<struct k_msgq, MAX_CONNECTIONS> rx_queues_{};
     std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> tx_bufs_{};
     std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> rx_bufs_{};
+    struct k_msgq tx_order_queue_{};
+    struct k_msgq rx_order_queue_{};
+    std::array<char, MAX_QUEUE_CAPACITY * sizeof(uint8_t)> tx_order_buf_{};
+    std::array<char, MAX_QUEUE_CAPACITY * sizeof(uint8_t)> rx_order_buf_{};
+    struct k_mutex mutex_{};
     size_t queue_capacity_ = MAX_QUEUE_CAPACITY;
 };
 
