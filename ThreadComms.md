@@ -49,6 +49,7 @@ Relevant interfaces:
 
 - `include/modem/message_queue_interface.h`
 - `include/modem/message_queue_factory.h`
+- `include/modem/i_radio_lte.h` (`IRadioLte::tx_write` / `IRadioLte::rx_read`)
 - `include/modem/network_lte.h` / `src/network_lte.cpp`
 
 ## Event Flags Usage
