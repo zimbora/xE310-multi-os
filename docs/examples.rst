@@ -2,8 +2,7 @@ Usage Examples
 ==============
 
 This page shows how to use ``IRadioDataQueue`` and ``RadioLteChannels`` for
-cross-thread communication in a desktop
-(POSIX/Win32) or Zephyr application.
+cross-thread communication in a desktop (POSIX/Win32) or Zephyr application.
 
 .. contents:: Contents
    :local:
@@ -20,21 +19,22 @@ and an event-flag object bundled in ``RadioLteChannels``:
 
 .. code-block:: text
 
-   ┌─────────────────────────┐     modem_tx_q      ┌───────────────────────────┐
+    ┌─────────────────────────┐     modem_tx_q      ┌───────────────────────────┐
     │    Application Thread   │ ─────────────────▶  │     Network Thread        │
-    │                         │     modem_rx_q       │  (runs the modem state    │
-    │                         │                      │   machine and queues)     │
-   │  RadioLteChannels::     │ ◀─────────────────  │                           │
-   │    send_request()       │     modem_evt        │  process_radio_requests() │
-   │    recv_typed_response()│ ◀── event flags ───  │  publish_typed_response() │
-   └─────────────────────────┘                      └───────────────────────────┘
+    │                         │     modem_rx_q      │  (runs the modem state    │
+    │                         │                     │   machine and queues)     │
+    │  RadioLteChannels::     │ ◀─────────────────  │                           │
+    │    send_request()       │     modem_evt       │  internal request         │
+    │    recv_typed_response()│ ◀── event flags ─── │  dispatcher              │
+    └─────────────────────────┘                     └───────────────────────────┘
 
 The application thread uses ``send_request()`` / ``recv_typed_response()`` /
 ``wait()`` for control-plane operations. Payload TX/RX queue access is a
 separate data-plane concern exposed by ``IRadioDataQueue``.
 
-The network thread calls ``process_radio_requests()`` once per loop iteration
-to drain queued requests and dispatch them to the modem state-machine owner.
+The network thread drains queued requests internally as part of the modem
+state-machine integration. Application code should interact only through
+``RadioLteChannels`` and ``IRadioDataQueue``.
 
 ---------------------------------------------------------------------------
 
@@ -268,7 +268,7 @@ Example 8 — Thread-Safe Payload Queue Access
 ---------------------------------------------
 
 Use ``IRadioDataQueue`` when you need to push TX payloads or drain RX payloads
-without routing the operation through ``process_radio_requests()``.
+without routing the operation through the internal request dispatcher.
 
 .. code-block:: cpp
 
@@ -296,29 +296,10 @@ without routing the operation through ``process_radio_requests()``.
 Example 9 — Network Thread Integration
 --------------------------------------
 
-The following skeleton shows how a network thread integrates
-``process_radio_requests()`` to service application requests every cycle.
+Applications should treat the request dispatcher as an internal detail of the
+network thread. The public integration points are:
 
-.. code-block:: cpp
-
-   #include "modem/i_radio_lte.h"
-    #include "modem/network_lte.h"
-
-   void network_thread_main(modem::RadioLteChannels& channels,
-                             modem::NetworkLte& network) {
-       while (true) {
-           // Wait for work (request, tick, etc.) — 100 ms timeout.
-           uint32_t events = channels.wait(
-               modem::MODEM_EVT_REQUEST,
-               /*reset=*/true,
-               100);
-
-           if (events & modem::MODEM_EVT_REQUEST) {
-               // Drain all pending requests from the application thread.
-               modem::process_radio_requests(channels, network);
-           }
-
-           // Run one step of the network state machine.
-           network.loop();
-       }
-   }
+* ``RadioLteChannels`` for control-plane requests and typed responses.
+* ``IRadioDataQueue`` for thread-safe TX/RX queue access.
+* ``NetworkLte::loop()`` for advancing the modem state machine in the owning
+  network thread.

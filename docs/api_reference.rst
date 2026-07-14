@@ -1,5 +1,5 @@
 API Reference — ``i_radio_lte.h``
-==================================
+=================================
 
 This page documents the public API defined in ``include/modem/i_radio_lte.h``.
 It covers the thread-safe messaging interface (``RadioLteChannels``),
@@ -127,14 +127,6 @@ payload buffering and ``rx_read()`` for draining received payloads.
    :project: xE310ModemLibrary
    :members:
    :undoc-members:
-
----------------------------------------------------------------------------
-
-Free Functions
---------------
-
-.. doxygenfunction:: modem::process_radio_requests
-   :project: xE310ModemLibrary
 
 ---------------------------------------------------------------------------
 
