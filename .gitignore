@@ -33,3 +33,7 @@ Thumbs.db
 build/
 build-lib/
 out/
+
+# Documentation build artifacts
+docs/doxygen/
+docs/_build/
