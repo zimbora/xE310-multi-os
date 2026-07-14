@@ -147,6 +147,13 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             }
             return {resp.ok, "\"" + std::string(resp.value.c_str()) + "\""};
         }
+        case modem::RadioLteRequestType::get_clock: {
+            modem::ModemTypedResponseMsg<modem::FixedString<modem::MODEM_SHORT_STR>> resp{};
+            if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                return {false, "ERROR: invalid clock response"};
+            }
+            return {resp.ok, "\"" + std::string(resp.value.c_str()) + "\""};
+        }
         case modem::RadioLteRequestType::get_modem_info: {
             modem::ModemTypedResponseMsg<modem::ModemInfo> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
@@ -300,6 +307,8 @@ std::string RpcServer::handle_request(const std::string& request) {
         if (sub == "MODEMINFO")
             return request_radio_state({modem::RadioLteRequestType::get_modem_info, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS)
                 .second;
+        if (sub == "CLOCK")
+            return request_radio_state({modem::RadioLteRequestType::get_clock, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS).second;
         if (sub == "SIMSTATUS")
             return request_radio_state({modem::RadioLteRequestType::get_sim_status, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS)
                 .second;

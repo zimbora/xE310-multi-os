@@ -32,6 +32,9 @@ const FixedString<MODEM_SHORT_STR>& NetworkLte::iccid() const {
 const FixedString<MODEM_SHORT_STR>& NetworkLte::imsi() const {
     return modemInfo.imsi;
 }
+const FixedString<MODEM_SHORT_STR>& NetworkLte::clock() const {
+    return modemClock;
+}
 const NetworkLteConfig& NetworkLte::config() const {
     return lteConfig;
 }
@@ -1160,6 +1163,7 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             // modem_.get_iot_tech(regInfo.act, networkInfo.gsm_priority); // update IoT tech in info struct after
             // applying it to modem modem_.get_registration_status(regInfo, RadioTech::gsm); // update registration info
             // in info struct after applying it to modem
+            modem_.get_clock(modemClock);             // update clock from modem
             modem_.get_signal_quality(signalQuality); // update signal quality in info struct after applying it to modem
             modem_.get_operator(
                 regInfo.operator_name); // update operator name in info struct after applying it to modem

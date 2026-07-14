@@ -217,6 +217,9 @@ public:
     /// SIM IMSI read at power-on.
     const FixedString<MODEM_SHORT_STR>& imsi() const override;
 
+    /// Last modem clock read from AT+CCLK?.
+    const FixedString<MODEM_SHORT_STR>& clock() const override;
+
     /// Full modem identification info read at power-on.
     const ModemInfo& modem_info() const override;
 
@@ -323,6 +326,7 @@ private:
     RegistrationInfo regInfo;
     NetworkInfo networkInfo;
     SignalQuality signalQuality;
+    FixedString<MODEM_SHORT_STR> modemClock;
     PsmMode psmMode = PsmMode::disable;
     CpsmsConfig cpsmsConfig;
     TelitCpsmsConfig telitCpsmsConfig;

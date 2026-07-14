@@ -121,6 +121,24 @@ ModemStatus xE310::get_imei(FixedString<MODEM_SHORT_STR>& imei) {
     return status;
 }
 
+ModemStatus xE310::get_clock(FixedString<MODEM_SHORT_STR>& clock) {
+    AtResponse response;
+    auto status = send_raw("AT+CCLK?", response);
+    if (status == ModemStatus::ok) {
+        constexpr std::string_view PREFIX = "+CCLK: ";
+        if (response.body.rfind(PREFIX, 0) == 0) {
+            std::string_view value = response.body.substr(PREFIX.size());
+            if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+                value = value.substr(1, value.size() - 2);
+            }
+            clock = value;
+        } else {
+            clock = response.body.view();
+        }
+    }
+    return status;
+}
+
 // --- SIM Card ---
 
 ModemStatus xE310::read_iccid(FixedString<MODEM_SHORT_STR>& iccid) {
