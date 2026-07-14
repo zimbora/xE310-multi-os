@@ -2,6 +2,7 @@
 
 #ifdef MODEM_PLATFORM_POSIX
 
+#include <algorithm>
 #include <array>
 #include <condition_variable>
 #include <deque>
@@ -111,11 +112,9 @@ private:
     }
 
     static void remove_order_entry(std::deque<uint8_t>& order, uint8_t conn_id) {
-        for (auto it = order.begin(); it != order.end(); ++it) {
-            if (*it == conn_id) {
-                order.erase(it);
-                break;
-            }
+        const auto it = std::find(order.begin(), order.end(), conn_id);
+        if (it != order.end()) {
+            order.erase(it);
         }
     }
 
