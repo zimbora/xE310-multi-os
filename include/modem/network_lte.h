@@ -176,10 +176,10 @@ public:
     bool server_disconnect(uint8_t conn_id) override;
 
     /// Write data into the TX queue for the given connection ID (1-based).
-    QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length);
+    QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length) override;
 
     /// Read data from the RX queue for the given connection ID (1-based).
-    QueueError rx_read(uint8_t conn_id, QueueMessage& msg);
+    QueueError rx_read(uint8_t conn_id, QueueMessage& msg) override;
 
     /// Try to register on a network with PSM enabled, by checking the current network registration and PSM
     /// configuration, and iterating through available operators if registration or PSM is not available with the

@@ -3,6 +3,7 @@
 #include "modem/event_flags_factory.h"
 #include "modem/fixed_string.h"
 #include "modem/message_channel_factory.h"
+#include "modem/message_queue_interface.h"
 #include "modem/network_lte_config.h"
 #include "modem/static_vector.h"
 #include "modem/xe310.h"
@@ -216,6 +217,12 @@ public:
 
     /// Disconnect server socket for the given connection id.
     virtual bool server_disconnect(uint8_t conn_id) = 0;
+
+    /// Queue payload data for the given connection ID (1-based).
+    virtual QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length) = 0;
+
+    /// Read queued RX payload data for the given connection ID (1-based).
+    virtual QueueError rx_read(uint8_t conn_id, QueueMessage& msg) = 0;
 
     /// Force modem into PSM flow according to current configuration.
     virtual bool force_psm() = 0;

@@ -1022,30 +1022,34 @@ void NetworkLte::execute_actions() {
                 NETWORK_LOG_WRN("Ignoring send_data action: state=%d (requires data_ready)", static_cast<int>(state_));
                 break;
             }
-            // Drain TX queues for all connection IDs, checking protocol per conn_id
-            for (uint8_t id = 1; id <= MAX_SERVER_CONNECTIONS; ++id) {
-                if (!message_queue_ || message_queue_->tx_count(id) == 0) {
+            if (!message_queue_) {
+                break;
+            }
+
+            QueueMessage msg;
+            while (message_queue_->tx_pop_next(msg) == QueueError::ok) {
+                const uint8_t id = msg.cid;
+                if (id < 1 || id > MAX_SERVER_CONNECTIONS) {
+                    NETWORK_LOG_ERR("Invalid conn_id %d in TX queue, dropping message", id);
                     continue;
                 }
                 if (serverInfo[id - 1].state != ServerState::connected) {
-                    NETWORK_LOG_WRN("conn_id %d not connected, state: %d skipping TX drain", id,
+                    NETWORK_LOG_WRN("conn_id %d not connected, state: %d dropping queued TX message", id,
                                     static_cast<int>(serverInfo[id - 1].state));
                     continue;
                 }
-                QueueMessage msg;
-                while (message_queue_->tx_pop(id, msg) == QueueError::ok) {
-                    NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.length));
-                    NETWORK_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
-                    if (serverInfo[id - 1].protocol == "UDP") {
-                        auto status = modem_.udp_send(id, msg.data.data(), msg.length);
-                        if (status != ModemStatus::ok) {
-                            NETWORK_LOG_ERR("Failed to send UDP data on conn_id %d", id);
-                        }
-                    } else if (serverInfo[id - 1].protocol == "TCP") {
-                        NETWORK_LOG_WRN("TCP send not implemented for conn_id %d", id);
-                    } else {
-                        NETWORK_LOG_ERR("Unknown protocol for conn_id %d, cannot send", id);
+
+                NETWORK_LOG_INF("id: %d, sending message of length %d", id, static_cast<int>(msg.length));
+                NETWORK_LOG_INF("protocol: %s", serverInfo[id - 1].protocol.c_str());
+                if (serverInfo[id - 1].protocol == "UDP") {
+                    auto status = modem_.udp_send(id, msg.data.data(), msg.length);
+                    if (status != ModemStatus::ok) {
+                        NETWORK_LOG_ERR("Failed to send UDP data on conn_id %d", id);
                     }
+                } else if (serverInfo[id - 1].protocol == "TCP") {
+                    NETWORK_LOG_WRN("TCP send not implemented for conn_id %d", id);
+                } else {
+                    NETWORK_LOG_ERR("Unknown protocol for conn_id %d, cannot send", id);
                 }
             }
         } break;

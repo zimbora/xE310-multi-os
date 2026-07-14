@@ -18,6 +18,7 @@ enum class QueueError : uint8_t {
 static constexpr size_t MAX_MSG_DATA = 256;
 
 struct QueueMessage {
+    uint8_t cid = 0;
     std::array<uint8_t, MAX_MSG_DATA> data{};
     size_t length = 0;
 };
@@ -27,7 +28,7 @@ struct QueueMessage {
 class MessageQueueInterface {
 public:
     static constexpr uint8_t MAX_CONNECTIONS = 5;
-    static constexpr size_t DEFAULT_CAPACITY = 16;
+    static constexpr size_t DEFAULT_CAPACITY = 5;
 
     MessageQueueInterface() = default;
     MessageQueueInterface(const MessageQueueInterface&) = delete;
@@ -41,6 +42,9 @@ public:
 
     /// Pop a message from the TX queue for the given connection ID (1-based).
     virtual QueueError tx_pop(uint8_t conn_id, QueueMessage& msg, uint32_t timeout_ms = 0) = 0;
+
+    /// Pop the next TX message in the order it was queued, regardless of connection ID.
+    virtual QueueError tx_pop_next(QueueMessage& msg, uint32_t timeout_ms = 0) = 0;
 
     /// Returns the number of messages in the TX queue for the given connection ID.
     virtual size_t tx_count(uint8_t conn_id) const = 0;
