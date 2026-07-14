@@ -1,9 +1,9 @@
-#include "modem/i_radio_lte.h"
+#include "i_radio_lte_internal.h"
 #include "modem/network_lte.h"
 
 namespace modem {
 
-void process_radio_requests(RadioLteChannels& channels, IRadioLte& radio) {
+void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
     MessageFrame frame{};
     while (channels.recv_request_frame(frame) == MessageChannelError::ok) {
         if (frame.length < sizeof(RadioLteRequestType)) {
