@@ -9,6 +9,7 @@
 #include "modem/i_radio_lte.h"
 #include "modem/timer_factory.h"
 #include "modem/log.h"
+#include "i_radio_lte_internal.h"
 #include <memory>
 #include <string>
 #include <string_view>

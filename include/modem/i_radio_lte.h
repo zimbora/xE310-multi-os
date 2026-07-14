@@ -199,101 +199,21 @@ private:
     ModemStateMsg state_msg{};
 };
 
-/// Interface that exposes the last known LTE radio/modem state.
-class IRadioLte {
+/// Interface for thread-safe payload queue access outside the radio request path.
+class IRadioDataQueue {
 public:
-    IRadioLte() = default;
-    IRadioLte(const IRadioLte&) = delete;
-    IRadioLte& operator=(const IRadioLte&) = delete;
-    IRadioLte(IRadioLte&&) = delete;
-    IRadioLte& operator=(IRadioLte&&) = delete;
-    virtual ~IRadioLte() = default;
-
-    /// Attach to network and establish default PDP connectivity.
-    virtual bool network_connect() = 0;
-
-    /// Disconnect from network and deactivate connectivity.
-    virtual bool network_disconnect() = 0;
-
-    /// Disconnect server socket for the given connection id.
-    virtual bool server_disconnect(uint8_t conn_id) = 0;
+    IRadioDataQueue() = default;
+    IRadioDataQueue(const IRadioDataQueue&) = delete;
+    IRadioDataQueue& operator=(const IRadioDataQueue&) = delete;
+    IRadioDataQueue(IRadioDataQueue&&) = delete;
+    IRadioDataQueue& operator=(IRadioDataQueue&&) = delete;
+    virtual ~IRadioDataQueue() = default;
 
     /// Queue payload data for the given connection ID (1-based).
     virtual QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length) = 0;
 
     /// Read queued RX payload data for the given connection ID (1-based).
     virtual QueueError rx_read(uint8_t conn_id, QueueMessage& msg) = 0;
-
-    /// Force modem into PSM flow according to current configuration.
-    virtual bool force_psm() = 0;
-
-    /// Last registration info read from the modem.
-    virtual const RegistrationInfo& registration_info() const = 0;
-
-    /// Last signal quality read from the modem.
-    virtual const SignalQuality& signal_quality() const = 0;
-
-    /// SIM ICCID read at power-on.
-    virtual const FixedString<MODEM_SHORT_STR>& iccid() const = 0;
-
-    /// SIM IMSI read at power-on.
-    virtual const FixedString<MODEM_SHORT_STR>& imsi() const = 0;
-
-    /// Last modem clock read from AT+CCLK?.
-    virtual const FixedString<MODEM_SHORT_STR>& clock() const = 0;
-
-    /// Full modem identification info read at power-on.
-    virtual const ModemInfo& modem_info() const = 0;
-
-    /// Last known SIM status.
-    virtual SimStatus sim_status() const = 0;
-
-    /// Last known radio access technology.
-    virtual RadioTech radio_tech() const = 0;
-
-    /// Last known registration status (from URC or query).
-    virtual RegStatus reg_status() const = 0;
-
-    /// Last known network/PDP context info.
-    virtual const NetworkInfo& network_info() const = 0;
-
-    /// Last known PSM mode.
-    virtual PsmMode psm_mode() const = 0;
-
-    /// Last known 3GPP PSM configuration.
-    virtual const CpsmsConfig& cpsms_config() const = 0;
-
-    /// Last known Telit PSM configuration.
-    virtual const TelitCpsmsConfig& telit_cpsms_config() const = 0;
-
-    /// Last known Telit PSM network status.
-    virtual const TelitCpsmsStatus& telit_cpsms_status() const = 0;
-
-    /// Last network survey result (populated after a survey action).
-    virtual const NetworkSurveyResult& network_survey_result() const = 0;
-
-    /// List of operators found by the last AT+COPS=? scan.
-    virtual const StaticVector<Operator, xE310::MAX_OPERATORS>& available_operators() const = 0;
-
-    /// Result of the last AT#CSURV scan (populated by scan_networks()).
-    virtual const CsurvResult& csurv_result() const = 0;
-
-    /// Run AT#CSURVF=2 + AT#CSURV and store results internally.
-    /// Optionally restrict to channels [start_ch, end_ch]; pass 0 for both to scan full band.
-    virtual bool scan_networks(uint32_t start_ch = 0, uint32_t end_ch = 0) = 0;
-
-    /// Pointer to the internal server info array (MAX_SERVER_CONNECTIONS entries, 0-based).
-    virtual const ServerInfo* server_info_array() const = 0;
-
-    /// Active configuration.
-    virtual const NetworkLteConfig& config() const = 0;
-
-    /// Replace the active configuration (takes effect on the next step cycle).
-    virtual void set_config(const NetworkLteConfig& config) = 0;
 };
-
-/// Process pending radio LTE requests from channels and dispatch them to network.
-/// Call this from the network thread on each iteration to service cross-thread requests.
-void process_radio_requests(RadioLteChannels& channels, IRadioLte& radio);
 
 } // namespace modem

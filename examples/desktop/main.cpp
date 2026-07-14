@@ -6,6 +6,7 @@
 #include "modem/i_radio_lte.h"
 #include "modem/log.h"
 #include "rpc_helpers.h"
+#include "i_radio_lte_internal.h"
 #include "modem/timer_interface.h"
 #include "modem/timer_factory.h"
 #include "app_ipc_servers.h"
