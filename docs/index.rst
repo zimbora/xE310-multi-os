@@ -9,7 +9,7 @@ The library provides:
 
 * A **hardware abstraction layer (HAL)** that isolates platform-specific serial/UART code.
 * Core AT command parsing and state machine logic that is fully **platform-independent**.
-* A thread-safe **cross-thread messaging interface** (``IRadioLte`` / ``RadioLteChannels``)
+* A thread-safe **cross-thread messaging interface** (``RadioLteChannels``)
   for querying and controlling modem state through the network thread.
 * A separate **data-plane queue interface** (``IRadioDataQueue``) for thread-safe
   TX/RX payload access outside the request dispatcher.

@@ -1,8 +1,8 @@
 Usage Examples
 ==============
 
-This page shows how to use ``IRadioLte``, ``IRadioDataQueue``, and
-``RadioLteChannels`` for cross-thread communication in a desktop
+This page shows how to use ``IRadioDataQueue`` and ``RadioLteChannels`` for
+cross-thread communication in a desktop
 (POSIX/Win32) or Zephyr application.
 
 .. contents:: Contents
@@ -21,9 +21,9 @@ and an event-flag object bundled in ``RadioLteChannels``:
 .. code-block:: text
 
    ┌─────────────────────────┐     modem_tx_q      ┌───────────────────────────┐
-   │    Application Thread   │ ─────────────────▶  │     Network Thread        │
-    │                         │     modem_rx_q       │  (implements IRadioLte    │
-    │                         │                      │   and IRadioDataQueue)    │
+    │    Application Thread   │ ─────────────────▶  │     Network Thread        │
+    │                         │     modem_rx_q       │  (runs the modem state    │
+    │                         │                      │   machine and queues)     │
    │  RadioLteChannels::     │ ◀─────────────────  │                           │
    │    send_request()       │     modem_evt        │  process_radio_requests() │
    │    recv_typed_response()│ ◀── event flags ───  │  publish_typed_response() │
@@ -34,8 +34,7 @@ The application thread uses ``send_request()`` / ``recv_typed_response()`` /
 separate data-plane concern exposed by ``IRadioDataQueue``.
 
 The network thread calls ``process_radio_requests()`` once per loop iteration
-to drain queued requests and dispatch them through the ``IRadioLte``
-implementation.
+to drain queued requests and dispatch them to the modem state-machine owner.
 
 ---------------------------------------------------------------------------
 
@@ -268,9 +267,8 @@ Example 7 — Monitoring State Changes and Logs
 Example 8 — Thread-Safe Payload Queue Access
 ---------------------------------------------
 
-``IRadioDataQueue`` is intentionally separate from ``IRadioLte``. Use it when
-you need to push TX payloads or drain RX payloads without routing the operation
-through ``process_radio_requests()``.
+Use ``IRadioDataQueue`` when you need to push TX payloads or drain RX payloads
+without routing the operation through ``process_radio_requests()``.
 
 .. code-block:: cpp
 
@@ -304,7 +302,7 @@ The following skeleton shows how a network thread integrates
 .. code-block:: cpp
 
    #include "modem/i_radio_lte.h"
-    #include "modem/network_lte.h"  // NetworkLte implements IRadioLte and IRadioDataQueue
+    #include "modem/network_lte.h"
 
    void network_thread_main(modem::RadioLteChannels& channels,
                              modem::NetworkLte& network) {

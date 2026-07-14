@@ -3,9 +3,8 @@ API Reference — ``i_radio_lte.h``
 
 This page documents the public API defined in ``include/modem/i_radio_lte.h``.
 It covers the thread-safe messaging interface (``RadioLteChannels``),
-the control-plane interface (``IRadioLte``), the data-plane queue interface
-(``IRadioDataQueue``), all message/event types, and every data structure they
-reference.
+the data-plane queue interface (``IRadioDataQueue``), all message/event
+types, and every data structure they reference.
 
 .. contents:: Contents
    :local:
@@ -131,24 +130,6 @@ payload buffering and ``rx_read()`` for draining received payloads.
 
 ---------------------------------------------------------------------------
 
-IRadioLte
----------
-
-``IRadioLte`` is the pure-virtual interface that the network thread
-implements for ``process_radio_requests()``. It exposes the **last known**
-modem state and the control operations serviced on the network thread.
-
-Application code should normally reach this interface indirectly through
-``RadioLteChannels`` and ``process_radio_requests()`` rather than calling it
-directly from unrelated threads.
-
-.. doxygenclass:: modem::IRadioLte
-   :project: xE310ModemLibrary
-   :members:
-   :undoc-members:
-
----------------------------------------------------------------------------
-
 Free Functions
 --------------
 
@@ -166,8 +147,8 @@ headers included by ``i_radio_lte.h``.
 NetworkLteConfig
 ~~~~~~~~~~~~~~~~
 
-Holds the full LTE network state-machine configuration. Pass one to
-``IRadioLte::set_config()`` or embed it in a ``ModemSetConfigMsg``.
+Holds the full LTE network state-machine configuration. Embed it in a
+``ModemSetConfigMsg`` to request a configuration update through the channel.
 
 .. doxygenstruct:: modem::NetworkLteConfig
    :project: xE310ModemLibrary
