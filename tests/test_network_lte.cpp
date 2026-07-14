@@ -636,3 +636,49 @@ TEST_F(NetworkLteTest, HandleUrc_SRING_NoSpace) {
     sm.handle_urc("SRING:3");
     EXPECT_EQ(sm.event(), NetworkLteEvent::data_available);
 }
+
+// ===========================================================================
+// server_connect tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, ServerConnect_NotInDataReady_ReturnsFalse) {
+    auto sm = make_sm();
+    // Default state is switched_off — not data_ready or sleep_mode
+    bool result = sm.server_connect(1, "UDP", "192.168.1.1", 5000);
+    EXPECT_FALSE(result);
+}
+
+TEST_F(NetworkLteTest, ServerConnect_IdleMode_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::idle_mode);
+    bool result = sm.server_connect(1, "UDP", "192.168.1.1", 5000);
+    EXPECT_FALSE(result);
+}
+
+TEST_F(NetworkLteTest, ServerConnect_UdpInDataReady_ReturnsTrue) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+
+    // AT#SS=1 → disconnected (state=0, default OK response has no comma)
+    // AT#SD=1,... → OK
+    // Default mock returns "\r\nOK\r\n" for unrecognised commands,
+    // so udp_status returns ok with state=0 (no comma found) and
+    // udp_open returns ok.
+    bool result = sm.server_connect(1, "UDP", "192.168.1.1", 5000);
+    EXPECT_TRUE(result);
+}
+
+TEST_F(NetworkLteTest, ServerConnect_TcpProtocol_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    // TCP is not supported
+    bool result = sm.server_connect(1, "TCP", "192.168.1.1", 5000);
+    EXPECT_FALSE(result);
+}
+
+TEST_F(NetworkLteTest, ServerConnect_UnknownProtocol_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    bool result = sm.server_connect(1, "SCTP", "192.168.1.1", 5000);
+    EXPECT_FALSE(result);
+}

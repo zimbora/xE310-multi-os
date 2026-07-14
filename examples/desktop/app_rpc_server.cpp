@@ -277,6 +277,7 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
         case modem::RadioLteRequestType::set_config:
         case modem::RadioLteRequestType::network_connect:
         case modem::RadioLteRequestType::network_disconnect:
+        case modem::RadioLteRequestType::server_connect:
         case modem::RadioLteRequestType::server_disconnect:
         case modem::RadioLteRequestType::force_psm:
         default: {
@@ -467,6 +468,82 @@ std::string RpcServer::handle_request(const std::string& request) {
                    "}";
         }
 
+        if (res == "SERVERCONNECT") {
+            // args: <conn_id> <protocol> <ip> <port>
+            modem::ModemServerConnectMsg sc_request{};
+            sc_request.conn_id = static_cast<uint8_t>(context_.lte_config.conn_id);
+
+            // Parse space-separated arguments
+            auto parse_next = [](std::string& s, std::string& token) -> bool {
+                auto sp = s.find(' ');
+                if (sp == std::string::npos) {
+                    token = s;
+                    s.clear();
+                } else {
+                    token = s.substr(0, sp);
+                    s = s.substr(sp + 1);
+                }
+                return !token.empty();
+            };
+
+            std::string remaining = args;
+            std::string tok;
+
+            if (!parse_next(remaining, tok)) return "ERROR: missing conn_id";
+            {
+                bool is_valid = true;
+                int id = 0;
+                for (char c : tok) {
+                    if (c < '0' || c > '9') { is_valid = false; break; }
+                    id = (id * 10) + (c - '0');
+                }
+                if (!is_valid || id < 1 || id > MAX_SERVER_CONNECTIONS)
+                    return "ERROR: invalid conn_id (1-" + std::to_string(MAX_SERVER_CONNECTIONS) + ")";
+                sc_request.conn_id = static_cast<uint8_t>(id);
+            }
+
+            if (!parse_next(remaining, tok)) return "ERROR: missing protocol";
+            sc_request.protocol = modem::FixedString<modem::MODEM_SHORT_STR>(tok.c_str());
+
+            if (!parse_next(remaining, tok)) return "ERROR: missing ip/dns";
+            sc_request.ip = modem::FixedString<modem::MODEM_MEDIUM_STR>(tok.c_str());
+
+            if (!parse_next(remaining, tok)) return "ERROR: missing port";
+            {
+                bool is_valid = true;
+                int port = 0;
+                for (char c : tok) {
+                    if (c < '0' || c > '9') { is_valid = false; break; }
+                    port = (port * 10) + (c - '0');
+                }
+                if (!is_valid || port < 1 || port > 65535) return "ERROR: invalid port";
+                sc_request.port = static_cast<uint16_t>(port);
+            }
+
+            if (!context_.network_worker_running.load())
+                return "ERROR: network worker not running";
+
+            modem::MessageChannelError send_err = context_.channels.send_request(sc_request, RPC_TIMEOUT_CONNECT_MS);
+            if (send_err != modem::MessageChannelError::ok)
+                return "ERROR: failed to send server_connect request";
+
+            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, RPC_TIMEOUT_CONNECT_MS);
+            if ((matched & modem::MODEM_EVT_RESPONSE) == 0U)
+                return "ERROR: timeout waiting server_connect response";
+
+            modem::ModemTypedResponseMsg<bool> sc_resp{};
+            if (context_.channels.recv_typed_response(sc_resp, 0) != modem::MessageChannelError::ok)
+                return "ERROR: invalid server_connect response";
+
+            std::string result = sc_resp.ok && sc_resp.value ? "true" : "false";
+            return std::string("{") + "\"resource\":\"SERVERCONNECT\"," +
+                   "\"conn_id\":" + std::to_string(sc_request.conn_id) + "," +
+                   "\"protocol\":\"" + sc_request.protocol.c_str() + "\"," +
+                   "\"ip\":\"" + sc_request.ip.c_str() + "\"," +
+                   "\"port\":" + std::to_string(sc_request.port) + "," +
+                   "\"server_connect\":" + result + "}";
+        }
+
         if (res == "CONFIG") {
             return apply_config_update(args);
         }
@@ -489,7 +566,7 @@ std::string RpcServer::handle_request(const std::string& request) {
         return "ERROR: unknown SET resource";
     }
 
-    return "ERROR: unknown command - use GET <resource>, SET CONFIG <key>=<value>, or SET NETWORKDISCONNECT [conn_id]";
+    return "ERROR: unknown command - use GET <resource>, SET CONFIG <key>=<value>, SET NETWORKDISCONNECT [conn_id], or SET SERVERCONNECT <conn_id> <protocol> <ip> <port>";
 }
 
 } // namespace app

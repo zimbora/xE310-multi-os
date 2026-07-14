@@ -15,7 +15,7 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
         std::memcpy(&request_type, frame.data.data(), sizeof(request_type));
 
         ModemTxMsg req{};
-        if (request_type != RadioLteRequestType::set_config) {
+        if (request_type != RadioLteRequestType::set_config && request_type != RadioLteRequestType::server_connect) {
             if (frame.length != sizeof(ModemTxMsg)) {
                 channels.publish_typed_response(false);
                 continue;
@@ -100,6 +100,18 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
             case RadioLteRequestType::network_disconnect:
                 channels.publish_typed_response(radio.network_disconnect());
                 break;
+
+            case RadioLteRequestType::server_connect: {
+                if (frame.length != sizeof(ModemServerConnectMsg)) {
+                    channels.publish_typed_response(false);
+                    break;
+                }
+                ModemServerConnectMsg sc_msg{};
+                std::memcpy(&sc_msg, frame.data.data(), sizeof(sc_msg));
+                channels.publish_typed_response(
+                    radio.server_connect(sc_msg.conn_id, sc_msg.protocol.view(), sc_msg.ip.view(), sc_msg.port));
+                break;
+            }
 
             case RadioLteRequestType::server_disconnect:
                 channels.publish_typed_response(radio.server_disconnect(static_cast<uint8_t>(req.arg0)));

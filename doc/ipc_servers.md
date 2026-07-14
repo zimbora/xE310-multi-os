@@ -96,6 +96,7 @@ This server provides a small text RPC protocol over newline-delimited TCP messag
 GET <RESOURCE>
 SET CONFIG <key>=<value>[,<key>=<value>...]
 SET NETWORKDISCONNECT [conn_id]
+SET SERVERCONNECT <conn_id> <protocol> <ip> <port>
 ```
 
 ### Supported GET resources
@@ -118,6 +119,14 @@ Notes:
   - Calls `server_disconnect(conn_id)` and `network_disconnect()`.
   - Returns JSON summary:
     `{"resource":"NETWORKDISCONNECT","conn_id":<n>,"server_disconnect":<bool>,"network_disconnect":<bool>}`
+- `SET SERVERCONNECT <conn_id> <protocol> <ip> <port>`
+  - Calls `server_connect(conn_id, protocol, ip, port)` on the network thread.
+  - `conn_id`: integer in range `1..MAX_SERVER_CONNECTIONS`.
+  - `protocol`: `UDP` or `TCP`.
+  - `ip`: IP address or DNS hostname of the remote server.
+  - `port`: remote port number (1–65535).
+  - Returns JSON summary:
+    `{"resource":"SERVERCONNECT","conn_id":<n>,"protocol":"<proto>","ip":"<addr>","port":<port>,"server_connect":<bool>}`
 
 ### Example session
 
@@ -133,6 +142,9 @@ SET CONFIG default_apn=my.apn
 
 SET NETWORKDISCONNECT 1
 {"resource":"NETWORKDISCONNECT","conn_id":1,"server_disconnect":true,"network_disconnect":true}
+
+SET SERVERCONNECT 1 UDP 185.205.209.91 10000
+{"resource":"SERVERCONNECT","conn_id":1,"protocol":"UDP","ip":"185.205.209.91","port":10000,"server_connect":true}
 ```
 
 Errors are returned as plain text starting with `ERROR:`.

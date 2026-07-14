@@ -50,6 +50,7 @@ enum class RadioLteRequestType : uint8_t {
     set_config,
     network_connect,
     network_disconnect,
+    server_connect,
     server_disconnect,
     force_psm,
 };
@@ -68,6 +69,17 @@ struct ModemSetConfigMsg {
 
 static_assert(sizeof(ModemSetConfigMsg) <= MESSAGE_CHANNEL_MAX_DATA,
               "ModemSetConfigMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
+
+struct ModemServerConnectMsg {
+    RadioLteRequestType type = RadioLteRequestType::server_connect;
+    uint8_t conn_id = 1;
+    uint16_t port = 0;
+    FixedString<MODEM_SHORT_STR> protocol;
+    FixedString<MODEM_MEDIUM_STR> ip;
+};
+
+static_assert(sizeof(ModemServerConnectMsg) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemServerConnectMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
 
 using RadioLteRequestMsg = ModemTxMsg;
 
@@ -108,6 +120,10 @@ public:
     }
 
     MessageChannelError send_request(const ModemSetConfigMsg& msg, uint32_t timeout_ms = 0) {
+        return send_request_message(msg, timeout_ms);
+    }
+
+    MessageChannelError send_request(const ModemServerConnectMsg& msg, uint32_t timeout_ms = 0) {
         return send_request_message(msg, timeout_ms);
     }
 
