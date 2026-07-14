@@ -44,6 +44,7 @@ Commands are case-insensitive. Values in `SET CONFIG` preserve their original ca
 | `GET STATE` | string | Current `NetworkLteState` value |
 | `GET CONFIG` | object | Full `NetworkLteConfig` |
 | `GET MODEMINFO` | object | `ModemInfo` (IMEI, ICCID, model, firmware, …) |
+| `GET CLOCK` | string | Current modem clock from `AT+CCLK?` |
 | `GET SIMSTATUS` | string | `SimStatus` enum |
 | `GET RADIOTECH` | string | `RadioTech` enum |
 | `GET REGSTATUS` | string | `RegStatus` enum |
@@ -68,6 +69,9 @@ GET STATE
 
 GET REGINFO
 {"mode":4,"stat":"registered_home","lac":"3A2B","ci":"0A1B2C3D","act":"cat_m1","has_location":true,"cause_type":0,"reject_cause":0,"has_reject":false,"active_time":"00100000","periodic_tau":"10000110","has_psm":true}
+
+GET CLOCK
+"24/07/14,09:01:55+00"
 
 GET SIGNALQUALITY
 {"rssi":20,"ber":0,"rsrq":14,"rsrp":45,"rsrp_dbm":-95}
