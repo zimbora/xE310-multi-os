@@ -3,6 +3,7 @@
 #include "modem/timer_factory.h"
 #include "modem/message_queue_factory.h"
 #include <algorithm>
+#include <chrono>
 #include <string>
 
 namespace modem {
@@ -1341,7 +1342,6 @@ void NetworkLte::handle_urc(std::string_view urc) {
 void NetworkLte::on_event(NetworkLteEvent event) {
     event_ = event;
     log_event();
-    // record uptime and event history for debugging/analytics
 }
 
 NetworkLteEvent NetworkLte::get_event() {
@@ -1454,16 +1454,73 @@ static const char* action_to_str(ModemAction a) {
     }
 }
 
-void NetworkLte::log_state() const {
+void NetworkLte::log_state() {
     NETWORK_LOG_DBG("new state: %s", state_to_str(state_));
+    push_trace(NetworkTraceKind::state_change, prev_state_, state_, NetworkLteEvent::none, ModemAction::none);
 }
 
-void NetworkLte::log_event() const {
+void NetworkLte::log_event() {
     NETWORK_LOG_DBG("new event: %s", event_to_str(event_));
+    push_trace(NetworkTraceKind::event_set, NetworkLteState::none, NetworkLteState::none, event_, ModemAction::none);
 }
 
-void NetworkLte::log_action() const {
+void NetworkLte::log_action() {
     if (modem_action_ != ModemAction::none) NETWORK_LOG_DBG("new action: %s", action_to_str(modem_action_));
+    push_trace(NetworkTraceKind::action_set, NetworkLteState::none, NetworkLteState::none, NetworkLteEvent::none,
+               modem_action_);
+}
+
+void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
+                            NetworkLteEvent event, ModemAction action) {
+    std::scoped_lock lock(trace_mutex_);
+
+    const auto now = std::chrono::steady_clock::now();
+    const auto uptime_ms =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - trace_start_time_).count());
+    const uint64_t delta_ms =
+        (trace_count_ == 0 && trace_last_uptime_ms_ == 0) ? 0 : (uptime_ms - trace_last_uptime_ms_);
+
+    NetworkTraceEntry entry;
+    entry.kind = kind;
+    entry.previous_state = previous_state;
+    entry.current_state = current_state;
+    entry.event = event;
+    entry.action = action;
+    entry.uptime_ms = uptime_ms;
+    entry.delta_ms = delta_ms;
+
+    size_t write_index = 0;
+    if (trace_count_ < TRACE_CAPACITY) {
+        write_index = (trace_head_ + trace_count_) % TRACE_CAPACITY;
+        trace_count_++;
+    } else {
+        write_index = trace_head_;
+        trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
+    }
+
+    trace_buffer_[write_index] = entry;
+    trace_last_uptime_ms_ = uptime_ms;
+    trace_cv_.notify_one();
+}
+
+bool NetworkLte::pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(trace_mutex_);
+    const auto has_data = [this]() { return trace_count_ > 0; };
+
+    if (timeout_ms == 0) {
+        if (!has_data()) {
+            return false;
+        }
+    } else {
+        if (!trace_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), has_data)) {
+            return false;
+        }
+    }
+
+    entry = trace_buffer_[trace_head_];
+    trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
+    trace_count_--;
+    return true;
 }
 
 // --- Timer ---

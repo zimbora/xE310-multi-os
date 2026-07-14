@@ -119,6 +119,38 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
         }
     });
 
+    // Trace consumer thread: drains the NetworkLte ring buffer and logs each state/event/action trace entry.
+    std::thread trace_logger_thread([&]() {
+        while (true) {
+            modem::NetworkTraceEntry entry;
+            if (!network.pop_trace(entry, 1000)) {
+                continue;
+            }
+
+            switch (entry.kind) {
+                case modem::NetworkTraceKind::state_change:
+                    MODEM_LOG_INF("Trace state change: %u -> %u (uptime=%llums, +%llums)",
+                                  static_cast<unsigned>(entry.previous_state),
+                                  static_cast<unsigned>(entry.current_state),
+                                  static_cast<unsigned long long>(entry.uptime_ms),
+                                  static_cast<unsigned long long>(entry.delta_ms));
+                    break;
+                case modem::NetworkTraceKind::event_set:
+                    MODEM_LOG_INF("Trace event set: %u (uptime=%llums, +%llums)",
+                                  static_cast<unsigned>(entry.event),
+                                  static_cast<unsigned long long>(entry.uptime_ms),
+                                  static_cast<unsigned long long>(entry.delta_ms));
+                    break;
+                case modem::NetworkTraceKind::action_set:
+                    MODEM_LOG_INF("Trace action set: %u (uptime=%llums, +%llums)",
+                                  static_cast<unsigned>(entry.action),
+                                  static_cast<unsigned long long>(entry.uptime_ms),
+                                  static_cast<unsigned long long>(entry.delta_ms));
+                    break;
+            }
+        }
+    });
+
     // thread to process network events and handle IPC requests
     network_worker_running.store(true); // Set to true to indicate that the network worker thread is running
     std::thread network_thread([&]() {
@@ -152,6 +184,7 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
     });
 
     event_thread.join();
+    trace_logger_thread.join();
     network_thread.join();
     return 0;
 }
