@@ -26,7 +26,9 @@ public:
         return pop_from(tx_, tx_order_, conn_id, msg, timeout_ms);
     }
 
-    QueueError tx_pop_next(QueueMessage& msg, uint32_t timeout_ms) override { return pop_next_from(tx_, tx_order_, msg, timeout_ms); }
+    QueueError tx_pop_next(QueueMessage& msg, uint32_t timeout_ms) override {
+        return pop_next_from(tx_, tx_order_, msg, timeout_ms);
+    }
 
     size_t tx_count(uint8_t conn_id) const override {
         if (conn_id < 1 || conn_id > MAX_CONNECTIONS) return 0;
