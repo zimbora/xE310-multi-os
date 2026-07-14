@@ -124,7 +124,7 @@ struct ServerInfo {
 };
 
 /// LTE network state machine — drives modem attach, PDP activation and server registration.
-class NetworkLte : public IRadioLte {
+class NetworkLte : public IRadioLte, public IRadioDataQueue {
 public:
     using DataReceivedCallback = std::function<void(uint8_t cid, std::string_view data, uint16_t n_bytes)>;
 

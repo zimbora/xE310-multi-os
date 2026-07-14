@@ -3,8 +3,9 @@ API Reference — ``i_radio_lte.h``
 
 This page documents the public API defined in ``include/modem/i_radio_lte.h``.
 It covers the thread-safe messaging interface (``RadioLteChannels``),
-the read-only modem state interface (``IRadioLte``), all message/event types,
-and every data structure they reference.
+the control-plane interface (``IRadioLte``), the data-plane queue interface
+(``IRadioDataQueue``), all message/event types, and every data structure they
+reference.
 
 .. contents:: Contents
    :local:
@@ -116,12 +117,30 @@ between the *application thread* (which calls ``send_request`` /
 
 ---------------------------------------------------------------------------
 
+IRadioDataQueue
+---------------
+
+``IRadioDataQueue`` exposes the thread-safe payload queues used outside the
+radio request dispatcher. Implementations provide ``tx_write()`` for outbound
+payload buffering and ``rx_read()`` for draining received payloads.
+
+.. doxygenclass:: modem::IRadioDataQueue
+   :project: xE310ModemLibrary
+   :members:
+   :undoc-members:
+
+---------------------------------------------------------------------------
+
 IRadioLte
 ---------
 
 ``IRadioLte`` is the pure-virtual interface that the network thread
-implements.  It exposes the **last known** modem state, so that the
-application thread can read cached values without blocking.
+implements for ``process_radio_requests()``. It exposes the **last known**
+modem state and the control operations serviced on the network thread.
+
+Application code should normally reach this interface indirectly through
+``RadioLteChannels`` and ``process_radio_requests()`` rather than calling it
+directly from unrelated threads.
 
 .. doxygenclass:: modem::IRadioLte
    :project: xE310ModemLibrary
@@ -147,7 +166,7 @@ headers included by ``i_radio_lte.h``.
 NetworkLteConfig
 ~~~~~~~~~~~~~~~~
 
-Holds the full LTE network state-machine configuration.  Pass one to
+Holds the full LTE network state-machine configuration. Pass one to
 ``IRadioLte::set_config()`` or embed it in a ``ModemSetConfigMsg``.
 
 .. doxygenstruct:: modem::NetworkLteConfig

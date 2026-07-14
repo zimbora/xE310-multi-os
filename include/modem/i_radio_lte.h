@@ -199,6 +199,23 @@ private:
     ModemStateMsg state_msg{};
 };
 
+/// Interface for thread-safe payload queue access outside the radio request path.
+class IRadioDataQueue {
+public:
+    IRadioDataQueue() = default;
+    IRadioDataQueue(const IRadioDataQueue&) = delete;
+    IRadioDataQueue& operator=(const IRadioDataQueue&) = delete;
+    IRadioDataQueue(IRadioDataQueue&&) = delete;
+    IRadioDataQueue& operator=(IRadioDataQueue&&) = delete;
+    virtual ~IRadioDataQueue() = default;
+
+    /// Queue payload data for the given connection ID (1-based).
+    virtual QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length) = 0;
+
+    /// Read queued RX payload data for the given connection ID (1-based).
+    virtual QueueError rx_read(uint8_t conn_id, QueueMessage& msg) = 0;
+};
+
 /// Interface that exposes the last known LTE radio/modem state.
 class IRadioLte {
 public:
@@ -217,12 +234,6 @@ public:
 
     /// Disconnect server socket for the given connection id.
     virtual bool server_disconnect(uint8_t conn_id) = 0;
-
-    /// Queue payload data for the given connection ID (1-based).
-    virtual QueueError tx_write(uint8_t conn_id, const uint8_t* data, size_t length) = 0;
-
-    /// Read queued RX payload data for the given connection ID (1-based).
-    virtual QueueError rx_read(uint8_t conn_id, QueueMessage& msg) = 0;
 
     /// Force modem into PSM flow according to current configuration.
     virtual bool force_psm() = 0;
