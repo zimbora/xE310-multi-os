@@ -86,4 +86,7 @@ while (k_msgq_get(&operator_q, &entry, K_NO_WAIT) == 0) {
 Pros: Compile-time type safety—the compiler catches field name typos and type mismatches. No
 memcpy/cast gymnastics. Each message type has a dedicated queue with the correct element
 size. This is the recommended approach for all interfaces.
-
+2.5 Sending messages to server
+Each message should be represented by a struct that is sent through a message queue to the server thread. The server thread processes the message and may send a response back through another message queue. This allows for asynchronous communication between threads, enabling the main thread to continue executing without waiting for the server's response.
+Struct should be designed to include cid (context id), payload and payload length.
+Allow to receive and send 5 messages at the same time. Discard any new message if the queue is full. The server should process messages in the order they are received, and send responses back to the appropriate context id.
