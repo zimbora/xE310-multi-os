@@ -9,7 +9,6 @@
 
 #include <cstdint>
 #include <array>
-#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -117,8 +116,6 @@ struct NetworkTraceEntry {
     NetworkLteState current_state = NetworkLteState::none;
     NetworkLteEvent event = NetworkLteEvent::none;
     ModemAction action = ModemAction::none;
-    uint64_t uptime_ms = 0;
-    uint64_t delta_ms = 0;
 };
 
 enum class ServerState : int8_t {
@@ -350,8 +347,6 @@ public:
     size_t trace_count_ = 0;
     std::mutex trace_mutex_;
     std::condition_variable trace_cv_;
-    std::chrono::steady_clock::time_point trace_start_time_ = std::chrono::steady_clock::now();
-    uint64_t trace_last_uptime_ms_ = 0;
 
 private:
     xE310& modem_;

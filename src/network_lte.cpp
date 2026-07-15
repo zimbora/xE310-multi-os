@@ -1474,20 +1474,12 @@ void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_stat
                             NetworkLteEvent event, ModemAction action) {
     std::scoped_lock lock(trace_mutex_);
 
-    const auto now = std::chrono::steady_clock::now();
-    const auto uptime_ms =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - trace_start_time_).count());
-    const uint64_t delta_ms =
-        (trace_count_ == 0 && trace_last_uptime_ms_ == 0) ? 0 : (uptime_ms - trace_last_uptime_ms_);
-
     NetworkTraceEntry entry;
     entry.kind = kind;
     entry.previous_state = previous_state;
     entry.current_state = current_state;
     entry.event = event;
     entry.action = action;
-    entry.uptime_ms = uptime_ms;
-    entry.delta_ms = delta_ms;
 
     size_t write_index = 0;
     if (trace_count_ < TRACE_CAPACITY) {
@@ -1499,7 +1491,6 @@ void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_stat
     }
 
     trace_buffer_[write_index] = entry;
-    trace_last_uptime_ms_ = uptime_ms;
     trace_cv_.notify_one();
 }
 

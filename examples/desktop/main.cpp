@@ -129,23 +129,15 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
 
             switch (entry.kind) {
                 case modem::NetworkTraceKind::state_change:
-                    MODEM_LOG_INF("Trace state change: %u -> %u (uptime=%llums, +%llums)",
+                    MODEM_LOG_INF("Trace state change: %u -> %u",
                                   static_cast<unsigned>(entry.previous_state),
-                                  static_cast<unsigned>(entry.current_state),
-                                  static_cast<unsigned long long>(entry.uptime_ms),
-                                  static_cast<unsigned long long>(entry.delta_ms));
+                                  static_cast<unsigned>(entry.current_state));
                     break;
                 case modem::NetworkTraceKind::event_set:
-                    MODEM_LOG_INF("Trace event set: %u (uptime=%llums, +%llums)",
-                                  static_cast<unsigned>(entry.event),
-                                  static_cast<unsigned long long>(entry.uptime_ms),
-                                  static_cast<unsigned long long>(entry.delta_ms));
+                    MODEM_LOG_INF("Trace event set: %u", static_cast<unsigned>(entry.event));
                     break;
                 case modem::NetworkTraceKind::action_set:
-                    MODEM_LOG_INF("Trace action set: %u (uptime=%llums, +%llums)",
-                                  static_cast<unsigned>(entry.action),
-                                  static_cast<unsigned long long>(entry.uptime_ms),
-                                  static_cast<unsigned long long>(entry.delta_ms));
+                    MODEM_LOG_INF("Trace action set: %u", static_cast<unsigned>(entry.action));
                     break;
             }
         }
