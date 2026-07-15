@@ -108,6 +108,7 @@ enum class NetworkTraceKind : uint8_t {
     state_change,
     event_set,
     action_set,
+    error,
 };
 
 struct NetworkTraceEntry {
@@ -332,6 +333,9 @@ public:
 
     /// Log current action using MODEM_LOG_DBG.
     void log_action();
+
+    /// Log error events using MODEM_LOG_ERR.
+    void log_error(NetworkLteEvent error_event);
 
     /// Process a single URC line (e.g. "+CREG: 1") and update event_ if relevant.
     void handle_urc(std::string_view urc);

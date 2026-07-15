@@ -139,6 +139,9 @@ int main(int argc, char* argv[]) { // NOLINT(bugprone-exception-escape)
                 case modem::NetworkTraceKind::action_set:
                     MODEM_LOG_INF("Trace action set: %u", static_cast<unsigned>(entry.action));
                     break;
+                case modem::NetworkTraceKind::error:
+                    MODEM_LOG_ERR("Trace error event: %u", static_cast<unsigned>(entry.event));
+                    break;
             }
         }
     });

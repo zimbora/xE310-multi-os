@@ -11,6 +11,16 @@ namespace modem {
 // Forward declarations of static helpers defined at bottom of file
 static const char* action_to_str(ModemAction a);
 
+static bool is_error_event(NetworkLteEvent event) {
+    switch (event) {
+        case NetworkLteEvent::network_error:
+        case NetworkLteEvent::attach_error:
+        case NetworkLteEvent::context_error:
+        case NetworkLteEvent::at_command_no_response: return true;
+        default: return false;
+    }
+}
+
 NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
                        TimerHandle timer)
     : modem_(modem),
@@ -1342,6 +1352,10 @@ void NetworkLte::handle_urc(std::string_view urc) {
 void NetworkLte::on_event(NetworkLteEvent event) {
     event_ = event;
     log_event();
+    if (is_error_event(event)) {
+        log_error(event);
+        push_trace(NetworkTraceKind::error, NetworkLteState::none, NetworkLteState::none, event, ModemAction::none);
+    }
 }
 
 NetworkLteEvent NetworkLte::get_event() {
@@ -1468,6 +1482,10 @@ void NetworkLte::log_action() {
     if (modem_action_ != ModemAction::none) NETWORK_LOG_DBG("new action: %s", action_to_str(modem_action_));
     push_trace(NetworkTraceKind::action_set, NetworkLteState::none, NetworkLteState::none, NetworkLteEvent::none,
                modem_action_);
+}
+
+void NetworkLte::log_error(NetworkLteEvent error_event) {
+    NETWORK_LOG_ERR("new error event: %s", event_to_str(error_event));
 }
 
 void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
