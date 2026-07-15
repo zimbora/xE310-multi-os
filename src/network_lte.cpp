@@ -46,6 +46,9 @@ const FixedString<MODEM_SHORT_STR>& NetworkLte::imsi() const {
 const FixedString<MODEM_SHORT_STR>& NetworkLte::clock() const {
     return modemClock;
 }
+ModemStatus NetworkLte::refresh_clock() {
+    return modem_.get_clock(modemClock);
+}
 const NetworkLteConfig& NetworkLte::config() const {
     return lteConfig;
 }

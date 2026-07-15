@@ -13,6 +13,10 @@ using ::testing::InSequence;
 using ::testing::Le;
 using ::testing::Gt;
 
+namespace modem {
+void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio);
+}
+
 // ---------------------------------------------------------------------------
 // Mock UART
 // ---------------------------------------------------------------------------
@@ -138,6 +142,50 @@ TEST_F(NetworkLteTest, IdleMode_SetupRadio_StaysIdle) {
     sm.call_action(ModemAction::setup_radio);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
+}
+
+TEST_F(NetworkLteTest, ClockRequestAlwaysQueriesModem) {
+    auto sm = make_sm();
+    RadioLteChannels channels;
+    int cclk_query_count = 0;
+
+    ON_CALL(*mock_uart_, write(_, _))
+        .WillByDefault(Invoke([this, &cclk_query_count](const uint8_t* data, size_t length) {
+            last_written_cmd_.assign(reinterpret_cast<const char*>(data), length);
+            if (last_written_cmd_.find("AT+CCLK?") != std::string::npos) {
+                ++cclk_query_count;
+            }
+            return UartError::ok;
+        }));
+
+    ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
+        .WillByDefault(Invoke([this](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            if (last_written_cmd_.find("AT+CCLK?") != std::string::npos) {
+                resp = "\r\n+CCLK: \"26/07/13,21:00:00+00\"\r\nOK\r\n";
+            }
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    ModemTxMsg req{};
+    req.type = RadioLteRequestType::get_clock;
+    ASSERT_EQ(channels.send_request(req), MessageChannelError::ok);
+    ASSERT_EQ(channels.send_request(req), MessageChannelError::ok);
+
+    process_radio_requests(channels, sm);
+
+    ModemTypedResponseMsg<FixedString<MODEM_SHORT_STR>> resp{};
+    ASSERT_EQ(channels.recv_typed_response(resp), MessageChannelError::ok);
+    EXPECT_TRUE(resp.ok);
+    EXPECT_EQ(resp.value, "26/07/13,21:00:00+00");
+
+    ASSERT_EQ(channels.recv_typed_response(resp), MessageChannelError::ok);
+    EXPECT_TRUE(resp.ok);
+    EXPECT_EQ(resp.value, "26/07/13,21:00:00+00");
+
+    EXPECT_EQ(cclk_query_count, 2);
 }
 
 // ---------------------------------------------------------------------------

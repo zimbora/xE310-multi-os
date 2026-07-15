@@ -237,6 +237,7 @@ public:
 
     /// Last modem clock read from AT+CCLK?.
     const FixedString<MODEM_SHORT_STR>& clock() const;
+    ModemStatus refresh_clock();
 
     /// Full modem identification info read at power-on.
     const ModemInfo& modem_info() const;
