@@ -611,6 +611,12 @@ TEST_F(NetworkLteTest, HandleUrc_PSMURC) {
     EXPECT_EQ(sm.event(), NetworkLteEvent::psm_enter);
 }
 
+TEST_F(NetworkLteTest, HandleUrc_NotifyEvPlmnSearchExh) {
+    auto sm = make_sm();
+    sm.handle_urc("%NOTIFYEV:\"PLMNSEARCHEXH\"");
+    EXPECT_EQ(sm.event(), NetworkLteEvent::network_detached);
+}
+
 TEST_F(NetworkLteTest, HandleUrc_SRING_MatchingConnId) {
     NetworkLteConfig cfg;
     cfg.conn_id = 1;

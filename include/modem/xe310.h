@@ -424,6 +424,9 @@ public:
     /// occurring in the module or in the network.
     ModemStatus set_pdp_urc(bool enable);
 
+    /// AT%NOTIFYEV="PLMNSEARCHEXH",<n> — Enable/disable PLMNSEARCHEXH notifications.
+    ModemStatus set_plmnsearchexh_notify(bool enable);
+
     /// AT+CGACT=1 — Activate PDP context.
     ModemStatus activate_pdp(uint8_t cid);
 
