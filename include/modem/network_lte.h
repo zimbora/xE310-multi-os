@@ -8,8 +8,11 @@
 #include "xe310.h"
 
 #include <cstdint>
+#include <array>
+#include <condition_variable>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string_view>
 
 #define MAX_SERVER_CONNECTIONS 5
@@ -99,6 +102,21 @@ enum class ModemAction : uint8_t {
     // special modes
     enter_transparent_mode, // trigger transparent mode flow (if supported by modem)
     leave_transparent_mode, // trigger exit transparent mode flow (if supported by modem)
+};
+
+enum class NetworkTraceKind : uint8_t {
+    state_change,
+    event_set,
+    action_set,
+    error,
+};
+
+struct NetworkTraceEntry {
+    NetworkTraceKind kind = NetworkTraceKind::state_change;
+    NetworkLteState previous_state = NetworkLteState::none;
+    NetworkLteState current_state = NetworkLteState::none;
+    NetworkLteEvent event = NetworkLteEvent::none;
+    ModemAction action = ModemAction::none;
 };
 
 enum class ServerState : int8_t {
@@ -269,6 +287,10 @@ public:
     /// Replace the active configuration (takes effect on the next step cycle).
     void set_config(const NetworkLteConfig& config);
 
+    /// Pop one trace entry produced by state/event/action transitions.
+    /// Returns false if timeout expires with no entry available.
+    bool pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms);
+
     // !! private functions but set as public for testing purposes, since we want to be able to call them directly from
     // unit tests to test specific state transitions and flows without having to go through the whole state machine loop
     // and trigger the corresponding events
@@ -304,18 +326,31 @@ public:
     void step() { loop(); };
 
     /// Log current state and event using MODEM_LOG_DBG.
-    void log_state() const;
+    void log_state();
 
     /// Log current event using MODEM_LOG_DBG.
-    void log_event() const;
+    void log_event();
 
     /// Log current action using MODEM_LOG_DBG.
-    void log_action() const;
+    void log_action();
+
+    /// Log error events using MODEM_LOG_ERR.
+    void log_error(NetworkLteEvent error_event);
 
     /// Process a single URC line (e.g. "+CREG: 1") and update event_ if relevant.
     void handle_urc(std::string_view urc);
 
     bool check_status_response(ModemStatus status);
+
+    void push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
+                    NetworkLteEvent event, ModemAction action);
+
+    static constexpr size_t TRACE_CAPACITY = 10;
+    std::array<NetworkTraceEntry, TRACE_CAPACITY> trace_buffer_{};
+    size_t trace_head_ = 0;
+    size_t trace_count_ = 0;
+    std::mutex trace_mutex_;
+    std::condition_variable trace_cv_;
 
 private:
     xE310& modem_;
