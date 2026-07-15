@@ -98,6 +98,19 @@ A fixed-size log line forwarded from the network thread to observers via
    :members:
    :undoc-members:
 
+StateTimers
+~~~~~~~~~~~
+
+Accumulated time counters (in milliseconds) for each timed state of the LTE
+state machine. Every time the state machine exits a timed state the elapsed
+time is added to the corresponding counter. Request this data with
+``RadioLteRequestType::get_timers``.
+
+.. doxygenstruct:: modem::StateTimers
+   :project: xE310ModemLibrary
+   :members:
+   :undoc-members:
+
 ---------------------------------------------------------------------------
 
 RadioLteChannels

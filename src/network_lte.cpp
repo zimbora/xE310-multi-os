@@ -82,6 +82,9 @@ const ServerInfo* NetworkLte::server_info_array() const {
     return serverInfo;
 }
 
+const StateTimers& NetworkLte::state_timers() const {
+    return stateTimers_;
+}
 bool NetworkLte::scan_networks(uint32_t start_ch, uint32_t end_ch) {
     auto status = modem_.scan_networks(csurvResult, start_ch, end_ch);
     return status == ModemStatus::ok;
@@ -1125,24 +1128,28 @@ void NetworkLte::change_state(NetworkLteState new_state) {
     switch (prev_state_) {
         case NetworkLteState::network_attaching: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.network_attaching_ms += elasped;
             NETWORK_LOG_INF("Time spent in network_attaching state: %u ms", elasped);
         }
             st_timer->stop(); // stop attach timer if running
             break;
         case NetworkLteState::pdp_context_opening: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.pdp_context_opening_ms += elasped;
             NETWORK_LOG_INF("Time spent in pdp_context_opening state: %u ms", elasped);
         }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::data_ready: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.data_ready_ms += elasped;
             NETWORK_LOG_INF("Time spent in data_ready state: %u ms", elasped);
         }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::transparent_mode: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.transparent_mode_ms += elasped;
             NETWORK_LOG_INF("Time spent in transparent_mode state: %u ms", elasped);
         }
             st_timer->stop(); // stop any timers related to transparent mode if needed

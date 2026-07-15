@@ -119,6 +119,8 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
 
             case RadioLteRequestType::force_psm: channels.publish_typed_response(radio.force_psm()); break;
 
+            case RadioLteRequestType::get_timers: channels.publish_typed_response(radio.state_timers()); break;
+
             default: channels.publish_typed_response(false); break;
         }
     }

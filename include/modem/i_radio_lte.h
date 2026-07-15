@@ -53,6 +53,7 @@ enum class RadioLteRequestType : uint8_t {
     server_connect,
     server_disconnect,
     force_psm,
+    get_timers,
 };
 
 /// Fixed-size command message submitted to modem_tx_q.
@@ -90,6 +91,19 @@ template<typename ValueType> struct ModemTypedResponseMsg {
 
 static_assert(sizeof(ModemTypedResponseMsg<NetworkLteConfig>) <= MESSAGE_CHANNEL_MAX_DATA,
               "ModemTypedResponseMsg<NetworkLteConfig> exceeds MESSAGE_CHANNEL_MAX_DATA");
+
+/// Accumulated time (in milliseconds) spent in each timed state since the NetworkLte instance was created.
+/// Counters are incremented each time the state machine exits a timed state, by the number of milliseconds
+/// spent in that state during that visit.
+struct StateTimers {
+    uint32_t network_attaching_ms = 0;   ///< Total ms spent in network_attaching across all visits.
+    uint32_t pdp_context_opening_ms = 0; ///< Total ms spent in pdp_context_opening across all visits.
+    uint32_t data_ready_ms = 0;          ///< Total ms spent in data_ready across all visits.
+    uint32_t transparent_mode_ms = 0;    ///< Total ms spent in transparent_mode across all visits.
+};
+
+static_assert(sizeof(ModemTypedResponseMsg<StateTimers>) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemTypedResponseMsg<StateTimers> exceeds MESSAGE_CHANNEL_MAX_DATA");
 
 /// Event payload describing the current LTE state machine snapshot.
 struct ModemStateMsg {
