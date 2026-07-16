@@ -424,6 +424,9 @@ public:
     /// occurring in the module or in the network.
     ModemStatus set_pdp_urc(bool enable);
 
+    /// AT%NOTIFYEV="ALL",0 — Disable all NOTIFYEV notifications.
+    ModemStatus disable_all_notifyev();
+
     /// AT%NOTIFYEV="PLMNSEARCHEXH",<n> — Enable/disable PLMNSEARCHEXH notifications.
     ModemStatus set_plmnsearchexh_notify(bool enable);
 
