@@ -10,6 +10,7 @@ namespace modem {
 
 // Forward declarations of static helpers defined at bottom of file
 static const char* action_to_str(ModemAction a);
+static const char* state_to_str(NetworkLteState s);
 
 static bool is_error_event(NetworkLteEvent event) {
     switch (event) {
@@ -126,6 +127,22 @@ void NetworkLte::set_pdp_retries(uint8_t n) {
 
 bool NetworkLte::network_connect() {
     if (fWarmBoot) modem_.network_detach();
+
+    // States that cannot transition to data_ready without explicit user action:
+    // return false immediately to avoid an infinite loop inside go_to_state().
+    if (state_ == NetworkLteState::transparent_mode) {
+        NETWORK_LOG_ERR("Cannot connect to network while in transparent mode, exit transparent mode first");
+        return false;
+    }
+    if (state_ == NetworkLteState::modem_fota) {
+        NETWORK_LOG_ERR("Cannot connect to network while a FOTA update is in progress");
+        return false;
+    }
+    if (state_ == NetworkLteState::done) {
+        NETWORK_LOG_ERR("Cannot connect to network from done state (max retries reached), reset the modem first");
+        return false;
+    }
+
     if (state_ == NetworkLteState::data_ready) {
         NETWORK_LOG_INF("Already connected to network");
         return true; // already connected to network
@@ -618,14 +635,20 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
                     call_action(ModemAction::wake_up); // trigger wake up to go back to data ready state
                 }
                 break;
-            /*
             case NetworkLteState::transparent_mode:
-                if(target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode){
-                    call_action(ModemAction::leave_transparent_mode); // trigger exit transparent mode to go back to
-            idle mode and restart normal flow, which should lead us back to data ready if the connection is still active
+                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode) {
+                    call_action(ModemAction::leave_transparent_mode); // exit transparent mode, re-enable URCs and
+                                                                      // restart normal flow toward data_ready
                 }
                 break;
-            */
+            case NetworkLteState::done:
+                NETWORK_LOG_ERR("Cannot transition from done state to %s, reset the modem first",
+                                state_to_str(target_state));
+                return false;
+            case NetworkLteState::modem_fota:
+                NETWORK_LOG_ERR("Cannot transition from modem_fota state to %s, wait for FOTA to complete",
+                                state_to_str(target_state));
+                return false;
             default:
                 if (target_state == NetworkLteState::transparent_mode) {
                     call_action(ModemAction::enter_transparent_mode);
