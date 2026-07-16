@@ -302,6 +302,7 @@ bool NetworkLte::force_psm() {
     modem_.set_psm_urc(false);          // enable PSM URCs in normal mode
     modem_.set_registration_urc(false); // enable registration URCs in normal mode
     modem_.set_pdp_urc(false);          // enable PDP URCs in normal mode
+    modem_.set_plmnsearchexh_notify(false);
 
     bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will
@@ -365,6 +366,7 @@ bool NetworkLte::force_psm() {
     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
     modem_.set_registration_urc(true); // enable registration URCs in normal mode
     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+    modem_.set_plmnsearchexh_notify(true);
 
     return fPsmModeAttached; // return whether PSM mode was successfully entered
 }
@@ -851,6 +853,7 @@ void NetworkLte::execute_actions() {
                     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
                     modem_.set_registration_urc(true); // enable registration URCs in normal mode
                     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+                    modem_.set_plmnsearchexh_notify(true);
                 }
                 change_state(NetworkLteState::idle_mode);
                 call_action(ModemAction::query_network_status); // check network status
@@ -1100,6 +1103,7 @@ void NetworkLte::execute_actions() {
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
                 false); // disable PDP URCs in transparent mode to avoid interfering with raw data reception
+            modem_.set_plmnsearchexh_notify(false);
             NETWORK_LOG_INF("Modem in transparent mode (ready to receive AT commands)");
         } break;
 
@@ -1108,9 +1112,10 @@ void NetworkLte::execute_actions() {
             // do any task needed to switch to normal mode (e.g. close existing PDP context, set up new PDP context with
             // normal mode settings, etc.)
             NETWORK_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
-            modem_.set_psm_urc(true);                 // enable PSM URCs in normal mode
-            modem_.set_registration_urc(true);        // enable registration URCs in normal mode
-            modem_.set_pdp_urc(true);                 // enable PDP URCs in normal mode
+            modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+            modem_.set_registration_urc(true); // enable registration URCs in normal mode
+            modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+            modem_.set_plmnsearchexh_notify(true);
             change_state(NetworkLteState::idle_mode); // after leaving transparent mode, we can go back to idle mode and
                                                       // restart attach flow to ensure we are properly connected before
                                                       // sending/receiving data
@@ -1332,6 +1337,10 @@ void NetworkLte::handle_urc(std::string_view urc) {
         on_event(NetworkLteEvent::psm_enter);
         return;
     }
+    if (urc.substr(0, 25) == "%NOTIFYEV:\"PLMNSEARCHEXH\"") {
+        on_event(NetworkLteEvent::network_detached);
+        return;
+    }
     // SRING: <conn_id>  →  new data available on socket
     if (urc.substr(0, 6) == "SRING:") {
         NETWORK_LOG_DBG("Data available URC received");
@@ -1344,6 +1353,13 @@ void NetworkLte::handle_urc(std::string_view urc) {
             on_event(NetworkLteEvent::data_available);
         }
         return;
+    }
+    if (urc.substr(0, 10) == "NO CARRIER") {
+        uint8_t conn_id = MAX_SERVER_CONNECTIONS;
+        while (conn_id > 0 && conn_id <= MAX_SERVER_CONNECTIONS &&
+               serverInfo[conn_id - 1].state != ServerState::disconnected) {
+            --conn_id;
+        }
     }
 }
 
