@@ -1354,6 +1354,13 @@ void NetworkLte::handle_urc(std::string_view urc) {
         }
         return;
     }
+    if (urc.substr(0, 10) == "NO CARRIER") {
+        uint8_t conn_id = MAX_SERVER_CONNECTIONS;
+        while(conn_id > 0 && conn_id <= MAX_SERVER_CONNECTIONS &&
+              serverInfo[conn_id - 1].state != ServerState::disconnected) {
+            --conn_id;
+        }
+    }
 }
 
 // replace all occurrences of event_ = with on_event(event) to ensure that all events go through the on_event handler
