@@ -302,7 +302,6 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             }
             return {resp.ok, rpc::to_json(resp.value)};
         }
-        case modem::RadioLteRequestType::set_config:
         case modem::RadioLteRequestType::set_config: {
             modem::ModemTypedResponseMsg<bool> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
