@@ -3,12 +3,23 @@
 #include "modem/timer_factory.h"
 #include "modem/message_queue_factory.h"
 #include <algorithm>
+#include <chrono>
 #include <string>
 
 namespace modem {
 
 // Forward declarations of static helpers defined at bottom of file
 static const char* action_to_str(ModemAction a);
+
+static bool is_error_event(NetworkLteEvent event) {
+    switch (event) {
+        case NetworkLteEvent::network_error:
+        case NetworkLteEvent::attach_error:
+        case NetworkLteEvent::context_error:
+        case NetworkLteEvent::at_command_no_response: return true;
+        default: return false;
+    }
+}
 
 NetworkLte::NetworkLte(xE310& modem, const NetworkLteConfig& config, DataReceivedCallback on_data_received,
                        TimerHandle timer)
@@ -34,6 +45,9 @@ const FixedString<MODEM_SHORT_STR>& NetworkLte::imsi() const {
 }
 const FixedString<MODEM_SHORT_STR>& NetworkLte::clock() const {
     return modemClock;
+}
+ModemStatus NetworkLte::refresh_clock() {
+    return modem_.get_clock(modemClock);
 }
 const NetworkLteConfig& NetworkLte::config() const {
     return lteConfig;
@@ -294,6 +308,7 @@ bool NetworkLte::force_psm() {
     modem_.set_psm_urc(false);          // enable PSM URCs in normal mode
     modem_.set_registration_urc(false); // enable registration URCs in normal mode
     modem_.set_pdp_urc(false);          // enable PDP URCs in normal mode
+    modem_.set_plmnsearchexh_notify(false);
 
     bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will
@@ -357,6 +372,7 @@ bool NetworkLte::force_psm() {
     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
     modem_.set_registration_urc(true); // enable registration URCs in normal mode
     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+    modem_.set_plmnsearchexh_notify(true);
 
     return fPsmModeAttached; // return whether PSM mode was successfully entered
 }
@@ -843,6 +859,7 @@ void NetworkLte::execute_actions() {
                     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
                     modem_.set_registration_urc(true); // enable registration URCs in normal mode
                     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+                    modem_.set_plmnsearchexh_notify(true);
                 }
                 change_state(NetworkLteState::idle_mode);
                 call_action(ModemAction::query_network_status); // check network status
@@ -1092,6 +1109,7 @@ void NetworkLte::execute_actions() {
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
                 false); // disable PDP URCs in transparent mode to avoid interfering with raw data reception
+            modem_.set_plmnsearchexh_notify(false);
             NETWORK_LOG_INF("Modem in transparent mode (ready to receive AT commands)");
         } break;
 
@@ -1100,9 +1118,10 @@ void NetworkLte::execute_actions() {
             // do any task needed to switch to normal mode (e.g. close existing PDP context, set up new PDP context with
             // normal mode settings, etc.)
             NETWORK_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
-            modem_.set_psm_urc(true);                 // enable PSM URCs in normal mode
-            modem_.set_registration_urc(true);        // enable registration URCs in normal mode
-            modem_.set_pdp_urc(true);                 // enable PDP URCs in normal mode
+            modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+            modem_.set_registration_urc(true); // enable registration URCs in normal mode
+            modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+            modem_.set_plmnsearchexh_notify(true);
             change_state(NetworkLteState::idle_mode); // after leaving transparent mode, we can go back to idle mode and
                                                       // restart attach flow to ensure we are properly connected before
                                                       // sending/receiving data
@@ -1348,6 +1367,10 @@ void NetworkLte::handle_urc(std::string_view urc) {
         on_event(NetworkLteEvent::psm_enter);
         return;
     }
+    if (urc.substr(0, 25) == "%NOTIFYEV:\"PLMNSEARCHEXH\"") {
+        on_event(NetworkLteEvent::network_detached);
+        return;
+    }
     // SRING: <conn_id>  →  new data available on socket
     if (urc.substr(0, 6) == "SRING:") {
         NETWORK_LOG_DBG("Data available URC received");
@@ -1361,6 +1384,13 @@ void NetworkLte::handle_urc(std::string_view urc) {
         }
         return;
     }
+    if (urc.substr(0, 10) == "NO CARRIER") {
+        uint8_t conn_id = MAX_SERVER_CONNECTIONS;
+        while (conn_id > 0 && conn_id <= MAX_SERVER_CONNECTIONS &&
+               serverInfo[conn_id - 1].state != ServerState::disconnected) {
+            --conn_id;
+        }
+    }
 }
 
 // replace all occurrences of event_ = with on_event(event) to ensure that all events go through the on_event handler
@@ -1368,7 +1398,10 @@ void NetworkLte::handle_urc(std::string_view urc) {
 void NetworkLte::on_event(NetworkLteEvent event) {
     event_ = event;
     log_event();
-    // record uptime and event history for debugging/analytics
+    if (is_error_event(event)) {
+        log_error(event);
+        push_trace(NetworkTraceKind::error, NetworkLteState::none, NetworkLteState::none, event, ModemAction::none);
+    }
 }
 
 NetworkLteEvent NetworkLte::get_event() {
@@ -1481,16 +1514,68 @@ static const char* action_to_str(ModemAction a) {
     }
 }
 
-void NetworkLte::log_state() const {
+void NetworkLte::log_state() {
     NETWORK_LOG_DBG("new state: %s", state_to_str(state_));
+    push_trace(NetworkTraceKind::state_change, prev_state_, state_, NetworkLteEvent::none, ModemAction::none);
 }
 
-void NetworkLte::log_event() const {
+void NetworkLte::log_event() {
     NETWORK_LOG_DBG("new event: %s", event_to_str(event_));
+    push_trace(NetworkTraceKind::event_set, NetworkLteState::none, NetworkLteState::none, event_, ModemAction::none);
 }
 
-void NetworkLte::log_action() const {
+void NetworkLte::log_action() {
     if (modem_action_ != ModemAction::none) NETWORK_LOG_DBG("new action: %s", action_to_str(modem_action_));
+    push_trace(NetworkTraceKind::action_set, NetworkLteState::none, NetworkLteState::none, NetworkLteEvent::none,
+               modem_action_);
+}
+
+void NetworkLte::log_error(NetworkLteEvent error_event) {
+    NETWORK_LOG_ERR("new error event: %s", event_to_str(error_event));
+}
+
+void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
+                            NetworkLteEvent event, ModemAction action) {
+    std::scoped_lock lock(trace_mutex_);
+
+    NetworkTraceEntry entry;
+    entry.kind = kind;
+    entry.previous_state = previous_state;
+    entry.current_state = current_state;
+    entry.event = event;
+    entry.action = action;
+
+    size_t write_index = 0;
+    if (trace_count_ < TRACE_CAPACITY) {
+        write_index = (trace_head_ + trace_count_) % TRACE_CAPACITY;
+        trace_count_++;
+    } else {
+        write_index = trace_head_;
+        trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
+    }
+
+    trace_buffer_[write_index] = entry;
+    trace_cv_.notify_one();
+}
+
+bool NetworkLte::pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(trace_mutex_);
+    const auto has_data = [this]() { return trace_count_ > 0; };
+
+    if (timeout_ms == 0) {
+        if (!has_data()) {
+            return false;
+        }
+    } else {
+        if (!trace_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), has_data)) {
+            return false;
+        }
+    }
+
+    entry = trace_buffer_[trace_head_];
+    trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
+    trace_count_--;
+    return true;
 }
 
 // --- Timer ---
