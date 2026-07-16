@@ -100,6 +100,8 @@ struct StateTimers {
     uint32_t pdp_context_opening_ms = 0; ///< Total ms spent in pdp_context_opening across all visits.
     uint32_t data_ready_ms = 0;          ///< Total ms spent in data_ready across all visits.
     uint32_t transparent_mode_ms = 0;    ///< Total ms spent in transparent_mode across all visits.
+    uint32_t sleep_mode_ms = 0;          ///< Total ms spent in sleep_mode across all visits.
+    uint32_t off_mode_ms = 0;            ///< Total ms spent in off_mode across all visits.
 };
 
 static_assert(sizeof(ModemTypedResponseMsg<StateTimers>) <= MESSAGE_CHANNEL_MAX_DATA,

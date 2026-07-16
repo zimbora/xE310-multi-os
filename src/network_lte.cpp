@@ -1154,6 +1154,20 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         }
             st_timer->stop(); // stop any timers related to transparent mode if needed
             break;
+        case NetworkLteState::sleep_mode: {
+            uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.sleep_mode_ms += elasped;
+            NETWORK_LOG_INF("Time spent in sleep_mode state: %u ms", elasped);
+        }
+            st_timer->stop();
+            break;
+        case NetworkLteState::off_mode: {
+            uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.off_mode_ms += elasped;
+            NETWORK_LOG_INF("Time spent in off_mode state: %u ms", elasped);
+        }
+            st_timer->stop();
+            break;
         default: break; // no special handling needed for other states when exiting
     }
 
@@ -1208,6 +1222,12 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         case NetworkLteState::transparent_mode:
             st_timer->start(lteConfig.transparent_timeout_sec * 1000,
                             [this]() { on_timer_expired(); }); // example timeout, adjust as needed
+            break;
+        case NetworkLteState::sleep_mode:
+            st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
+            break;
+        case NetworkLteState::off_mode:
+            st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
             break;
         default: break; // no special handling needed for other states when entering
     }
