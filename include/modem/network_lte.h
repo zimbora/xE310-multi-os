@@ -291,7 +291,7 @@ public:
     /// Pop one trace entry produced by state/event/action transitions.
     /// Returns false if timeout expires with no entry available.
     bool pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms);
-    
+
     /// Accumulated time counters for timed states.
     const StateTimers& state_timers() const;
 
