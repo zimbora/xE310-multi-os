@@ -3,8 +3,18 @@ name: Documentation
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'include/**'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches: ["**"]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'include/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
