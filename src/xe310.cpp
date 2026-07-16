@@ -1087,6 +1087,7 @@ ModemStatus xE310::set_pdp_urc(bool enable) {
 
 ModemStatus xE310::set_plmnsearchexh_notify(bool enable) {
     AtResponse response;
+    send_raw("AT%NOTIFYEV=\"ALL\",0", response);
     return send_raw(enable ? "AT%NOTIFYEV=\"PLMNSEARCHEXH\",1" : "AT%NOTIFYEV=\"PLMNSEARCHEXH\",0", response);
 }
 
