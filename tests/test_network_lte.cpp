@@ -692,6 +692,64 @@ TEST_F(NetworkLteTest, HandleUrc_SRING_NoSpace) {
 }
 
 // ===========================================================================
+// network_connect blocking-state tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, NetworkConnect_TransparentMode_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::transparent_mode);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    // State must not change — the guard fires before any go_to_state call.
+    EXPECT_EQ(sm.state(), NetworkLteState::transparent_mode);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_DoneState_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::done);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_AlreadyDataReady_ReturnsTrue) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    bool result = sm.network_connect();
+    EXPECT_TRUE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
+}
+
+// ===========================================================================
+// go_to_state blocking-state tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, GoToState_DoneState_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::done);
+    // go_to_state must return false immediately without spinning
+    bool result = sm.go_to_state(NetworkLteState::data_ready);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
+}
+
+TEST_F(NetworkLteTest, GoToState_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    bool result = sm.go_to_state(NetworkLteState::data_ready);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
+// ===========================================================================
 // server_connect tests
 // ===========================================================================
 
