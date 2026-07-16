@@ -283,6 +283,18 @@ inline std::string to_json(const modem::CsurvResult& r) {
     s += tail;
     return s;
 }
+inline std::string to_json(const modem::StateTimers& t) {
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+        "{\"network_attaching_ms\":%u,\"pdp_context_opening_ms\":%u,"
+        "\"data_ready_ms\":%u,\"transparent_mode_ms\":%u,"
+        "\"sleep_mode_ms\":%u,\"off_mode_ms\":%u}",
+        (unsigned)t.network_attaching_ms, (unsigned)t.pdp_context_opening_ms,
+        (unsigned)t.data_ready_ms, (unsigned)t.transparent_mode_ms,
+        (unsigned)t.sleep_mode_ms, (unsigned)t.off_mode_ms);
+    return buf;
+}
+
 inline std::string config_to_json(const modem::NetworkLteConfig& c) {
     char buf[1024];
     snprintf(buf, sizeof(buf),

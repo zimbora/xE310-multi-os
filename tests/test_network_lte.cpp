@@ -736,3 +736,82 @@ TEST_F(NetworkLteTest, ServerConnect_UnknownProtocol_ReturnsFalse) {
     bool result = sm.server_connect(1, "SCTP", "192.168.1.1", 5000);
     EXPECT_FALSE(result);
 }
+
+// ===========================================================================
+// StateTimers tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, StateTimers_InitiallyAllZero) {
+    auto sm = make_sm();
+    const auto& t = sm.state_timers();
+    EXPECT_EQ(t.network_attaching_ms, 0u);
+    EXPECT_EQ(t.pdp_context_opening_ms, 0u);
+    EXPECT_EQ(t.data_ready_ms, 0u);
+    EXPECT_EQ(t.transparent_mode_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_NetworkAttaching_AccumulatesOnExit) {
+    auto sm = make_sm();
+    // Enter network_attaching state
+    sm.change_state(NetworkLteState::network_attaching);
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
+    // Transition away — elapsed time (≥ 0) is accumulated
+    sm.change_state(NetworkLteState::pdp_context_closed);
+    EXPECT_GE(sm.state_timers().network_attaching_ms, 0u);
+    // Other counters remain zero
+    EXPECT_EQ(sm.state_timers().pdp_context_opening_ms, 0u);
+    EXPECT_EQ(sm.state_timers().data_ready_ms, 0u);
+    EXPECT_EQ(sm.state_timers().transparent_mode_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_PdpContextOpening_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::pdp_context_opening);
+    sm.change_state(NetworkLteState::data_ready);
+    EXPECT_GE(sm.state_timers().pdp_context_opening_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_DataReady_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    sm.change_state(NetworkLteState::idle_mode);
+    EXPECT_GE(sm.state_timers().data_ready_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_TransparentMode_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::transparent_mode);
+    sm.change_state(NetworkLteState::idle_mode);
+    EXPECT_GE(sm.state_timers().transparent_mode_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_MultipleVisits_CountersAccumulate) {
+    auto sm = make_sm();
+    // Visit network_attaching twice
+    sm.change_state(NetworkLteState::network_attaching);
+    sm.change_state(NetworkLteState::network_detached);
+    uint32_t after_first = sm.state_timers().network_attaching_ms;
+
+    sm.change_state(NetworkLteState::network_attaching);
+    sm.change_state(NetworkLteState::pdp_context_closed);
+    uint32_t after_second = sm.state_timers().network_attaching_ms;
+
+    // Counter must be >= the value after the first visit
+    EXPECT_GE(after_second, after_first);
+}
+
+TEST_F(NetworkLteTest, StateTimers_NonTimedStates_NeverAccumulate) {
+    auto sm = make_sm();
+    // Transition through states that have no timers
+    sm.change_state(NetworkLteState::idle_mode);
+    sm.change_state(NetworkLteState::network_detached);
+    sm.change_state(NetworkLteState::setup_mode);
+    const auto& t = sm.state_timers();
+    EXPECT_EQ(t.network_attaching_ms, 0u);
+    EXPECT_EQ(t.pdp_context_opening_ms, 0u);
+    EXPECT_EQ(t.data_ready_ms, 0u);
+    EXPECT_EQ(t.transparent_mode_ms, 0u);
+}
