@@ -10,6 +10,7 @@ namespace modem {
 
 // Forward declarations of static helpers defined at bottom of file
 static const char* action_to_str(ModemAction a);
+static const char* state_to_str(NetworkLteState s);
 
 static bool is_error_event(NetworkLteEvent event) {
     switch (event) {
@@ -45,6 +46,9 @@ const FixedString<MODEM_SHORT_STR>& NetworkLte::imsi() const {
 }
 const FixedString<MODEM_SHORT_STR>& NetworkLte::clock() const {
     return modemClock;
+}
+ModemStatus NetworkLte::refresh_clock() {
+    return modem_.get_clock(modemClock);
 }
 const NetworkLteConfig& NetworkLte::config() const {
     return lteConfig;
@@ -93,6 +97,9 @@ const ServerInfo* NetworkLte::server_info_array() const {
     return serverInfo;
 }
 
+const StateTimers& NetworkLte::state_timers() const {
+    return stateTimers_;
+}
 bool NetworkLte::scan_networks(uint32_t start_ch, uint32_t end_ch) {
     auto status = modem_.scan_networks(csurvResult, start_ch, end_ch);
     return status == ModemStatus::ok;
@@ -126,6 +133,22 @@ void NetworkLte::set_pdp_retries(uint8_t n) {
 
 bool NetworkLte::network_connect() {
     if (fWarmBoot) modem_.network_detach();
+
+    // States that cannot transition to data_ready without explicit user action:
+    // return false immediately to avoid an infinite loop inside go_to_state().
+    if (state_ == NetworkLteState::transparent_mode) {
+        NETWORK_LOG_ERR("Cannot connect to network while in transparent mode, exit transparent mode first");
+        return false;
+    }
+    if (state_ == NetworkLteState::modem_fota) {
+        NETWORK_LOG_ERR("Cannot connect to network while a FOTA update is in progress");
+        return false;
+    }
+    if (state_ == NetworkLteState::done) {
+        NETWORK_LOG_ERR("Cannot connect to network from done state (max retries reached), reset the modem first");
+        return false;
+    }
+
     if (state_ == NetworkLteState::data_ready) {
         NETWORK_LOG_INF("Already connected to network");
         return true; // already connected to network
@@ -302,7 +325,7 @@ bool NetworkLte::force_psm() {
     modem_.set_psm_urc(false);          // enable PSM URCs in normal mode
     modem_.set_registration_urc(false); // enable registration URCs in normal mode
     modem_.set_pdp_urc(false);          // enable PDP URCs in normal mode
-    modem_.set_plmnsearchexh_notify(false);
+    modem_.disable_all_notifyev();
 
     bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will
@@ -618,14 +641,20 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
                     call_action(ModemAction::wake_up); // trigger wake up to go back to data ready state
                 }
                 break;
-            /*
             case NetworkLteState::transparent_mode:
-                if(target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode){
-                    call_action(ModemAction::leave_transparent_mode); // trigger exit transparent mode to go back to
-            idle mode and restart normal flow, which should lead us back to data ready if the connection is still active
+                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode) {
+                    call_action(ModemAction::leave_transparent_mode); // exit transparent mode, re-enable URCs and
+                                                                      // restart normal flow toward data_ready
                 }
                 break;
-            */
+            case NetworkLteState::done:
+                NETWORK_LOG_ERR("Cannot transition from done state to %s, reset the modem first",
+                                state_to_str(target_state));
+                return false;
+            case NetworkLteState::modem_fota:
+                NETWORK_LOG_ERR("Cannot transition from modem_fota state to %s, wait for FOTA to complete",
+                                state_to_str(target_state));
+                return false;
             default:
                 if (target_state == NetworkLteState::transparent_mode) {
                     call_action(ModemAction::enter_transparent_mode);
@@ -1103,7 +1132,7 @@ void NetworkLte::execute_actions() {
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
                 false); // disable PDP URCs in transparent mode to avoid interfering with raw data reception
-            modem_.set_plmnsearchexh_notify(false);
+            modem_.disable_all_notifyev();
             NETWORK_LOG_INF("Modem in transparent mode (ready to receive AT commands)");
         } break;
 
@@ -1141,27 +1170,45 @@ void NetworkLte::change_state(NetworkLteState new_state) {
     switch (prev_state_) {
         case NetworkLteState::network_attaching: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.network_attaching_ms += elasped;
             NETWORK_LOG_INF("Time spent in network_attaching state: %u ms", elasped);
         }
             st_timer->stop(); // stop attach timer if running
             break;
         case NetworkLteState::pdp_context_opening: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.pdp_context_opening_ms += elasped;
             NETWORK_LOG_INF("Time spent in pdp_context_opening state: %u ms", elasped);
         }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::data_ready: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.data_ready_ms += elasped;
             NETWORK_LOG_INF("Time spent in data_ready state: %u ms", elasped);
         }
             st_timer->stop(); // stop PDP activation timer if running
             break;
         case NetworkLteState::transparent_mode: {
             uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.transparent_mode_ms += elasped;
             NETWORK_LOG_INF("Time spent in transparent_mode state: %u ms", elasped);
         }
             st_timer->stop(); // stop any timers related to transparent mode if needed
+            break;
+        case NetworkLteState::sleep_mode: {
+            uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.sleep_mode_ms += elasped;
+            NETWORK_LOG_INF("Time spent in sleep_mode state: %u ms", elasped);
+        }
+            st_timer->stop();
+            break;
+        case NetworkLteState::off_mode: {
+            uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.off_mode_ms += elasped;
+            NETWORK_LOG_INF("Time spent in off_mode state: %u ms", elasped);
+        }
+            st_timer->stop();
             break;
         default: break; // no special handling needed for other states when exiting
     }
@@ -1217,6 +1264,12 @@ void NetworkLte::change_state(NetworkLteState new_state) {
         case NetworkLteState::transparent_mode:
             st_timer->start(lteConfig.transparent_timeout_sec * 1000,
                             [this]() { on_timer_expired(); }); // example timeout, adjust as needed
+            break;
+        case NetworkLteState::sleep_mode:
+            st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
+            break;
+        case NetworkLteState::off_mode:
+            st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
             break;
         default: break; // no special handling needed for other states when entering
     }

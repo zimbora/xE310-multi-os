@@ -237,6 +237,7 @@ public:
 
     /// Last modem clock read from AT+CCLK?.
     const FixedString<MODEM_SHORT_STR>& clock() const;
+    ModemStatus refresh_clock();
 
     /// Full modem identification info read at power-on.
     const ModemInfo& modem_info() const;
@@ -290,6 +291,9 @@ public:
     /// Pop one trace entry produced by state/event/action transitions.
     /// Returns false if timeout expires with no entry available.
     bool pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms);
+
+    /// Accumulated time counters for timed states.
+    const StateTimers& state_timers() const;
 
     // !! private functions but set as public for testing purposes, since we want to be able to call them directly from
     // unit tests to test specific state transitions and flows without having to go through the whole state machine loop
@@ -385,6 +389,8 @@ private:
     TimerHandle timer_;
     MessageQueueHandle message_queue_;
     uint8_t last_data_conn_id_ = 0; ///< Connection ID from the most recent SRING URC
+
+    StateTimers stateTimers_; ///< Accumulated time counters for timed states.
 
     /// Called by the timer when it expires; injects a timeout modem event.
     void on_timer_expired();

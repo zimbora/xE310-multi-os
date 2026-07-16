@@ -13,6 +13,10 @@ using ::testing::InSequence;
 using ::testing::Le;
 using ::testing::Gt;
 
+namespace modem {
+void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio);
+}
+
 // ---------------------------------------------------------------------------
 // Mock UART
 // ---------------------------------------------------------------------------
@@ -138,6 +142,50 @@ TEST_F(NetworkLteTest, IdleMode_SetupRadio_StaysIdle) {
     sm.call_action(ModemAction::setup_radio);
     sm.step();
     EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
+}
+
+TEST_F(NetworkLteTest, ClockRequestAlwaysQueriesModem) {
+    auto sm = make_sm();
+    RadioLteChannels channels;
+    int cclk_query_count = 0;
+
+    ON_CALL(*mock_uart_, write(_, _))
+        .WillByDefault(Invoke([this, &cclk_query_count](const uint8_t* data, size_t length) {
+            last_written_cmd_.assign(reinterpret_cast<const char*>(data), length);
+            if (last_written_cmd_.find("AT+CCLK?") != std::string::npos) {
+                ++cclk_query_count;
+            }
+            return UartError::ok;
+        }));
+
+    ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
+        .WillByDefault(Invoke([this](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            if (last_written_cmd_.find("AT+CCLK?") != std::string::npos) {
+                resp = "\r\n+CCLK: \"26/07/13,21:00:00+00\"\r\nOK\r\n";
+            }
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    ModemTxMsg req{};
+    req.type = RadioLteRequestType::get_clock;
+    ASSERT_EQ(channels.send_request(req), MessageChannelError::ok);
+    ASSERT_EQ(channels.send_request(req), MessageChannelError::ok);
+
+    process_radio_requests(channels, sm);
+
+    ModemTypedResponseMsg<FixedString<MODEM_SHORT_STR>> resp{};
+    ASSERT_EQ(channels.recv_typed_response(resp), MessageChannelError::ok);
+    EXPECT_TRUE(resp.ok);
+    EXPECT_EQ(resp.value, "26/07/13,21:00:00+00");
+
+    ASSERT_EQ(channels.recv_typed_response(resp), MessageChannelError::ok);
+    EXPECT_TRUE(resp.ok);
+    EXPECT_EQ(resp.value, "26/07/13,21:00:00+00");
+
+    EXPECT_EQ(cclk_query_count, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -644,6 +692,64 @@ TEST_F(NetworkLteTest, HandleUrc_SRING_NoSpace) {
 }
 
 // ===========================================================================
+// network_connect blocking-state tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, NetworkConnect_TransparentMode_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::transparent_mode);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    // State must not change — the guard fires before any go_to_state call.
+    EXPECT_EQ(sm.state(), NetworkLteState::transparent_mode);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_DoneState_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::done);
+    bool result = sm.network_connect();
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
+}
+
+TEST_F(NetworkLteTest, NetworkConnect_AlreadyDataReady_ReturnsTrue) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    bool result = sm.network_connect();
+    EXPECT_TRUE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::data_ready);
+}
+
+// ===========================================================================
+// go_to_state blocking-state tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, GoToState_DoneState_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::done);
+    // go_to_state must return false immediately without spinning
+    bool result = sm.go_to_state(NetworkLteState::data_ready);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::done);
+}
+
+TEST_F(NetworkLteTest, GoToState_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    bool result = sm.go_to_state(NetworkLteState::data_ready);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
+// ===========================================================================
 // server_connect tests
 // ===========================================================================
 
@@ -687,4 +793,83 @@ TEST_F(NetworkLteTest, ServerConnect_UnknownProtocol_ReturnsFalse) {
     sm.change_state(NetworkLteState::data_ready);
     bool result = sm.server_connect(1, "SCTP", "192.168.1.1", 5000);
     EXPECT_FALSE(result);
+}
+
+// ===========================================================================
+// StateTimers tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, StateTimers_InitiallyAllZero) {
+    auto sm = make_sm();
+    const auto& t = sm.state_timers();
+    EXPECT_EQ(t.network_attaching_ms, 0u);
+    EXPECT_EQ(t.pdp_context_opening_ms, 0u);
+    EXPECT_EQ(t.data_ready_ms, 0u);
+    EXPECT_EQ(t.transparent_mode_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_NetworkAttaching_AccumulatesOnExit) {
+    auto sm = make_sm();
+    // Enter network_attaching state
+    sm.change_state(NetworkLteState::network_attaching);
+    EXPECT_EQ(sm.state(), NetworkLteState::network_attaching);
+    // Transition away — elapsed time (≥ 0) is accumulated
+    sm.change_state(NetworkLteState::pdp_context_closed);
+    EXPECT_GE(sm.state_timers().network_attaching_ms, 0u);
+    // Other counters remain zero
+    EXPECT_EQ(sm.state_timers().pdp_context_opening_ms, 0u);
+    EXPECT_EQ(sm.state_timers().data_ready_ms, 0u);
+    EXPECT_EQ(sm.state_timers().transparent_mode_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_PdpContextOpening_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::pdp_context_opening);
+    sm.change_state(NetworkLteState::data_ready);
+    EXPECT_GE(sm.state_timers().pdp_context_opening_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_DataReady_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::data_ready);
+    sm.change_state(NetworkLteState::idle_mode);
+    EXPECT_GE(sm.state_timers().data_ready_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_TransparentMode_AccumulatesOnExit) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::transparent_mode);
+    sm.change_state(NetworkLteState::idle_mode);
+    EXPECT_GE(sm.state_timers().transparent_mode_ms, 0u);
+    EXPECT_EQ(sm.state_timers().network_attaching_ms, 0u);
+}
+
+TEST_F(NetworkLteTest, StateTimers_MultipleVisits_CountersAccumulate) {
+    auto sm = make_sm();
+    // Visit network_attaching twice
+    sm.change_state(NetworkLteState::network_attaching);
+    sm.change_state(NetworkLteState::network_detached);
+    uint32_t after_first = sm.state_timers().network_attaching_ms;
+
+    sm.change_state(NetworkLteState::network_attaching);
+    sm.change_state(NetworkLteState::pdp_context_closed);
+    uint32_t after_second = sm.state_timers().network_attaching_ms;
+
+    // Counter must be >= the value after the first visit
+    EXPECT_GE(after_second, after_first);
+}
+
+TEST_F(NetworkLteTest, StateTimers_NonTimedStates_NeverAccumulate) {
+    auto sm = make_sm();
+    // Transition through states that have no timers
+    sm.change_state(NetworkLteState::idle_mode);
+    sm.change_state(NetworkLteState::network_detached);
+    sm.change_state(NetworkLteState::setup_mode);
+    const auto& t = sm.state_timers();
+    EXPECT_EQ(t.network_attaching_ms, 0u);
+    EXPECT_EQ(t.pdp_context_opening_ms, 0u);
+    EXPECT_EQ(t.data_ready_ms, 0u);
+    EXPECT_EQ(t.transparent_mode_ms, 0u);
 }

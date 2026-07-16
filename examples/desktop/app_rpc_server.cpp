@@ -295,6 +295,14 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             }
             return {resp.ok, rpc::config_to_json(resp.value)};
         }
+        case modem::RadioLteRequestType::get_timers: {
+            modem::ModemTypedResponseMsg<modem::StateTimers> resp{};
+            if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                return {false, "ERROR: invalid timers response"};
+            }
+            return {resp.ok, rpc::to_json(resp.value)};
+        }
+        case modem::RadioLteRequestType::set_config:
         case modem::RadioLteRequestType::set_config: {
             modem::ModemTypedResponseMsg<bool> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
@@ -394,6 +402,10 @@ std::string RpcServer::handle_request(const std::string& request) {
         }
         if (sub == "STATE") {
             return context_.get_network_state();
+        }
+        if (sub == "TIMERS") {
+            return request_radio_state({modem::RadioLteRequestType::get_timers, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS)
+                .second;
         }
         if (sub.rfind("SERVERINFO", 0) == 0) {
             std::string arg = sub.size() > 10 ? sub.substr(11) : "";

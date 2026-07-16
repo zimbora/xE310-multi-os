@@ -37,7 +37,10 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
 
             case RadioLteRequestType::get_imsi: channels.publish_typed_response(radio.imsi()); break;
 
-            case RadioLteRequestType::get_clock: channels.publish_typed_response(radio.clock()); break;
+            case RadioLteRequestType::get_clock:
+                radio.refresh_clock();
+                channels.publish_typed_response(radio.clock());
+                break;
 
             case RadioLteRequestType::get_modem_info: channels.publish_typed_response(radio.modem_info()); break;
 
@@ -138,6 +141,8 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
                 channels.publish_action_complete(RadioLteRequestType::force_psm, res);
                 break;
             }
+
+            case RadioLteRequestType::get_timers: channels.publish_typed_response(radio.state_timers()); break;
 
             default: channels.publish_typed_response(false); break;
         }
