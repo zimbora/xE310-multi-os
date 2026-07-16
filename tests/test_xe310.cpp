@@ -349,6 +349,11 @@ TEST_F(Xe310Test, SetPsmUrcDisable) {
     EXPECT_EQ(modem_->set_psm_urc(false), ModemStatus::ok);
 }
 
+TEST_F(Xe310Test, DisableAllNotifyev) {
+    expect_command_ok("AT%NOTIFYEV=\"ALL\",0", "");
+    EXPECT_EQ(modem_->disable_all_notifyev(), ModemStatus::ok);
+}
+
 TEST_F(Xe310Test, SetPlmnSearchExhNotifyEnable) {
     expect_command_ok("AT%NOTIFYEV=\"PLMNSEARCHEXH\",1", "");
     EXPECT_EQ(modem_->set_plmnsearchexh_notify(true), ModemStatus::ok);
