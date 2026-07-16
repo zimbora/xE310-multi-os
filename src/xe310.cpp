@@ -1085,6 +1085,12 @@ ModemStatus xE310::set_pdp_urc(bool enable) {
     return send_raw(enable ? "AT+CGEREP=1" : "AT+CGEREP=0", response);
 }
 
+ModemStatus xE310::set_plmnsearchexh_notify(bool enable) {
+    AtResponse response;
+    send_raw("AT%NOTIFYEV=\"ALL\",0", response);
+    return send_raw(enable ? "AT%NOTIFYEV=\"PLMNSEARCHEXH\",1" : "AT%NOTIFYEV=\"PLMNSEARCHEXH\",0", response);
+}
+
 ModemStatus xE310::activate_pdp(uint8_t cid) {
     AtResponse response;
     char cmd[32];
