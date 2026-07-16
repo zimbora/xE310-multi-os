@@ -1559,7 +1559,9 @@ void NetworkLte::log_error(NetworkLteEvent error_event) {
 
 void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
                             NetworkLteEvent event, ModemAction action) {
+#if !defined(PLATFORM_ZEPHYR) && !defined(__ZEPHYR__)
     std::scoped_lock lock(trace_mutex_);
+#endif
 
     NetworkTraceEntry entry;
     entry.kind = kind;
@@ -1578,10 +1580,13 @@ void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_stat
     }
 
     trace_buffer_[write_index] = entry;
+#if !defined(PLATFORM_ZEPHYR) && !defined(__ZEPHYR__)
     trace_cv_.notify_one();
+#endif
 }
 
 bool NetworkLte::pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms) {
+#if !defined(PLATFORM_ZEPHYR) && !defined(__ZEPHYR__)
     std::unique_lock<std::mutex> lock(trace_mutex_);
     const auto has_data = [this]() { return trace_count_ > 0; };
 
@@ -1599,6 +1604,11 @@ bool NetworkLte::pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms) {
     trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
     trace_count_--;
     return true;
+#else
+    (void)entry;
+    (void)timeout_ms;
+    return false;
+#endif
 }
 
 // --- Timer ---

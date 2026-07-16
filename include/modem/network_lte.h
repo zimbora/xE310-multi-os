@@ -9,11 +9,14 @@
 
 #include <cstdint>
 #include <array>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string_view>
+
+#if !defined(PLATFORM_ZEPHYR) && !defined(__ZEPHYR__)
+#include <condition_variable>
+#include <mutex>
+#endif
 
 #define MAX_SERVER_CONNECTIONS 5
 
@@ -353,8 +356,10 @@ public:
     std::array<NetworkTraceEntry, TRACE_CAPACITY> trace_buffer_{};
     size_t trace_head_ = 0;
     size_t trace_count_ = 0;
+#if !defined(PLATFORM_ZEPHYR) && !defined(__ZEPHYR__)
     std::mutex trace_mutex_;
     std::condition_variable trace_cv_;
+#endif
 
 private:
     xE310& modem_;
