@@ -37,6 +37,22 @@ target_link_libraries(test_network_lte PRIVATE
 
 gtest_discover_tests(test_network_lte)
 
+add_executable(test_i_radio_lte
+    test_i_radio_lte.cpp
+)
+
+target_include_directories(test_i_radio_lte PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_i_radio_lte PRIVATE
+    modem_xe310
+    GTest::gtest_main
+    GTest::gmock
+)
+
+gtest_discover_tests(test_i_radio_lte)
+
 add_executable(test_message_queue
     test_message_queue.cpp
 )

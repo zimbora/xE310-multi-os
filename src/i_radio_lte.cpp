@@ -71,9 +71,12 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
 
             case RadioLteRequestType::get_csurv_result: channels.publish_typed_response(radio.csurv_result()); break;
 
-            case RadioLteRequestType::scan_networks:
-                channels.publish_typed_response(radio.scan_networks(req.arg0, req.arg1));
+            case RadioLteRequestType::scan_networks: {
+                channels.publish_typed_response(true);
+                bool res = radio.scan_networks(req.arg0, req.arg1);
+                channels.publish_action_complete(RadioLteRequestType::scan_networks, res);
                 break;
+            }
 
             case RadioLteRequestType::get_server_info_array:
                 channels.publish_typed_response(radio.server_info_array());
@@ -95,11 +98,19 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
                 break;
             }
 
-            case RadioLteRequestType::network_connect: channels.publish_typed_response(radio.network_connect()); break;
-
-            case RadioLteRequestType::network_disconnect:
-                channels.publish_typed_response(radio.network_disconnect());
+            case RadioLteRequestType::network_connect: {
+                channels.publish_typed_response(true);
+                bool res = radio.network_connect();
+                channels.publish_action_complete(RadioLteRequestType::network_connect, res);
                 break;
+            }
+
+            case RadioLteRequestType::network_disconnect: {
+                channels.publish_typed_response(true);
+                bool res = radio.network_disconnect();
+                channels.publish_action_complete(RadioLteRequestType::network_disconnect, res);
+                break;
+            }
 
             case RadioLteRequestType::server_connect: {
                 if (frame.length != sizeof(ModemServerConnectMsg)) {
@@ -108,16 +119,25 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
                 }
                 ModemServerConnectMsg sc_msg{};
                 std::memcpy(&sc_msg, frame.data.data(), sizeof(sc_msg));
-                channels.publish_typed_response(
-                    radio.server_connect(sc_msg.conn_id, sc_msg.protocol.view(), sc_msg.ip.view(), sc_msg.port));
+                channels.publish_typed_response(true);
+                bool res = radio.server_connect(sc_msg.conn_id, sc_msg.protocol.view(), sc_msg.ip.view(), sc_msg.port);
+                channels.publish_action_complete(RadioLteRequestType::server_connect, res);
                 break;
             }
 
-            case RadioLteRequestType::server_disconnect:
-                channels.publish_typed_response(radio.server_disconnect(static_cast<uint8_t>(req.arg0)));
+            case RadioLteRequestType::server_disconnect: {
+                channels.publish_typed_response(true);
+                bool res = radio.server_disconnect(static_cast<uint8_t>(req.arg0));
+                channels.publish_action_complete(RadioLteRequestType::server_disconnect, res);
                 break;
+            }
 
-            case RadioLteRequestType::force_psm: channels.publish_typed_response(radio.force_psm()); break;
+            case RadioLteRequestType::force_psm: {
+                channels.publish_typed_response(true);
+                bool res = radio.force_psm();
+                channels.publish_action_complete(RadioLteRequestType::force_psm, res);
+                break;
+            }
 
             default: channels.publish_typed_response(false); break;
         }

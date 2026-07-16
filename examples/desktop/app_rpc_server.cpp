@@ -83,6 +83,29 @@ std::pair<bool, std::string> RpcServer::request_radio_state(modem::RadioLteReque
     return request_radio_state_impl(msg, timeout_ms);
 }
 
+std::pair<bool, std::string> RpcServer::wait_blocking_action_complete(modem::RadioLteRequestType type,
+                                                                       uint32_t timeout_ms) {
+    // The immediate ACK has already been signalled via MODEM_EVT_RESPONSE. Read it.
+    modem::ModemTypedResponseMsg<bool> ack{};
+    if (context_.channels.recv_typed_response(ack, 0) != modem::MessageChannelError::ok) {
+        return {false, "ERROR: invalid ACK"};
+    }
+    if (!ack.ok || !ack.value) {
+        return {false, "ERROR: request not accepted"};
+    }
+    // Wait for the blocking operation to finish.
+    uint32_t done = context_.channels.wait(modem::MODEM_EVT_ACTION_DONE, true, timeout_ms);
+    if ((done & modem::MODEM_EVT_ACTION_DONE) == 0U) {
+        return {false, "ERROR: timeout waiting for completion"};
+    }
+    modem::ModemActionCompleteMsg complete{};
+    if (context_.channels.recv_action_complete(complete, 0) != modem::MessageChannelError::ok) {
+        return {false, "ERROR: invalid completion response"};
+    }
+    (void)type;
+    return {complete.result, complete.result ? "true" : "false"};
+}
+
 std::pair<bool, std::string> RpcServer::request_csurv_result(uint32_t timeout_ms) {
     modem::RadioLteRequestMsg msg{modem::RadioLteRequestType::get_csurv_result, 0U, 0U};
     modem::MessageChannelError send_err = context_.channels.send_request(msg, timeout_ms);
@@ -113,7 +136,8 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
         return {false, "ERROR: failed to send request"};
     }
 
-    uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, timeout_ms);
+    // All requests return an immediate ACK within MODEM_ACK_TIMEOUT_MS.
+    uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, modem::MODEM_ACK_TIMEOUT_MS);
     if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
         return {false, "ERROR: timeout waiting response"};
     }
@@ -239,13 +263,10 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             return {resp.ok, rpc::to_json(resp.value)};
         }
         case modem::RadioLteRequestType::scan_networks: {
-            modem::ModemTypedResponseMsg<bool> resp{};
-            if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
-                return {false, "ERROR: invalid scan_networks response"};
-            }
-            if (!resp.ok || !resp.value) {
-                return {false, "ERROR: scan_networks failed"};
-            }
+            // Blocking op: ACK already received; wait for completion then fetch results.
+            auto [ok, err_msg] =
+                wait_blocking_action_complete(modem::RadioLteRequestType::scan_networks, timeout_ms);
+            if (!ok) return {false, err_msg};
             return request_csurv_result(timeout_ms);
         }
         case modem::RadioLteRequestType::get_server_info_array: {
@@ -274,12 +295,24 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             }
             return {resp.ok, rpc::config_to_json(resp.value)};
         }
-        case modem::RadioLteRequestType::set_config:
+        case modem::RadioLteRequestType::set_config: {
+            modem::ModemTypedResponseMsg<bool> resp{};
+            if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                return {false, "ERROR: invalid response"};
+            }
+            return {resp.ok && resp.value, resp.value ? "true" : "false"};
+        }
+        // Blocking actions: ACK already received; wait for MODEM_EVT_ACTION_DONE.
         case modem::RadioLteRequestType::network_connect:
+            return wait_blocking_action_complete(modem::RadioLteRequestType::network_connect, timeout_ms);
         case modem::RadioLteRequestType::network_disconnect:
+            return wait_blocking_action_complete(modem::RadioLteRequestType::network_disconnect, timeout_ms);
         case modem::RadioLteRequestType::server_connect:
+            return wait_blocking_action_complete(modem::RadioLteRequestType::server_connect, timeout_ms);
         case modem::RadioLteRequestType::server_disconnect:
+            return wait_blocking_action_complete(modem::RadioLteRequestType::server_disconnect, timeout_ms);
         case modem::RadioLteRequestType::force_psm:
+            return wait_blocking_action_complete(modem::RadioLteRequestType::force_psm, timeout_ms);
         default: {
             modem::ModemTypedResponseMsg<bool> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
@@ -412,7 +445,7 @@ std::string RpcServer::handle_request(const std::string& request) {
                 return "ERROR: failed to send set_config request";
             }
 
-            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, 5000U);
+            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, modem::MODEM_ACK_TIMEOUT_MS);
             if ((matched & modem::MODEM_EVT_RESPONSE) == 0U) {
                 return "ERROR: timeout waiting set_config response";
             }
@@ -527,21 +560,22 @@ std::string RpcServer::handle_request(const std::string& request) {
             if (send_err != modem::MessageChannelError::ok)
                 return "ERROR: failed to send server_connect request";
 
-            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, RPC_TIMEOUT_CONNECT_MS);
+            // Wait for immediate ACK (≤ MODEM_ACK_TIMEOUT_MS).
+            uint32_t matched = context_.channels.wait(modem::MODEM_EVT_RESPONSE, true, modem::MODEM_ACK_TIMEOUT_MS);
             if ((matched & modem::MODEM_EVT_RESPONSE) == 0U)
                 return "ERROR: timeout waiting server_connect response";
 
-            modem::ModemTypedResponseMsg<bool> sc_resp{};
-            if (context_.channels.recv_typed_response(sc_resp, 0) != modem::MessageChannelError::ok)
-                return "ERROR: invalid server_connect response";
+            // Read ACK then wait for the blocking connect to complete.
+            auto [sc_ok, sc_err] =
+                wait_blocking_action_complete(modem::RadioLteRequestType::server_connect, RPC_TIMEOUT_CONNECT_MS);
+            if (!sc_ok) return sc_err;
 
-            std::string result = sc_resp.ok && sc_resp.value ? "true" : "false";
             return std::string("{") + "\"resource\":\"SERVERCONNECT\"," +
                    "\"conn_id\":" + std::to_string(sc_request.conn_id) + "," +
                    "\"protocol\":\"" + sc_request.protocol.c_str() + "\"," +
                    "\"ip\":\"" + sc_request.ip.c_str() + "\"," +
                    "\"port\":" + std::to_string(sc_request.port) + "," +
-                   "\"server_connect\":" + result + "}";
+                   "\"server_connect\":" + (sc_ok ? "true" : "false") + "}";
         }
 
         if (res == "CONFIG") {
