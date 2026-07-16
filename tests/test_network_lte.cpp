@@ -463,6 +463,17 @@ TEST_F(NetworkLteTest, DataReady_Timeout_GoesDone) {
     EXPECT_EQ(sm.state(), NetworkLteState::done);
 }
 
+TEST_F(NetworkLteTest, DataReady_ZeroTimeout_TimeoutEventIgnored) {
+    NetworkLteConfig cfg;
+    cfg.data_ready_timeout_sec = 0;
+    auto sm = make_sm(cfg);
+    sm.change_state(NetworkLteState::data_ready);
+    sm.on_event(NetworkLteEvent::timeout);
+    sm.step();
+    // when data_ready_timeout_sec == 0, timeout should not move modem to done
+    EXPECT_NE(sm.state(), NetworkLteState::done);
+}
+
 TEST_F(NetworkLteTest, DataReady_NetworkDetached_TriggersAttach) {
     auto sm = make_sm();
     sm.change_state(NetworkLteState::data_ready);

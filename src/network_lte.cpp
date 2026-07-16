@@ -383,7 +383,11 @@ bool NetworkLte::force_psm() {
 
     // resume timers and URCs after PSM flow
     if (st_timer) {
-        st_timer->start(lteConfig.data_ready_timeout_sec * 1000, [this]() { on_timer_expired(); });
+        if (lteConfig.data_ready_timeout_sec > 0) {
+            st_timer->start(lteConfig.data_ready_timeout_sec * 1000, [this]() { on_timer_expired(); });
+        } else {
+            st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
+        }
     }
 
     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
@@ -576,6 +580,9 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             }
         } break;
         case NetworkLteEvent::timeout: {
+            if (state_ == NetworkLteState::data_ready && lteConfig.data_ready_timeout_sec == 0) {
+                break; // data_ready_timeout_sec == 0 means the modem should stay alive indefinitely
+            }
             if (state_ == NetworkLteState::data_ready) {
                 call_action(ModemAction::enter_sleep); // if we are in data ready state and we receive a timeout event,
                                                        // we can assume the connection is lost, so we can trigger radio
@@ -1258,8 +1265,12 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             } else {
                 NETWORK_LOG_ERR("Failed to get PSM status");
             }
-            st_timer->start(lteConfig.data_ready_timeout_sec * 1000,
-                            [this]() { on_timer_expired(); }); // example timeout, adjust as needed
+            if (lteConfig.data_ready_timeout_sec > 0) {
+                st_timer->start(lteConfig.data_ready_timeout_sec * 1000,
+                                [this]() { on_timer_expired(); }); // example timeout, adjust as needed
+            } else {
+                st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
+            }
         } break;
         case NetworkLteState::transparent_mode:
             st_timer->start(lteConfig.transparent_timeout_sec * 1000,
