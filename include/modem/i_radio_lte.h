@@ -24,6 +24,11 @@ constexpr uint32_t MODEM_EVT_REQUEST = (1U << 0);
 constexpr uint32_t MODEM_EVT_RESPONSE = (1U << 1);
 constexpr uint32_t MODEM_EVT_STATE = (1U << 2);
 constexpr uint32_t MODEM_EVT_LOG = (1U << 3);
+/// Posted after a blocking action (scan_networks, connect, disconnect, force_psm) completes.
+constexpr uint32_t MODEM_EVT_ACTION_DONE = (1U << 4);
+
+/// Maximum time in ms to wait for an initial ACK to any i_radio_lte request.
+constexpr uint32_t MODEM_ACK_TIMEOUT_MS = 3000U;
 
 /// Request message type for cross-thread radio LTE state queries/actions.
 enum class RadioLteRequestType : uint8_t {
@@ -81,6 +86,16 @@ struct ModemServerConnectMsg {
 
 static_assert(sizeof(ModemServerConnectMsg) <= MESSAGE_CHANNEL_MAX_DATA,
               "ModemServerConnectMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
+
+/// Completion notification sent after a blocking action finishes.
+/// Consumed via recv_action_complete() after waiting on MODEM_EVT_ACTION_DONE.
+struct ModemActionCompleteMsg {
+    RadioLteRequestType type = RadioLteRequestType::get_registration_info;
+    bool result = false;
+};
+
+static_assert(sizeof(ModemActionCompleteMsg) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemActionCompleteMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
 
 using RadioLteRequestMsg = ModemTxMsg;
 
@@ -165,6 +180,20 @@ public:
 
     template<typename ValueType>
     MessageChannelError recv_typed_response(ModemTypedResponseMsg<ValueType>& msg, uint32_t timeout_ms = 0) {
+        return receive_message(*modem_rx_q, msg, timeout_ms);
+    }
+
+    /// Send a blocking-action completion notification and post MODEM_EVT_ACTION_DONE.
+    void publish_action_complete(RadioLteRequestType type, bool result, uint32_t timeout_ms = 0) {
+        ModemActionCompleteMsg msg{type, result};
+        MessageChannelError err = send_message(*modem_rx_q, msg, timeout_ms);
+        if (err == MessageChannelError::ok) {
+            modem_evt->set(MODEM_EVT_ACTION_DONE);
+        }
+    }
+
+    /// Read a completion notification from the rx channel (call after MODEM_EVT_ACTION_DONE fires).
+    MessageChannelError recv_action_complete(ModemActionCompleteMsg& msg, uint32_t timeout_ms = 0) {
         return receive_message(*modem_rx_q, msg, timeout_ms);
     }
 

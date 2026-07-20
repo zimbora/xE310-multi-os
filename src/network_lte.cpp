@@ -1570,7 +1570,7 @@ void NetworkLte::log_error(NetworkLteEvent error_event) {
 
 void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_state, NetworkLteState current_state,
                             NetworkLteEvent event, ModemAction action) {
-    std::scoped_lock lock(trace_mutex_);
+    trace_mutex_.lock();
 
     NetworkTraceEntry entry;
     entry.kind = kind;
@@ -1589,26 +1589,21 @@ void NetworkLte::push_trace(NetworkTraceKind kind, NetworkLteState previous_stat
     }
 
     trace_buffer_[write_index] = entry;
-    trace_cv_.notify_one();
+    trace_mutex_.notify();
+    trace_mutex_.unlock();
 }
 
 bool NetworkLte::pop_trace(NetworkTraceEntry& entry, uint32_t timeout_ms) {
-    std::unique_lock<std::mutex> lock(trace_mutex_);
-    const auto has_data = [this]() { return trace_count_ > 0; };
-
-    if (timeout_ms == 0) {
-        if (!has_data()) {
-            return false;
-        }
-    } else {
-        if (!trace_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), has_data)) {
-            return false;
-        }
+    trace_mutex_.lock();
+    if (!trace_mutex_.wait_for_data(trace_count_, timeout_ms)) {
+        trace_mutex_.unlock();
+        return false;
     }
 
     entry = trace_buffer_[trace_head_];
     trace_head_ = (trace_head_ + 1) % TRACE_CAPACITY;
     trace_count_--;
+    trace_mutex_.unlock();
     return true;
 }
 

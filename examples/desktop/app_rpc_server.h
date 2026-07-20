@@ -34,6 +34,9 @@ private:
     std::pair<bool, std::string> request_radio_state(modem::RadioLteRequestMsg msg, uint32_t timeout_ms = 5000U);
     std::pair<bool, std::string> request_radio_state_impl(modem::RadioLteRequestMsg msg, uint32_t timeout_ms);
     std::pair<bool, std::string> request_csurv_result(uint32_t timeout_ms);
+    /// Read the ACK already signalled by MODEM_EVT_RESPONSE, then wait for the
+    /// MODEM_EVT_ACTION_DONE completion notification. Returns {result, "true"/"false"}.
+    std::pair<bool, std::string> wait_blocking_action_complete(modem::RadioLteRequestType type, uint32_t timeout_ms);
 
     RpcServerContext context_;
     IpcServer rpc_ipc_;

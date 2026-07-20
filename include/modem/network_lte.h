@@ -1,5 +1,6 @@
 #pragma once
 
+#include "modem/hal/trace_mutex.h"
 #include "modem/i_radio_lte.h"
 #include "modem/message_queue_factory.h"
 #include "modem/timer_factory.h"
@@ -9,10 +10,8 @@
 
 #include <cstdint>
 #include <array>
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string_view>
 
 #define MAX_SERVER_CONNECTIONS 5
@@ -353,8 +352,7 @@ public:
     std::array<NetworkTraceEntry, TRACE_CAPACITY> trace_buffer_{};
     size_t trace_head_ = 0;
     size_t trace_count_ = 0;
-    std::mutex trace_mutex_;
-    std::condition_variable trace_cv_;
+    TraceMutex trace_mutex_;
 
 private:
     xE310& modem_;
