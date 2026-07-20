@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/modem_controller.h"
+#include "modem/hal/modem_controller.h"
 
 #include <cstdint>
 #include <string_view>

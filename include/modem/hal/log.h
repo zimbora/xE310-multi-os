@@ -162,7 +162,7 @@ inline const char* timestamp() {
     auto now = clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
     std::time_t t = clock::to_time_t(now);
-    struct tm tm_buf{};
+    struct tm tm_buf {};
 #ifdef _WIN32
     localtime_s(&tm_buf, &t);
 #else

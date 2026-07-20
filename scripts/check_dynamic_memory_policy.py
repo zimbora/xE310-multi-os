@@ -20,6 +20,7 @@ TARGET_GLOBS = (
     "src/hal/zephyr_*.cpp",
     "src/zephyr_*.cpp",
     "include/modem/*.h",
+    "include/modem/hal/*.h",
 )
 
 ALLOW_MARKER = "dynamic-memory-allow"

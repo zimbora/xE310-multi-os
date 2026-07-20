@@ -70,13 +70,13 @@ python3 scripts/check_code_style.py --verbose --summary
 Format all source files with [clang-format](https://clang.llvm.org/docs/ClangFormat.html):
 
 ```bash
-clang-format -i src/*.cpp src/hal/*.cpp include/modem/*.h
+clang-format -i src/*.cpp src/hal/*.cpp include/modem/*.h include/modem/hal/*.h
 ```
 
 Check formatting without modifying files:
 
 ```bash
-clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
+clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h include/modem/hal/*.h
 ```
 
 ## Static Analysis

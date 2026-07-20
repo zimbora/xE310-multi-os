@@ -288,7 +288,7 @@ All methods return `ModemStatus`:
 
 ```cpp
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
+#include "modem/hal/modem_controller.h"
 
 // Platform-specific UART (e.g., Win32)
 #include "modem/hal/win32_uart.h"
@@ -319,7 +319,7 @@ int main() {
 
 ```cpp
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
+#include "modem/hal/modem_controller.h"
 #include "modem/hal/posix_uart.h"
 
 int main() {
@@ -381,7 +381,7 @@ int main() {
 
 ```cpp
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
+#include "modem/hal/modem_controller.h"
 #include "modem/hal/zephyr_uart.h"
 
 void main(void) {

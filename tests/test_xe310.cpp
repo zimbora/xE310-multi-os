@@ -1,5 +1,5 @@
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
+#include "modem/hal/modem_controller.h"
 
 #include <cstring>
 #include <gmock/gmock.h>

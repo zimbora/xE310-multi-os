@@ -55,7 +55,7 @@ Thread communication roles for `message_channel`, `message_queue`, and event fla
 - Before considering a task complete, run static analysis checks when code changes affect C++ sources or headers.
 - Required checks:
   - `python3 scripts/check_dynamic_memory_policy.py`
-  - `clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h`
+  - `clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h include/modem/hal/*.h`
   - `clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp`
   - `cppcheck --enable=all --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1 --std=c++17 -I include src/ include/`
 - If any check cannot be run, explicitly state why and what remains unvalidated.

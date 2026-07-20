@@ -1,7 +1,7 @@
 #include "modem/network_lte.h"
-#include "modem/log.h"
-#include "modem/timer_factory.h"
-#include "modem/message_queue_factory.h"
+#include "modem/hal/log.h"
+#include "modem/hal/timer_factory.h"
+#include "modem/hal/message_queue_factory.h"
 #include <algorithm>
 #include <chrono>
 #include <string>

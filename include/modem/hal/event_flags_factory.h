@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/event_flags_interface.h"
+#include "modem/hal/event_flags_interface.h"
 
 #include <memory>
 

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "modem/at_command.h"
-#include "modem/fixed_string.h"
-#include "modem/static_vector.h"
-#include "modem/timer_factory.h"
-#include "modem/uart_factory.h"
+#include "modem/hal/fixed_string.h"
+#include "modem/hal/static_vector.h"
+#include "modem/hal/timer_factory.h"
+#include "modem/hal/uart_factory.h"
 
 #include <memory>
 #include <string_view>

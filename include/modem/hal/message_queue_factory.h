@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/message_queue_interface.h"
+#include "modem/hal/message_queue_interface.h"
 #include <memory>
 
 namespace modem {
