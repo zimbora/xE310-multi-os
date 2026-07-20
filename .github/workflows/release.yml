@@ -61,6 +61,7 @@ jobs:
 
   build-zephyr:
     name: Build Zephyr (nRF54L15)
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/zephyrproject-rtos/ci:v0.27.4
