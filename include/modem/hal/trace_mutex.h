@@ -27,7 +27,7 @@ public:
     void notify() { k_condvar_signal(&cv_); }
 
     /// Block until count > 0 or timeout_ms elapses; mutex must be held on entry and is still held on return.
-    bool wait_for_data(size_t& count, uint32_t timeout_ms) {
+    bool wait_for_data(const size_t& count, uint32_t timeout_ms) {
         if (count > 0U) return true;
         if (timeout_ms == 0U) return false;
         const int64_t deadline = k_uptime_get() + static_cast<int64_t>(timeout_ms);
@@ -40,8 +40,8 @@ public:
     }
 
 private:
-    struct k_mutex m_ {};
-    struct k_condvar cv_ {};
+    struct k_mutex m_{};
+    struct k_condvar cv_{};
 #else
     void lock() { m_.lock(); }
     void unlock() { m_.unlock(); }
