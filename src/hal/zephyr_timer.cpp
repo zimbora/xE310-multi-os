@@ -1,4 +1,4 @@
-#include "modem/hal/timer_interface.h"
+#include "hal/timer_interface.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
@@ -76,7 +76,7 @@ private:
 
 } // namespace modem
 
-#include "modem/hal/timer_factory.h"
+#include "hal/timer_factory.h"
 
 namespace modem {
 

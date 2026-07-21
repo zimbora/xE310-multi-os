@@ -1,6 +1,6 @@
 #include "app_ipc_servers.h"
 
-#include "modem/hal/log.h"
+#include "hal/log.h"
 #include "rpc_helpers.h"
 
 #include <cstdint>

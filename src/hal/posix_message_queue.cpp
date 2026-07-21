@@ -1,4 +1,4 @@
-#include "modem/hal/message_queue_interface.h"
+#include "hal/message_queue_interface.h"
 
 #ifdef MODEM_PLATFORM_POSIX
 
@@ -130,7 +130,7 @@ private:
 
 } // namespace modem
 
-#include "modem/hal/message_queue_factory.h"
+#include "hal/message_queue_factory.h"
 
 namespace modem {
 

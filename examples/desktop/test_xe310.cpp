@@ -1,8 +1,8 @@
-#include "modem/hal/modem_controller.h"
+#include "hal/modem_controller.h"
 #include "modem/at_command.h"
-#include "modem/hal/uart_factory.h"
+#include "hal/uart_factory.h"
 #include "modem/xe310.h"
-#include "modem/hal/log.h"
+#include "hal/log.h"
 #include <memory>
 #include <string>
 

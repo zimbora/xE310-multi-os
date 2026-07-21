@@ -1,11 +1,11 @@
 #pragma once
 
-#include "modem/hal/event_flags_factory.h"
-#include "modem/hal/fixed_string.h"
-#include "modem/hal/message_channel_factory.h"
-#include "modem/hal/message_queue_interface.h"
+#include "hal/event_flags_factory.h"
+#include "hal/fixed_string.h"
+#include "hal/message_channel_factory.h"
+#include "hal/message_queue_interface.h"
 #include "modem/network_lte_config.h"
-#include "modem/hal/static_vector.h"
+#include "hal/static_vector.h"
 #include "modem/xe310.h"
 
 #include <cstdint>

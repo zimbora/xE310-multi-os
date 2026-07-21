@@ -1,4 +1,4 @@
-#include "modem/hal/message_queue_interface.h"
+#include "hal/message_queue_interface.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
@@ -156,17 +156,17 @@ private:
     std::array<struct k_msgq, MAX_CONNECTIONS> rx_queues_{};
     std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> tx_bufs_{};
     std::array<std::array<char, SLOT_SIZE * MAX_QUEUE_CAPACITY>, MAX_CONNECTIONS> rx_bufs_{};
-    struct k_msgq tx_order_queue_{};
-    struct k_msgq rx_order_queue_{};
+    struct k_msgq tx_order_queue_ {};
+    struct k_msgq rx_order_queue_ {};
     std::array<char, MAX_QUEUE_CAPACITY * sizeof(uint8_t)> tx_order_buf_{};
     std::array<char, MAX_QUEUE_CAPACITY * sizeof(uint8_t)> rx_order_buf_{};
-    struct k_mutex mutex_{};
+    struct k_mutex mutex_ {};
     size_t queue_capacity_ = MAX_QUEUE_CAPACITY;
 };
 
 } // namespace modem
 
-#include "modem/hal/message_queue_factory.h"
+#include "hal/message_queue_factory.h"
 
 namespace modem {
 

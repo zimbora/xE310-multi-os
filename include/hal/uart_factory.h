@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/hal/uart_interface.h"
+#include "hal/uart_interface.h"
 #include <memory>
 
 namespace modem {

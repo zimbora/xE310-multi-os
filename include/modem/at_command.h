@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/hal/fixed_string.h"
+#include "hal/fixed_string.h"
 
 #include <cstdint>
 #include <string_view>

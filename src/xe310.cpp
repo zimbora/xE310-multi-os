@@ -1,7 +1,7 @@
 #include "modem/xe310.h"
 #include "modem/at_command.h"
-#include "modem/hal/log.h"
-#include "modem/hal/timer_factory.h"
+#include "hal/log.h"
+#include "hal/timer_factory.h"
 
 #include <cstdio>
 #include <cstdlib>

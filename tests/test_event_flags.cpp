@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "modem/hal/event_flags_factory.h"
+#include "hal/event_flags_factory.h"
 
 #include <thread>
 

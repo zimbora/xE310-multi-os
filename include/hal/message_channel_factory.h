@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/hal/message_channel_interface.h"
+#include "hal/message_channel_interface.h"
 
 #include <memory>
 

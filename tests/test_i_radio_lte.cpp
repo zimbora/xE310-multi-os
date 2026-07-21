@@ -1,8 +1,8 @@
 #include "i_radio_lte_internal.h"
 #include "modem/i_radio_lte.h"
-#include "modem/hal/modem_controller.h"
+#include "hal/modem_controller.h"
 #include "modem/network_lte.h"
-#include "modem/hal/uart_interface.h"
+#include "hal/uart_interface.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

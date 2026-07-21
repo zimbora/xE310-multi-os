@@ -19,8 +19,8 @@ Examples:
 
 Relevant interfaces:
 
-- `include/modem/hal/message_channel_interface.h`
-- `include/modem/hal/message_channel_factory.h`
+- `include/hal/message_channel_interface.h`
+- `include/hal/message_channel_factory.h`
 - `include/modem/i_radio_lte.h` (`RadioLteChannels` wrapper)
 
 ## message_queue Usage (Socket Data)
@@ -47,8 +47,8 @@ Examples:
 
 Relevant interfaces:
 
-- `include/modem/hal/message_queue_interface.h`
-- `include/modem/hal/message_queue_factory.h`
+- `include/hal/message_queue_interface.h`
+- `include/hal/message_queue_factory.h`
 - `include/modem/i_radio_lte.h` (`IRadioLte::tx_write` / `IRadioLte::rx_read`)
 - `include/modem/network_lte.h` / `src/network_lte.cpp`
 
@@ -71,8 +71,8 @@ Guidelines:
 
 Relevant interfaces:
 
-- `include/modem/hal/event_flags_interface.h`
-- `include/modem/hal/event_flags_factory.h`
+- `include/hal/event_flags_interface.h`
+- `include/hal/event_flags_factory.h`
 - `include/modem/i_radio_lte.h`
 
 ## Selection Rule

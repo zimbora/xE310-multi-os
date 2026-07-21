@@ -1,4 +1,4 @@
-#include "modem/hal/uart_interface.h"
+#include "hal/uart_interface.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
@@ -27,7 +27,7 @@ public:
             return UartError::invalid_config;
         }
 
-        struct uart_config uart_cfg{};
+        struct uart_config uart_cfg {};
         uart_cfg.baudrate = config.baud_rate;
         uart_cfg.data_bits = UART_CFG_DATA_BITS_8;
         uart_cfg.stop_bits = (config.stop_bits == 2) ? UART_CFG_STOP_BITS_2 : UART_CFG_STOP_BITS_1;
@@ -100,7 +100,7 @@ private:
 
 } // namespace modem
 
-#include "modem/hal/uart_factory.h"
+#include "hal/uart_factory.h"
 
 namespace modem {
 

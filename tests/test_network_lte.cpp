@@ -1,5 +1,5 @@
 #include "modem/network_lte.h"
-#include "modem/hal/modem_controller.h"
+#include "hal/modem_controller.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

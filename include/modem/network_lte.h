@@ -1,9 +1,9 @@
 #pragma once
 
-#include "modem/hal/trace_mutex.h"
+#include "hal/trace_mutex.h"
 #include "modem/i_radio_lte.h"
-#include "modem/hal/message_queue_factory.h"
-#include "modem/hal/timer_factory.h"
+#include "hal/message_queue_factory.h"
+#include "hal/timer_factory.h"
 #include "modem/xe310.h"
 
 #include <cstdint>

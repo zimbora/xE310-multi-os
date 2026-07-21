@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/hal/timer_interface.h"
+#include "hal/timer_interface.h"
 #include <memory>
 
 namespace modem {

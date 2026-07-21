@@ -1,6 +1,6 @@
 #include "app_rpc_server.h"
 
-#include "modem/hal/log.h"
+#include "hal/log.h"
 #include "rpc_helpers.h"
 
 #include <algorithm>

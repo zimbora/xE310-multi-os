@@ -1,4 +1,4 @@
-#include "modem/hal/message_channel_factory.h"
+#include "hal/message_channel_factory.h"
 
 #ifdef MODEM_PLATFORM_WINDOWS
 
