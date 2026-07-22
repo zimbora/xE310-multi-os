@@ -9,4 +9,10 @@ manifest:
     - name: zephyr
       remote: zephyrproject-rtos
       revision: v4.1.0
-      import: true
+      import:
+        name-allowlist:
+          - hal_nordic
+          - nrfx
+          - cmsis
+          - mbedtls
+          - picolibc
