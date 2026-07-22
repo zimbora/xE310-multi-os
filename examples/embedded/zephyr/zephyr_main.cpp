@@ -3,12 +3,12 @@
 
 #include "modem/network_lte.h"
 #include "modem/xe310.h"
-#include "modem/modem_controller.h"
-#include "modem/uart_factory.h"
-#include "modem/message_queue_interface.h"
+#include "hal/modem_controller.h"
+#include "hal/uart_factory.h"
+#include "hal/message_queue_interface.h"
 #include "modem/i_radio_lte.h"
-#include "modem/timer_factory.h"
-#include "modem/log.h"
+#include "hal/timer_factory.h"
+#include "hal/log.h"
 #include "i_radio_lte_internal.h"
 #include <memory>
 #include <string>

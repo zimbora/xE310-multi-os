@@ -127,7 +127,7 @@ install(TARGETS modem_xe310
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(DIRECTORY include/modem
+install(DIRECTORY include/modem include/hal
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

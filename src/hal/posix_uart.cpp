@@ -1,4 +1,4 @@
-#include "modem/uart_interface.h"
+#include "hal/uart_interface.h"
 
 #ifdef MODEM_PLATFORM_POSIX
 
@@ -184,7 +184,7 @@ private:
 
 } // namespace modem
 
-#include "modem/uart_factory.h"
+#include "hal/uart_factory.h"
 
 namespace modem {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modem/fixed_string.h"
+#include "hal/fixed_string.h"
 #include "modem/xe310.h"
 
 #include <cstdint>

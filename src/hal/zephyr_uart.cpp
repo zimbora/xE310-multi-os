@@ -1,4 +1,4 @@
-#include "modem/uart_interface.h"
+#include "hal/uart_interface.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
@@ -100,7 +100,7 @@ private:
 
 } // namespace modem
 
-#include "modem/uart_factory.h"
+#include "hal/uart_factory.h"
 
 namespace modem {
 

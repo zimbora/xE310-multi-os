@@ -1,4 +1,4 @@
-#include "modem/event_flags_factory.h"
+#include "hal/event_flags_factory.h"
 
 #ifdef MODEM_PLATFORM_WINDOWS
 

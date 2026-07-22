@@ -1,4 +1,4 @@
-#include "modem/event_flags_factory.h"
+#include "hal/event_flags_factory.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 

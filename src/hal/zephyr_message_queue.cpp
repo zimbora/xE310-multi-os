@@ -1,4 +1,4 @@
-#include "modem/message_queue_interface.h"
+#include "hal/message_queue_interface.h"
 
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
 
@@ -166,7 +166,7 @@ private:
 
 } // namespace modem
 
-#include "modem/message_queue_factory.h"
+#include "hal/message_queue_factory.h"
 
 namespace modem {
 

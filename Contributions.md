@@ -41,7 +41,7 @@ Before considering a task complete, run static analysis checks when code changes
 Required checks:
 
 ```bash
-clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
+clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h include/hal/*.h
 clang-tidy --extra-arg="-Iinclude" --extra-arg="-std=c++17" --warnings-as-errors="*" src/*.cpp
 cppcheck --enable=all --inline-suppr --suppress=missingIncludeSystem --suppress=unusedFunction --suppress=normalCheckLevelMaxBranches --suppress=checkersReport --error-exitcode=1 --std=c++17 -I include src/ include/
 ```

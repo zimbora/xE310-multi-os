@@ -1,4 +1,4 @@
-#include "modem/message_queue_interface.h"
+#include "hal/message_queue_interface.h"
 
 #ifdef MODEM_PLATFORM_WINDOWS
 
@@ -130,7 +130,7 @@ private:
 
 } // namespace modem
 
-#include "modem/message_queue_factory.h"
+#include "hal/message_queue_factory.h"
 
 namespace modem {
 

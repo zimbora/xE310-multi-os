@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "modem/message_channel_factory.h"
+#include "hal/message_channel_factory.h"
 
 #include <cstring>
 #include <thread>

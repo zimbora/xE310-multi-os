@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "modem/message_queue_interface.h"
-#include "modem/message_queue_factory.h"
+#include "hal/message_queue_interface.h"
+#include "hal/message_queue_factory.h"
 
 #include <thread>
 #include <cstring>

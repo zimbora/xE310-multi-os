@@ -1,5 +1,5 @@
 #include "modem/at_command.h"
-#include "modem/log.h"
+#include "hal/log.h"
 
 #include <algorithm>
 #include <string_view>

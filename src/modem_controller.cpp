@@ -1,6 +1,6 @@
-#include "modem/modem_controller.h"
-#include "modem/log.h"
-#include "modem/timer_factory.h"
+#include "hal/modem_controller.h"
+#include "hal/log.h"
+#include "hal/timer_factory.h"
 
 #include <cstring>
 

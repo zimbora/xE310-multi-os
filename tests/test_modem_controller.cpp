@@ -1,4 +1,4 @@
-#include "modem/modem_controller.h"
+#include "hal/modem_controller.h"
 
 #include <cstring>
 #include <gmock/gmock.h>

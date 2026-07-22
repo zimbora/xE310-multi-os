@@ -28,7 +28,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Check clang-format
-        run: clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h
+        run: clang-format --dry-run --Werror src/*.cpp src/hal/*.cpp include/modem/*.h include/hal/*.h
 
   clang-tidy:
     name: clang-tidy

@@ -1,4 +1,4 @@
-#include "modem/timer_interface.h"
+#include "hal/timer_interface.h"
 
 #ifdef MODEM_PLATFORM_POSIX
 
@@ -141,7 +141,7 @@ private:
 
 } // namespace modem
 
-#include "modem/timer_factory.h"
+#include "hal/timer_factory.h"
 
 namespace modem {
 
