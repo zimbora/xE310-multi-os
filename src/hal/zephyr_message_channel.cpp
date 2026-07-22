@@ -70,7 +70,7 @@ private:
     }
 
     size_t capacity_ = MAX_CAPACITY;
-    struct k_msgq queue_ {};
+    struct k_msgq queue_{};
     std::array<char, SLOT_SIZE * MAX_CAPACITY> buffer_{};
 };
 
