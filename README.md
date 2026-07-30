@@ -33,6 +33,50 @@ Code style, naming conventions, formatting, and static analysis rules are docume
 
 Build commands and log-level build examples are documented in [Build.md](Build.md).
 
+### Windows Build Script Options
+
+Use `build_vs.ps1` for Visual Studio builds:
+
+```powershell
+.\build_vs.ps1 [options] [extra CMake args]
+```
+
+Supported options:
+
+- `-Config <Debug|Release|RelWithDebInfo|MinSizeRel>`: select the build configuration (default: `Release`).
+- `-Clean`: remove previous `build/` output and in-source CMake artifacts before configuring.
+- `-WithTests`: compile test targets (`MODEM_BUILD_TESTS=ON`).
+- `-Test`: run `ctest` after build (also enables test compilation automatically).
+- `-NoTests`: force-disable test compilation (`MODEM_BUILD_TESTS=OFF`), even if `-WithTests` or `-Test` was provided.
+- `-D<VAR>=<VALUE>`: forward CMake definitions.
+
+Log-level definitions:
+
+- Preferred CMake variables: `-DMODEM_LOG_LEVEL=<0..4>` and `-DNETWORK_LOG_LEVEL=<0..4>`
+- Compatibility aliases also accepted: `-DMODEM_MODEM_LOG=<0..4>` and `-DMODEM_NETWORK_LOG=<0..4>`
+
+Examples:
+
+```powershell
+# Default build (tests are not compiled)
+.\build_vs.ps1
+
+# Build and run tests
+.\build_vs.ps1 -WithTests -Test
+
+# Debug logging levels
+.\build_vs.ps1 -DMODEM_LOG_LEVEL=4 -DNETWORK_LOG_LEVEL=4
+```
+
+### CMake Compile Options
+
+These options can be passed directly to CMake with `-D<VAR>=<VALUE>`:
+
+- `MODEM_BUILD_TESTS` (`OFF` by default): enable with `ON` to compile desktop tests.
+- `MODEM_BUILD_SHARED` (`OFF` by default): build shared library instead of static.
+- `MODEM_LOG_LEVEL` (`3` default): modem logging level (`0..4`).
+- `NETWORK_LOG_LEVEL` (`3` default): network logging level (`0..4`).
+
 ## Contributions
 
 Contribution workflow, commit message rules, changelog generation, and validation commands are documented in [Contributions.md](Contributions.md).
