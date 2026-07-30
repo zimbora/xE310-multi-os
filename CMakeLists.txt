@@ -17,7 +17,7 @@ project(modem_xe310 VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(MODEM_BUILD_TESTS "Build unit tests" ON)
+option(MODEM_BUILD_TESTS "Build unit tests" OFF)
 option(MODEM_BUILD_SHARED "Build shared library" OFF)
 
 set(MODEM_LOG_LEVEL "3" CACHE STRING "Compile-time modem log level (0=none,1=err,2=wrn,3=inf,4=dbg)")
@@ -157,8 +157,10 @@ if(NOT MODEM_PLATFORM STREQUAL "zephyr")
         target_link_libraries(modem_app PRIVATE Ws2_32)
     endif()
 
-    add_executable(test_xe310 examples/desktop/test_xe310.cpp)
-    target_link_libraries(test_xe310 PRIVATE modem_xe310)
+    if(MODEM_BUILD_TESTS)
+        add_executable(test_xe310 examples/desktop/test_xe310.cpp)
+        target_link_libraries(test_xe310 PRIVATE modem_xe310)
+    endif()
 endif()
 
 # --- Tests (desktop only) ---
