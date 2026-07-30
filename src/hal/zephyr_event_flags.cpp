@@ -21,7 +21,7 @@ public:
     uint32_t get() const override { return k_event_test(const_cast<struct k_event*>(&event_), ~0U); }
 
 private:
-    struct k_event event_ {};
+    struct k_event event_{};
 };
 
 EventFlagsHandle create_platform_event_flags() {

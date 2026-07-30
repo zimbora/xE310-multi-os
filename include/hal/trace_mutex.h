@@ -40,8 +40,8 @@ public:
     }
 
 private:
-    struct k_mutex m_ {};
-    struct k_condvar cv_ {};
+    struct k_mutex m_{};
+    struct k_condvar cv_{};
 #else
     void lock() { m_.lock(); }
     void unlock() { m_.unlock(); }
