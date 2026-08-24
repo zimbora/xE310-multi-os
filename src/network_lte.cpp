@@ -322,10 +322,11 @@ bool NetworkLte::force_psm() {
         st_timer->stop();
     }
 
-    modem_.set_psm_urc(false);          // enable PSM URCs in normal mode
-    modem_.set_registration_urc(false); // enable registration URCs in normal mode
-    modem_.set_pdp_urc(false);          // enable PDP URCs in normal mode
-    modem_.disable_all_notifyev();
+    modem_.set_psm_urc(false);          // disable PSM URCs
+    modem_.set_cell_state_urc(false);   // disable CELL scan events
+    modem_.set_registration_urc(false); // disable registration URCs
+    modem_.set_pdp_urc(false);          // disable PDP URCs
+    modem_.disable_all_notifyev();      // disable all notifications
 
     bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will
@@ -391,9 +392,10 @@ bool NetworkLte::force_psm() {
     }
 
     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+    modem_.set_cell_state_urc(true);   // enable CELL scan events
     modem_.set_registration_urc(true); // enable registration URCs in normal mode
     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
-    modem_.set_plmnsearchexh_notify(true);
+    modem_.set_plmnsearchexh_notify(true); // enable PLMNSEARCHEXH notifications
 
     return fPsmModeAttached; // return whether PSM mode was successfully entered
 }
@@ -887,6 +889,7 @@ void NetworkLte::execute_actions() {
                         modem_.set_telit_psm(cfg);
 
                     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+                    modem_.set_cell_state_urc(true);   // enable CELL scan events
                     modem_.set_registration_urc(true); // enable registration URCs in normal mode
                     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
                     modem_.set_plmnsearchexh_notify(true);
@@ -1135,6 +1138,7 @@ void NetworkLte::execute_actions() {
             change_state(NetworkLteState::transparent_mode);
             modem_.set_psm_urc(
                 false); // disable PSM URCs in transparent mode to avoid interfering with raw data reception
+            modem_.set_cell_state_urc(false);   // disable CELL scan events
             modem_.set_registration_urc(
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
@@ -1149,6 +1153,7 @@ void NetworkLte::execute_actions() {
             // normal mode settings, etc.)
             NETWORK_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
             modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+            modem_.set_cell_state_urc(true);   // enable CELL scan events
             modem_.set_registration_urc(true); // enable registration URCs in normal mode
             modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
             modem_.set_plmnsearchexh_notify(true);
@@ -1394,6 +1399,76 @@ void NetworkLte::handle_urc(std::string_view urc) {
             on_event(NetworkLteEvent::context_rejected);
         }
         // NW REACT (network requesting reactivation) — no action needed
+        return;
+    }
+    // %STATEV: <event>,<rat>,<scan_type>[,<scan_effort>,<scan_reason> | ,<scan_reason>]  — cell scan / RRC state events
+    if (urc.substr(0, 8) == "%STATEV:") {
+        auto trim_sv = [](std::string_view s) -> std::string_view {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
+            while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
+            return s;
+        };
+
+        std::string_view payload = urc.substr(8);
+        constexpr size_t MAX_FIELDS = 5;
+        std::string_view fields[MAX_FIELDS];
+        size_t field_count = 0;
+        size_t pos = 0;
+        while (pos <= payload.size() && field_count < MAX_FIELDS) {
+            auto comma = payload.find(',', pos);
+            if (comma == std::string_view::npos) {
+                fields[field_count++] = trim_sv(payload.substr(pos));
+                break;
+            }
+            fields[field_count++] = trim_sv(payload.substr(pos, comma - pos));
+            pos = comma + 1;
+        }
+
+        if (field_count < 2) {
+            NETWORK_LOG_WRN("Malformed %%STATEV URC: %.*s", static_cast<int>(urc.size()), urc.data());
+            return;
+        }
+
+        int statev_event = std::atoi(std::string(fields[0]).c_str());
+        int rat = std::atoi(std::string(fields[1]).c_str());
+        // <scan_type> is omitted by some firmware variants for events 2-7 (observed as "%STATEV: 2,0")
+        int scan_type = (field_count > 2) ? std::atoi(std::string(fields[2]).c_str()) : -1;
+
+        switch (statev_event) {
+            case 0: { // Start Scan: extra fields are <scan_effort>,<scan_reason>
+                // cppcheck-suppress unreadVariable
+                int scan_effort = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 3) ? std::atoi(std::string(fields[3]).c_str()) : -1;
+                // cppcheck-suppress unreadVariable
+                int scan_reason = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 4) ? std::atoi(std::string(fields[4]).c_str()) : -1;
+                NETWORK_LOG_DBG("STATEV: Start Scan rat=%d scan_type=%d scan_effort=%d scan_reason=%d", rat, scan_type,
+                                scan_effort, scan_reason);
+            } break;
+            case 1: { // Fail Scan: extra field is <scan_reason>
+                // cppcheck-suppress unreadVariable
+                int scan_reason = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 3) ? std::atoi(std::string(fields[3]).c_str()) : -1;
+                NETWORK_LOG_DBG("STATEV: Fail Scan rat=%d scan_type=%d scan_reason=%d", rat, scan_type, scan_reason);
+            } break;
+            case 2: // NOLINT(bugprone-branch-clone) — distinct events logged separately for clarity, not merged
+                NETWORK_LOG_DBG("STATEV: Camped on Cell rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 3:
+                NETWORK_LOG_DBG("STATEV: RRC Connection establishment started rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 4: NETWORK_LOG_DBG("STATEV: Start Rescan rat=%d scan_type=%d", rat, scan_type); break;
+            case 5:
+                NETWORK_LOG_DBG("STATEV: RRC Connection established (Connected) rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 6: NETWORK_LOG_WRN("STATEV: No Suitable Cells Found rat=%d scan_type=%d", rat, scan_type); break;
+            case 7:
+                NETWORK_LOG_ERR("STATEV: All Registration Attempts Failed rat=%d scan_type=%d", rat, scan_type);
+                break;
+            default:
+                NETWORK_LOG_WRN("STATEV: Unknown event %d rat=%d scan_type=%d", statev_event, rat, scan_type);
+                break;
+        }
         return;
     }
     // #PSMURC: <ActiveTime>,<PSMTime>  →  modem entered PSM

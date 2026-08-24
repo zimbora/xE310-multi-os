@@ -349,6 +349,9 @@ public:
 
     // --- Network Registration ---
 
+    // AT%STATEV - GET status for CELL scan
+    ModemStatus set_cell_state_urc(bool enable);
+
     // AT+CEREG=2 — Enable network registration URC with location info and IP address.
     ModemStatus set_registration_urc(bool enable);
 

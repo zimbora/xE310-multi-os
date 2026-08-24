@@ -660,6 +660,11 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
     return ModemStatus::ok;
 }
 
+ModemStatus xE310::set_cell_state_urc(bool enable) {
+    AtResponse response;
+    return send_raw(enable ? "AT%STATEV=1" : "AT%STATEV=0", response);
+}
+
 ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
     return send_raw(enable ? "AT+CEREG=4" : "AT+CEREG=0", response);
@@ -998,7 +1003,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         cell.rx_lev = std::atoi(to_cstr(extract_value(line, "rxLev:")));
         cell.mcc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mcc:")), nullptr, 16));
         cell.mnc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mnc:")), nullptr, 16));
-        cell.cell_id = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellid:")), nullptr, 16));
+        cell.cell_id = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellId:")), nullptr, 16));
         cell.tac = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "tac:")), nullptr, 16));
         cell.cell_identity =
             static_cast<uint64_t>(std::strtoull(to_cstr(extract_value(line, "cellIdentity:")), nullptr, 16));

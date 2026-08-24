@@ -290,6 +290,8 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     // Known URC prefixes to recognise
     static const char* const kPrefixes[] = {"+CREG:",      "+CGREG:",     "+CEREG:", // registration
                                             "+CGEV:",                                // PDP context events
+                                            "%STATEV:",                              // CELL scan
+                                            "%NOTIFYEV:",                            // Module notifications
                                             "#PSMURC:",                              // PSM entry
                                             "+CME ERROR:", "+CMS ERROR:",            // async errors
                                             "#CSURV:",                               // survey URC
