@@ -673,7 +673,8 @@ ModemStatus xE310::set_registration_urc(bool enable) {
 ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "AT%%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",%u", static_cast<unsigned>(rat));
+    // <param> is sent as a quoted string, not a bare integer (confirmed against modem terminal capture)
+    snprintf(cmd, sizeof(cmd), "AT%%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",\"%u\"", static_cast<unsigned>(rat));
     return send_raw(cmd, response);
 }
 
