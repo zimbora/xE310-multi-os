@@ -568,7 +568,7 @@ TEST_F(Xe310Test, GetBandsMalformedResponse) {
 }
 
 TEST_F(Xe310Test, DeleteMruListNbIot) {
-    expect_command_ok("AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",2", "");
+    expect_command_ok("AT%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",\"2\"", "");
     EXPECT_EQ(modem_->delete_mru_list(MruListRat::nb_iot), ModemStatus::ok);
 }
 
@@ -665,7 +665,7 @@ TEST_F(Xe310Test, PowerRadio) {
 }
 
 TEST_F(Xe310Test, PowerOffRadio) {
-    expect_command_ok("AT+CFUN=0", "");
+    expect_command_ok("AT+CFUN=4", "");
     EXPECT_EQ(modem_->power_off_radio(), ModemStatus::ok);
 }
 

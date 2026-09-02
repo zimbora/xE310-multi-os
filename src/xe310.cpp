@@ -385,7 +385,7 @@ ModemStatus xE310::power_radio() {
 
 ModemStatus xE310::power_off_radio() {
     AtResponse response;
-    return send_raw("AT+CFUN=0", response, 15000);
+    return send_raw("AT+CFUN=4", response, 15000);
 }
 
 ModemStatus xE310::shutdown() {
@@ -660,16 +660,74 @@ ModemStatus xE310::get_bands(BandConfig& bands) {
     return ModemStatus::ok;
 }
 
+ModemStatus xE310::set_cell_state_urc(bool enable) {
+    AtResponse response;
+    return send_raw(enable ? "AT%STATEV=1" : "AT%STATEV=0", response);
+}
+
 ModemStatus xE310::set_registration_urc(bool enable) {
     AtResponse response;
     return send_raw(enable ? "AT+CEREG=4" : "AT+CEREG=0", response);
 }
 
+// call it when modem moves location
 ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
     char cmd[64];
-    snprintf(cmd, sizeof(cmd), "AT%%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",%u", static_cast<unsigned>(rat));
+    // <param> is sent as a quoted string, not a bare integer (confirmed against modem terminal capture)
+    snprintf(cmd, sizeof(cmd), "AT%%TRSHCMD=\"BSPFILE\",\"ERASE_LTEPP\",\"%u\"", static_cast<unsigned>(rat));
     return send_raw(cmd, response);
+}
+
+// call it on modem reset or first time boot
+ModemStatus xE310::set_scan_tables() {
+    AtResponse response;
+    auto status = send_raw("AT%SETCFG=\"SCANTABLE\",\"0\",\"8\"", response); // disable rows from table 8
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 0, row rep: 1, row type: One Time, scan type: MRU, scan effort: Light, repose interval: 0
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"0\",\"1\",\"0\",\"0\",\"0\",\"0\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 1, row rep: 5, row type: Cyclic, scan type: MRU, scan effort: Moderate, repose interval: 3
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"1\",\"5\",\"1\",\"0\",\"1\",\"3\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 2, row rep: 1, row type: One Time, scan type: MRU+CBS, scan effort: Light, repose interval:
+    // 0
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"2\",\"1\",\"0\",\"4\",\"0\",\"0\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 3, row rep: 1, row type: Cyclic, scan type: MRU+CBS, scan effort: Moderate, repose
+    // interval: 3
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"3\",\"1\",\"1\",\"4\",\"1\",\"3\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 11, row rep: 1, row type: Cyclic, scan type: MRU+FBS, scan effort: Heavy, repose interval:
+    // 10
+    return send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"11\",\"1\",\"1\",\"6\",\"2\",\"10\"", response);
+}
+
+// call it on modem reset or first time boot
+ModemStatus xE310::select_tables() {
+    AtResponse response;
+    auto status = send_raw("AT%SETCFG=\"SCANTABLESELECTOR\",\"0\",\"8\"", response); // select table 8 on Power Up
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // select table 8 for OOC (Out of coverage)
+    return send_raw("AT%SETCFG=\"SCANTABLESELECTOR\",\"1\",\"8\"", response);
 }
 
 ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tech) {
@@ -998,7 +1056,7 @@ ModemStatus xE310::scan_networks(CsurvResult& result, uint32_t start_ch, uint32_
         cell.rx_lev = std::atoi(to_cstr(extract_value(line, "rxLev:")));
         cell.mcc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mcc:")), nullptr, 16));
         cell.mnc = static_cast<uint16_t>(std::strtoul(to_cstr(extract_value(line, "mnc:")), nullptr, 16));
-        cell.cell_id = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellid:")), nullptr, 16));
+        cell.cell_id = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "cellId:")), nullptr, 16));
         cell.tac = static_cast<uint32_t>(std::strtoul(to_cstr(extract_value(line, "tac:")), nullptr, 16));
         cell.cell_identity =
             static_cast<uint64_t>(std::strtoull(to_cstr(extract_value(line, "cellIdentity:")), nullptr, 16));

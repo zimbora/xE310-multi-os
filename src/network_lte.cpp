@@ -323,6 +323,7 @@ bool NetworkLte::force_psm() {
     }
 
     modem_.set_psm_urc(false);          // disable PSM URCs
+    modem_.set_cell_state_urc(false);   // disable CELL scan events
     modem_.set_registration_urc(false); // disable registration URCs
     modem_.set_pdp_urc(false);          // disable PDP URCs
     modem_.disable_all_notifyev();      // disable all notifications
@@ -391,6 +392,7 @@ bool NetworkLte::force_psm() {
     }
 
     modem_.set_psm_urc(true);              // enable PSM URCs in normal mode
+    modem_.set_cell_state_urc(true);       // enable CELL scan events
     modem_.set_registration_urc(true);     // enable registration URCs in normal mode
     modem_.set_pdp_urc(true);              // enable PDP URCs in normal mode
     modem_.set_plmnsearchexh_notify(true); // enable PLMNSEARCHEXH notifications
@@ -904,6 +906,7 @@ void NetworkLte::execute_actions() {
                         modem_.set_telit_psm(cfg);
 
                     modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+                    modem_.set_cell_state_urc(true);   // enable CELL scan events
                     modem_.set_registration_urc(true); // enable registration URCs in normal mode
                     modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
                     modem_.set_plmnsearchexh_notify(true);
@@ -1160,6 +1163,7 @@ void NetworkLte::execute_actions() {
             change_state(NetworkLteState::transparent_mode);
             modem_.set_psm_urc(
                 false); // disable PSM URCs in transparent mode to avoid interfering with raw data reception
+            modem_.set_cell_state_urc(false); // disable CELL scan events
             modem_.set_registration_urc(
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
@@ -1174,6 +1178,7 @@ void NetworkLte::execute_actions() {
             // normal mode settings, etc.)
             NETWORK_LOG_INF("Modem leaving transparent mode (ready to receive AT commands)");
             modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
+            modem_.set_cell_state_urc(true);   // enable CELL scan events
             modem_.set_registration_urc(true); // enable registration URCs in normal mode
             modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
             modem_.set_plmnsearchexh_notify(true);

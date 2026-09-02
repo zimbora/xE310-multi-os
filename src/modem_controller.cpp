@@ -290,6 +290,8 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     // Known URC prefixes to recognise
     static const char* const kPrefixes[] = {"+CREG:",      "+CGREG:",     "+CEREG:", // registration
                                             "+CGEV:",                                // PDP context events
+                                            "%STATEV:",                              // CELL scan
+                                            "%NOTIFYEV:",                            // Module notifications
                                             "#PSMURC:",                              // PSM entry
                                             "+CME ERROR:", "+CMS ERROR:",            // async errors
                                             "#CSURV:",                               // survey URC
@@ -306,10 +308,10 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     if (err == UartError::ok && bytes_read > 0) {
         buffer[bytes_read] = '\0';
         std::string_view raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
-
+        /*
         MODEM_LOG_DBG("<< (URC poll raw): %.*s [%zu bytes]", (int)bytes_read, reinterpret_cast<const char*>(buffer),
                       bytes_read);
-
+        */
         // Append and parse only complete CRLF-terminated lines.
         urc_rx_buffer_.append(raw_chunk);
     } else if (err != UartError::timeout && err != UartError::ok) {
