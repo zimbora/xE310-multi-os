@@ -385,13 +385,13 @@ ModemStatus xE310::power_radio() {
 
 ModemStatus xE310::power_off_radio() {
     AtResponse response;
-    return send_raw("AT+CFUN=0", response, 15000);
+    return send_raw("AT+CFUN=4", response, 15000);
 }
 
 ModemStatus xE310::shutdown() {
     AtResponse response;
     // go to DH0 mode
-    // send_raw("AT+CFUN=4", response, 15000);
+    send_raw("AT+CFUN=4", response, 15000);
     return send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
     // return send_raw("AT#SHDN", response); // use on/off
 }

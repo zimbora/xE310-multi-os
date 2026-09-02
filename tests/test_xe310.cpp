@@ -665,7 +665,7 @@ TEST_F(Xe310Test, PowerRadio) {
 }
 
 TEST_F(Xe310Test, PowerOffRadio) {
-    expect_command_ok("AT+CFUN=0", "");
+    expect_command_ok("AT+CFUN=4", "");
     EXPECT_EQ(modem_->power_off_radio(), ModemStatus::ok);
 }
 
