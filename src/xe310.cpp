@@ -391,7 +391,7 @@ ModemStatus xE310::power_off_radio() {
 ModemStatus xE310::shutdown() {
     AtResponse response;
     // go to DH0 mode
-    //send_raw("AT+CFUN=4", response, 15000);
+    // send_raw("AT+CFUN=4", response, 15000);
     return send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
     // return send_raw("AT#SHDN", response); // use on/off
 }
@@ -699,19 +699,22 @@ ModemStatus xE310::set_scan_tables() {
         return status;
     }
 
-    // write, table: 8, row: 2, row rep: 1, row type: One Time, scan type: MRU+CBS, scan effort: Light, repose interval: 0
+    // write, table: 8, row: 2, row rep: 1, row type: One Time, scan type: MRU+CBS, scan effort: Light, repose interval:
+    // 0
     status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"2\",\"1\",\"0\",\"4\",\"0\",\"0\"", response);
     if (status != ModemStatus::ok) {
         return status;
     }
 
-    // write, table: 8, row: 3, row rep: 1, row type: Cyclic, scan type: MRU+CBS, scan effort: Moderate, repose interval: 3
+    // write, table: 8, row: 3, row rep: 1, row type: Cyclic, scan type: MRU+CBS, scan effort: Moderate, repose
+    // interval: 3
     status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"3\",\"1\",\"1\",\"4\",\"1\",\"3\"", response);
     if (status != ModemStatus::ok) {
         return status;
     }
 
-    // write, table: 8, row: 11, row rep: 1, row type: Cyclic, scan type: MRU+FBS, scan effort: Heavy, repose interval: 10
+    // write, table: 8, row: 11, row rep: 1, row type: Cyclic, scan type: MRU+FBS, scan effort: Heavy, repose interval:
+    // 10
     return send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"11\",\"1\",\"1\",\"6\",\"2\",\"10\"", response);
 }
 

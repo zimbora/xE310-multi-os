@@ -391,10 +391,10 @@ bool NetworkLte::force_psm() {
         }
     }
 
-    modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
-    modem_.set_cell_state_urc(true);   // enable CELL scan events
-    modem_.set_registration_urc(true); // enable registration URCs in normal mode
-    modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
+    modem_.set_psm_urc(true);              // enable PSM URCs in normal mode
+    modem_.set_cell_state_urc(true);       // enable CELL scan events
+    modem_.set_registration_urc(true);     // enable registration URCs in normal mode
+    modem_.set_pdp_urc(true);              // enable PDP URCs in normal mode
     modem_.set_plmnsearchexh_notify(true); // enable PLMNSEARCHEXH notifications
 
     return fPsmModeAttached; // return whether PSM mode was successfully entered
@@ -914,7 +914,7 @@ void NetworkLte::execute_actions() {
             }
         } break;
         case ModemAction::attach_network: {
-            //modem_.delete_mru_list(MruListRat::lte_m);
+            // modem_.delete_mru_list(MruListRat::lte_m);
             modem_.power_off_radio();
             // modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
             // modem_.network_attach();
@@ -1146,7 +1146,7 @@ void NetworkLte::execute_actions() {
             change_state(NetworkLteState::transparent_mode);
             modem_.set_psm_urc(
                 false); // disable PSM URCs in transparent mode to avoid interfering with raw data reception
-            modem_.set_cell_state_urc(false);   // disable CELL scan events
+            modem_.set_cell_state_urc(false); // disable CELL scan events
             modem_.set_registration_urc(
                 false); // disable registration URCs in transparent mode to avoid interfering with raw data reception
             modem_.set_pdp_urc(
