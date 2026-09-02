@@ -385,13 +385,13 @@ ModemStatus xE310::power_radio() {
 
 ModemStatus xE310::power_off_radio() {
     AtResponse response;
-    return send_raw("AT+CFUN=4", response, 15000);
+    return send_raw("AT+CFUN=0", response, 15000);
 }
 
 ModemStatus xE310::shutdown() {
     AtResponse response;
     // go to DH0 mode
-    send_raw("AT+CFUN=4", response, 15000);
+    //send_raw("AT+CFUN=4", response, 15000);
     return send_raw("AT+CFUN=11", response, 15000); // use reset button on devkit to wake up modem
     // return send_raw("AT#SHDN", response); // use on/off
 }
@@ -670,6 +670,7 @@ ModemStatus xE310::set_registration_urc(bool enable) {
     return send_raw(enable ? "AT+CEREG=4" : "AT+CEREG=0", response);
 }
 
+// call it when modem moves location
 ModemStatus xE310::delete_mru_list(MruListRat rat) {
     AtResponse response;
     char cmd[64];
@@ -678,6 +679,7 @@ ModemStatus xE310::delete_mru_list(MruListRat rat) {
     return send_raw(cmd, response);
 }
 
+// call it on modem reset or first time boot
 ModemStatus xE310::set_scan_tables() {
     AtResponse response;
     auto status = send_raw("AT%SETCFG=\"SCANTABLE\",\"0\",\"8\"", response); // disable rows from table 8
@@ -713,6 +715,7 @@ ModemStatus xE310::set_scan_tables() {
     return send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"11\",\"1\",\"1\",\"6\",\"2\",\"10\"", response);
 }
 
+// call it on modem reset or first time boot
 ModemStatus xE310::select_tables() {
     AtResponse response;
     auto status = send_raw("AT%SETCFG=\"SCANTABLESELECTOR\",\"0\",\"8\"", response); // select table 8 on Power Up
