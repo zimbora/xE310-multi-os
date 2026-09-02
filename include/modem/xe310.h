@@ -249,6 +249,31 @@ struct BandConfig {
     uint64_t lte_mask_over_64 = 0;
 };
 
+/// GNSS fix type for AT$GPSACP <fix>.
+enum class GnssFixType : uint8_t {
+    invalid = 0,
+    invalid_fix = 1,
+    fix_2d = 2,
+    fix_3d = 3,
+};
+
+/// Last acquired GNSS position from AT$GPSACP.
+struct GnssPosition {
+    FixedString<MODEM_SHORT_STR> utc;       ///< UTC time (hhmmss.sss)
+    FixedString<MODEM_SHORT_STR> latitude;  ///< ddmm.mmmm N/S
+    FixedString<MODEM_SHORT_STR> longitude; ///< dddmm.mmmm E/W
+    FixedString<MODEM_SHORT_STR> hdop;      ///< Horizontal dilution of precision
+    FixedString<MODEM_SHORT_STR> altitude;  ///< Mean-sea-level altitude in meters
+    GnssFixType fix = GnssFixType::invalid;
+    FixedString<MODEM_SHORT_STR> cog;  ///< Course over ground (degrees, true)
+    FixedString<MODEM_SHORT_STR> spkm; ///< Speed over ground (km/h)
+    FixedString<MODEM_SHORT_STR> spkn; ///< Speed over ground (knots)
+    FixedString<MODEM_SHORT_STR> date; ///< Fix date (ddmmyy)
+    uint8_t nsat = 0;                  ///< Total number of satellites in use
+    FixedString<MODEM_SHORT_STR> hepe; ///< Horizontal estimated position error (meters)
+    FixedString<MODEM_SHORT_STR> vepe; ///< Vertical estimated position error (meters)
+};
+
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.
 class xE310 {
 public:
@@ -480,6 +505,17 @@ public:
     /// Send a raw AT command string and return the response body.
     ModemStatus send_at_command(std::string_view command, FixedString<AT_RESPONSE_MAX>& response,
                                 uint32_t timeout_ms = 5000);
+
+    // --- GNSS ---
+
+    /// AT$GPSP=<status> — Start/stop the GNSS positioning session (also powers on the GNSS chip the first time).
+    ModemStatus set_gnss_power(bool enable);
+
+    /// AT$GNSSNMEA=<status> — Enable/disable GNSS NMEA URC messages.
+    ModemStatus set_gnss_urc(bool enable);
+
+    /// AT$GPSACP — Get the last acquired GNSS position.
+    ModemStatus get_gnss_position(GnssPosition& pos);
 
     // --- Event Handlers ---
 

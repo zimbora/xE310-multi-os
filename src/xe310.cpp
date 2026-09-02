@@ -1308,6 +1308,65 @@ ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESP
 
 // --- Power Options ---
 
+// --- GNSS ---
+
+ModemStatus xE310::set_gnss_power(bool enable) {
+    AtResponse response;
+    return send_raw(enable ? "AT$GPSP=1" : "AT$GPSP=0", response);
+}
+
+ModemStatus xE310::set_gnss_urc(bool enable) {
+    AtResponse response;
+    return send_raw(enable ? "AT$GNSSNMEA=1" : "AT$GNSSNMEA=0", response);
+}
+
+ModemStatus xE310::get_gnss_position(GnssPosition& pos) {
+    AtResponse response;
+    auto status = send_raw("AT$GPSACP", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // Response body: "$GPSACP: <UTC>,<latitude>,<longitude>,<hdop>,<altitude>,<fix>,<cog>,<spkm>,<spkn>,<date>,
+    //                 <nsat>,<hepe>,<vepe>"
+    std::string_view body = response.body.view();
+    auto colon = body.find(':');
+    if (colon == std::string_view::npos) {
+        return ModemStatus::at_error;
+    }
+    std::string_view params = body.substr(colon + 1);
+
+    // Tokenize on commas
+    FixedString<MODEM_SHORT_STR> fields[13];
+    int field_count = 0;
+    std::string_view sv = params;
+    while (!sv.empty() && field_count < 13) {
+        auto comma = sv.find(',');
+        auto token = (comma == std::string_view::npos) ? sv : sv.substr(0, comma);
+        auto start = token.find_first_not_of(' ');
+        fields[field_count] = (start == std::string_view::npos) ? std::string_view("") : token.substr(start);
+        ++field_count;
+        if (comma == std::string_view::npos) break;
+        sv = sv.substr(comma + 1);
+    }
+
+    if (field_count >= 1) pos.utc = fields[0];
+    if (field_count >= 2) pos.latitude = fields[1];
+    if (field_count >= 3) pos.longitude = fields[2];
+    if (field_count >= 4) pos.hdop = fields[3];
+    if (field_count >= 5) pos.altitude = fields[4];
+    if (field_count >= 6) pos.fix = static_cast<GnssFixType>(std::atoi(fields[5].c_str()));
+    if (field_count >= 7) pos.cog = fields[6];
+    if (field_count >= 8) pos.spkm = fields[7];
+    if (field_count >= 9) pos.spkn = fields[8];
+    if (field_count >= 10) pos.date = fields[9];
+    if (field_count >= 11) pos.nsat = static_cast<uint8_t>(std::atoi(fields[10].c_str()));
+    if (field_count >= 12) pos.hepe = fields[11];
+    if (field_count >= 13) pos.vepe = fields[12];
+
+    return ModemStatus::ok;
+}
+
 // --- Event Handlers ---
 const RegistrationInfo& xE310::registration_info() const {
     return info;

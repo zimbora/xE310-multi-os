@@ -59,6 +59,7 @@ struct NetworkLteConfig {
     uint16_t transparent_timeout_sec =
         300; ///< Timeout for transparent mode in seconds, adjust as needed based on expected time to send AT commands
              ///< and receive responses in transparent mode
+    uint16_t gps_timeout_sec = 60;    ///< Timeout for GNSS fix mode in seconds
     uint8_t max_network_attempts = 2; ///< Timeout for server connection and data transfer
     uint8_t max_attach_retries = 2;
     uint8_t max_pdp_retries = 2;
