@@ -308,10 +308,10 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     if (err == UartError::ok && bytes_read > 0) {
         buffer[bytes_read] = '\0';
         std::string_view raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
-
+        /*
         MODEM_LOG_DBG("<< (URC poll raw): %.*s [%zu bytes]", (int)bytes_read, reinterpret_cast<const char*>(buffer),
                       bytes_read);
-
+        */
         // Append and parse only complete CRLF-terminated lines.
         urc_rx_buffer_.append(raw_chunk);
     } else if (err != UartError::timeout && err != UartError::ok) {

@@ -914,7 +914,8 @@ void NetworkLte::execute_actions() {
             }
         } break;
         case ModemAction::attach_network: {
-            modem_.power_radio();
+            //modem_.delete_mru_list(MruListRat::lte_m);
+            modem_.power_off_radio();
             // modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
             // modem_.network_attach();
             if (nAttachRetries == 0) {
@@ -968,12 +969,16 @@ void NetworkLte::execute_actions() {
 
                 NETWORK_LOG_INF("Starting network attach with default configuration");
                 change_state(NetworkLteState::network_attaching);
+                /*
                 status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
                 if (status != ModemStatus::ok) {
                     NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
                     change_state(NetworkLteState::network_detached);
                     // flag error and stay in the same state to retry later
                 }
+                */
+                modem_.power_radio();
+
             } else if (nAttachRetries < lteConfig.max_attach_retries) {
                 NETWORK_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
 
@@ -1025,12 +1030,15 @@ void NetworkLte::execute_actions() {
                 }
 
                 change_state(NetworkLteState::network_attaching);
+                /*
                 status = modem_.set_operator_auto();
                 if (status != ModemStatus::ok) {
                     NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
                     // flag error and stay in the same state to retry later
                     change_state(NetworkLteState::network_detached);
                 }
+                */
+                modem_.power_radio();
 
             } else {
                 NETWORK_LOG_ERR("Max attach retries reached, giving up");

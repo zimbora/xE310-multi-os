@@ -678,6 +678,52 @@ ModemStatus xE310::delete_mru_list(MruListRat rat) {
     return send_raw(cmd, response);
 }
 
+ModemStatus xE310::set_scan_tables() {
+    AtResponse response;
+    auto status = send_raw("AT%SETCFG=\"SCANTABLE\",\"0\",\"8\"", response); // disable rows from table 8
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 0, row rep: 1, row type: One Time, scan type: MRU, scan effort: Light, repose interval: 0
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"0\",\"1\",\"0\",\"0\",\"0\",\"0\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 1, row rep: 5, row type: Cyclic, scan type: MRU, scan effort: Moderate, repose interval: 3
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"1\",\"5\",\"1\",\"0\",\"1\",\"3\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 2, row rep: 1, row type: One Time, scan type: MRU+CBS, scan effort: Light, repose interval: 0
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"2\",\"1\",\"0\",\"4\",\"0\",\"0\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 3, row rep: 1, row type: Cyclic, scan type: MRU+CBS, scan effort: Moderate, repose interval: 3
+    status = send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"3\",\"1\",\"1\",\"4\",\"1\",\"3\"", response);
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // write, table: 8, row: 11, row rep: 1, row type: Cyclic, scan type: MRU+FBS, scan effort: Heavy, repose interval: 10
+    return send_raw("AT%SETCFG=\"SCANTABLE\",\"1\",\"8\",\"11\",\"1\",\"1\",\"6\",\"2\",\"10\"", response);
+}
+
+ModemStatus xE310::select_tables() {
+    AtResponse response;
+    auto status = send_raw("AT%SETCFG=\"SCANTABLESELECTOR\",\"0\",\"8\"", response); // select table 8 on Power Up
+    if (status != ModemStatus::ok) {
+        return status;
+    }
+
+    // select table 8 for OOC (Out of coverage)
+    return send_raw("AT%SETCFG=\"SCANTABLESELECTOR\",\"1\",\"8\"", response);
+}
+
 ModemStatus xE310::get_registration_status(RegistrationInfo& info, RadioTech tech) {
     AtResponse response;
     const char* cmd = (tech == RadioTech::gsm) ? "AT+CREG?" : "AT+CEREG?";

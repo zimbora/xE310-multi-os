@@ -358,6 +358,12 @@ public:
     /// AT%TRSHCMD="BSPFILE","ERASE_LTEPP",<param> — Delete MRU list for selected RAT.
     ModemStatus delete_mru_list(MruListRat rat);
 
+    /// AT%SETCFG="SCANTABLE",... — Configure scan table 8 rows (disable, then define each row).
+    ModemStatus set_scan_tables();
+
+    /// AT%SETCFG="SCANTABLESELECTOR",... — Select table 8 for Power Up and Out of Coverage scans.
+    ModemStatus select_tables();
+
     /// AT#CSURVC — Network survey (numeric format). Scans all channels in the current band.
     /// Optionally restrict to channels [start_ch, end_ch]. Pass 0 for both to scan full band.
     ModemStatus network_survey(NetworkSurveyResult& result, uint32_t start_ch = 0, uint32_t end_ch = 0);
