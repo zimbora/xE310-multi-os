@@ -502,6 +502,9 @@ public:
     /// AT$GPSP=<status> — Start/stop the GNSS positioning session (also powers on the GNSS chip the first time).
     ModemStatus set_gnss_power(bool enable);
 
+    /// AT$GNSSNMEA=<status> — Enable/disable GNSS NMEA URC messages.
+    ModemStatus set_gnss_urc(bool enable);
+
     /// AT$GPSACP — Get the last acquired GNSS position.
     ModemStatus get_gnss_position(GnssPosition& pos);
 

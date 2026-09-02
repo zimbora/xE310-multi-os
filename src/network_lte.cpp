@@ -322,10 +322,10 @@ bool NetworkLte::force_psm() {
         st_timer->stop();
     }
 
-    modem_.set_psm_urc(false);          // enable PSM URCs in normal mode
-    modem_.set_registration_urc(false); // enable registration URCs in normal mode
-    modem_.set_pdp_urc(false);          // enable PDP URCs in normal mode
-    modem_.disable_all_notifyev();
+    modem_.set_psm_urc(false);          // disable PSM URCs
+    modem_.set_registration_urc(false); // disable registration URCs
+    modem_.set_pdp_urc(false);          // disable PDP URCs
+    modem_.disable_all_notifyev();      // disable all notifications
 
     bool fPsmModeAttached = false;
     // It will try to connect to each availale operator and enter PSM mode, if the modem and network support it. It will
@@ -390,10 +390,10 @@ bool NetworkLte::force_psm() {
         }
     }
 
-    modem_.set_psm_urc(true);          // enable PSM URCs in normal mode
-    modem_.set_registration_urc(true); // enable registration URCs in normal mode
-    modem_.set_pdp_urc(true);          // enable PDP URCs in normal mode
-    modem_.set_plmnsearchexh_notify(true);
+    modem_.set_psm_urc(true);              // enable PSM URCs in normal mode
+    modem_.set_registration_urc(true);     // enable registration URCs in normal mode
+    modem_.set_pdp_urc(true);              // enable PDP URCs in normal mode
+    modem_.set_plmnsearchexh_notify(true); // enable PLMNSEARCHEXH notifications
 
     return fPsmModeAttached; // return whether PSM mode was successfully entered
 }
@@ -579,6 +579,17 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                 }
             }
         } break;
+        case NetworkLteEvent::gps_available: {
+            NETWORK_LOG_INF("GNSS fix available");
+            GnssPosition pos;
+            modem_.get_gnss_position(pos);
+            if (pos.fix > GnssFixType::invalid_fix) {
+                // dispatch message
+                // copy to global struct GnssPosition
+                call_action(ModemAction::leave_gnss_fix);
+            }
+            // otherwise wait for timeout
+        } break;
         case NetworkLteEvent::timeout: {
             if (state_ == NetworkLteState::data_ready && lteConfig.data_ready_timeout_sec == 0) {
                 break; // data_ready_timeout_sec == 0 means the modem should stay alive indefinitely
@@ -593,6 +604,10 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
                                                                   // lost, so we can trigger exit transparent mode to
                                                                   // restart the normal flow and eventually go back to
                                                                   // data ready if the connection is still active
+            } else if (state_ == NetworkLteState::gnss_fix_mode) {
+                call_action(ModemAction::leave_gnss_fix); // if we are in GNSS fix mode and we receive a timeout event,
+                                                          // we can assume the GNSS fix is lost, so we can trigger exit
+                                                          // GNSS fix mode
             } else {
                 call_action(ModemAction::attach_network);
             }
@@ -759,6 +774,7 @@ void NetworkLte::execute_actions() {
         case ModemAction::switch_off_radio: {
 #if defined(PLATFORM_ZEPHYR) || defined(__ZEPHYR__)
             if (lteConfig.fCfunSleep) {
+                modem_.power_off_radio();
                 modem_.shutdown();
                 change_state(NetworkLteState::off_mode);
             } else {
@@ -767,6 +783,7 @@ void NetworkLte::execute_actions() {
             }
 #else
             if (lteConfig.fCfunSleep) {
+                modem_.power_off_radio();
                 modem_.shutdown();
                 change_state(NetworkLteState::off_mode);
             } else {
@@ -911,7 +928,8 @@ void NetworkLte::execute_actions() {
             }
         } break;
         case ModemAction::attach_network: {
-            modem_.power_radio();
+            // modem_.delete_mru_list(MruListRat::lte_m);
+            modem_.power_off_radio();
             // modem_.set_iot_tech(lteConfig.default_iot_tech); // needs reboot
             // modem_.network_attach();
             if (nAttachRetries == 0) {
@@ -965,12 +983,16 @@ void NetworkLte::execute_actions() {
 
                 NETWORK_LOG_INF("Starting network attach with default configuration");
                 change_state(NetworkLteState::network_attaching);
+                /*
                 status = modem_.set_operator_manual(lteConfig.plmn, lteConfig.default_iot_tech);
                 if (status != ModemStatus::ok) {
                     NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
                     change_state(NetworkLteState::network_detached);
                     // flag error and stay in the same state to retry later
                 }
+                */
+                modem_.power_radio();
+
             } else if (nAttachRetries < lteConfig.max_attach_retries) {
                 NETWORK_LOG_INF("Retrying network attach with fallback configuration, attempt %d", nAttachRetries);
 
@@ -1022,12 +1044,15 @@ void NetworkLte::execute_actions() {
                 }
 
                 change_state(NetworkLteState::network_attaching);
+                /*
                 status = modem_.set_operator_auto();
                 if (status != ModemStatus::ok) {
                     NETWORK_LOG_ERR("Failed to set operator manual for fallback configuration");
                     // flag error and stay in the same state to retry later
                     change_state(NetworkLteState::network_detached);
                 }
+                */
+                modem_.power_radio();
 
             } else {
                 NETWORK_LOG_ERR("Max attach retries reached, giving up");
@@ -1158,6 +1183,28 @@ void NetworkLte::execute_actions() {
             call_action(ModemAction::query_network_status); // trigger attach flow to ensure we are properly connected
                                                             // before sending/receiving data
         } break;
+
+        case ModemAction::enter_gnss_fix: {
+            // switch modem to GNSS fix mode
+            NETWORK_LOG_INF("Modem entering GNSS fix mode");
+            auto status = modem_.set_gnss_power(true); // enable GNSS power
+            if (status != ModemStatus::ok) {
+                NETWORK_LOG_ERR("Failed to enable GNSS power");
+                call_action(ModemAction::leave_gnss_fix); // attempt to leave GNSS fix mode if enabling GNSS power fails
+            } else {
+                change_state(NetworkLteState::gnss_fix_mode);
+                modem_.set_gnss_urc(true); // enable GNSS NMEA URCs
+            }
+        } break;
+
+        case ModemAction::leave_gnss_fix: {
+            // switch modem to normal mode from GNSS fix mode
+            NETWORK_LOG_INF("Modem leaving GNSS fix mode");
+            modem_.set_gnss_power(false); // disable GNSS power
+            modem_.set_gnss_urc(false);   // disable GNSS NMEA URCs
+            change_state(NetworkLteState::idle_mode);
+            call_action(ModemAction::query_network_status);
+        } break;
     }
 }
 
@@ -1202,6 +1249,13 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             NETWORK_LOG_INF("Time spent in transparent_mode state: %u ms", elasped);
         }
             st_timer->stop(); // stop any timers related to transparent mode if needed
+            break;
+        case NetworkLteState::gnss_fix_mode: {
+            uint32_t elasped = st_timer->elapsed_ms();
+            stateTimers_.gnss_fix_mode_ms += elasped;
+            NETWORK_LOG_INF("Time spent in gnss_fix_mode state: %u ms", elasped);
+        }
+            st_timer->stop(); // stop any timers related to GNSS fix mode if needed
             break;
         case NetworkLteState::sleep_mode: {
             uint32_t elasped = st_timer->elapsed_ms();
@@ -1281,6 +1335,10 @@ void NetworkLte::change_state(NetworkLteState new_state) {
             break;
         case NetworkLteState::off_mode:
             st_timer->start(UINT32_MAX, []() {}); // no timeout; timer used only to measure elapsed time
+            break;
+        case NetworkLteState::gnss_fix_mode:
+            st_timer->start(lteConfig.gps_timeout_sec * 1000,
+                            [this]() { on_timer_expired(); }); // example timeout, adjust as needed
             break;
         default: break; // no special handling needed for other states when entering
     }
@@ -1396,12 +1454,85 @@ void NetworkLte::handle_urc(std::string_view urc) {
         // NW REACT (network requesting reactivation) — no action needed
         return;
     }
+    // %STATEV: <event>,<rat>,<scan_type>[,<scan_effort>,<scan_reason> | ,<scan_reason>]  — cell scan / RRC state events
+    if (urc.substr(0, 8) == "%STATEV:") {
+        auto trim_sv = [](std::string_view s) -> std::string_view {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t' || s.front() == '\r')) s.remove_prefix(1);
+            while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
+            return s;
+        };
+
+        std::string_view payload = urc.substr(8);
+        constexpr size_t MAX_FIELDS = 5;
+        std::string_view fields[MAX_FIELDS];
+        size_t field_count = 0;
+        size_t pos = 0;
+        while (pos <= payload.size() && field_count < MAX_FIELDS) {
+            auto comma = payload.find(',', pos);
+            if (comma == std::string_view::npos) {
+                fields[field_count++] = trim_sv(payload.substr(pos));
+                break;
+            }
+            fields[field_count++] = trim_sv(payload.substr(pos, comma - pos));
+            pos = comma + 1;
+        }
+
+        if (field_count < 2) {
+            NETWORK_LOG_WRN("Malformed %%STATEV URC: %.*s", static_cast<int>(urc.size()), urc.data());
+            return;
+        }
+
+        int statev_event = std::atoi(std::string(fields[0]).c_str());
+        int rat = std::atoi(std::string(fields[1]).c_str());
+        // <scan_type> is omitted by some firmware variants for events 2-7 (observed as "%STATEV: 2,0")
+        int scan_type = (field_count > 2) ? std::atoi(std::string(fields[2]).c_str()) : -1;
+
+        switch (statev_event) {
+            case 0: { // Start Scan: extra fields are <scan_effort>,<scan_reason>
+                // cppcheck-suppress unreadVariable
+                int scan_effort = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 3) ? std::atoi(std::string(fields[3]).c_str()) : -1;
+                // cppcheck-suppress unreadVariable
+                int scan_reason = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 4) ? std::atoi(std::string(fields[4]).c_str()) : -1;
+                NETWORK_LOG_DBG("STATEV: Start Scan rat=%d scan_type=%d scan_effort=%d scan_reason=%d", rat, scan_type,
+                                scan_effort, scan_reason);
+            } break;
+            case 1: { // Fail Scan: extra field is <scan_reason>
+                // cppcheck-suppress unreadVariable
+                int scan_reason = // NOLINT(clang-analyzer-deadcode.DeadStores)
+                    (field_count > 3) ? std::atoi(std::string(fields[3]).c_str()) : -1;
+                NETWORK_LOG_DBG("STATEV: Fail Scan rat=%d scan_type=%d scan_reason=%d", rat, scan_type, scan_reason);
+            } break;
+            case 2: // NOLINT(bugprone-branch-clone) — distinct events logged separately for clarity, not merged
+                NETWORK_LOG_DBG("STATEV: Camped on Cell rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 3:
+                NETWORK_LOG_DBG("STATEV: RRC Connection establishment started rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 4: NETWORK_LOG_DBG("STATEV: Start Rescan rat=%d scan_type=%d", rat, scan_type); break;
+            case 5:
+                NETWORK_LOG_DBG("STATEV: RRC Connection established (Connected) rat=%d scan_type=%d", rat, scan_type);
+                break;
+            case 6: NETWORK_LOG_WRN("STATEV: No Suitable Cells Found rat=%d scan_type=%d", rat, scan_type); break;
+            case 7:
+                NETWORK_LOG_ERR("STATEV: All Registration Attempts Failed rat=%d scan_type=%d", rat, scan_type);
+                break;
+            default:
+                NETWORK_LOG_WRN("STATEV: Unknown event %d rat=%d scan_type=%d", statev_event, rat, scan_type);
+                break;
+        }
+        return;
+    }
     // #PSMURC: <ActiveTime>,<PSMTime>  →  modem entered PSM
     if (urc.substr(0, 8) == "#PSMURC:") {
         on_event(NetworkLteEvent::psm_enter);
         return;
     }
     if (urc.substr(0, 25) == "%NOTIFYEV:\"PLMNSEARCHEXH\"") {
+        // cell scan ended, no cells found
+        // check if invalid attach has the same behavior, do it for NB-IoT as well
+        // prepare to change sim profile
         on_event(NetworkLteEvent::network_detached);
         return;
     }
@@ -1424,6 +1555,11 @@ void NetworkLte::handle_urc(std::string_view urc) {
                serverInfo[conn_id - 1].state != ServerState::disconnected) {
             --conn_id;
         }
+    }
+    if (urc.substr(0, 10) == "$GNSSNMEA:") {
+        NETWORK_LOG_DBG("GNSS NMEA URC received");
+        on_event(NetworkLteEvent::gps_available);
+        return;
     }
 }
 

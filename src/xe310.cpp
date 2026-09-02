@@ -1257,6 +1257,11 @@ ModemStatus xE310::set_gnss_power(bool enable) {
     return send_raw(enable ? "AT$GPSP=1" : "AT$GPSP=0", response);
 }
 
+ModemStatus xE310::set_gnss_urc(bool enable) {
+    AtResponse response;
+    return send_raw(enable ? "AT$GNSSNMEA=1" : "AT$GNSSNMEA=0", response);
+}
+
 ModemStatus xE310::get_gnss_position(GnssPosition& pos) {
     AtResponse response;
     auto status = send_raw("AT$GPSACP", response);
