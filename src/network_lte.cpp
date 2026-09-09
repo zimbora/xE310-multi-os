@@ -93,6 +93,9 @@ const StaticVector<Operator, xE310::MAX_OPERATORS>& NetworkLte::available_operat
 const CsurvResult& NetworkLte::csurv_result() const {
     return csurvResult;
 }
+const GnssPosition& NetworkLte::gnss_position() const {
+    return gnssPosition;
+}
 const ServerInfo* NetworkLte::server_info_array() const {
     return serverInfo;
 }
@@ -496,6 +499,29 @@ bool NetworkLte::update_modem(std::string_view /*firmware_url*/) {
     }
 }
 
+bool NetworkLte::acquire_gnss_position(GnssPosition& pos) {
+    if (state_ != NetworkLteState::gnss_fix_mode) {
+        go_to_state(NetworkLteState::gnss_fix_mode);
+    }
+    if (state_ != NetworkLteState::gnss_fix_mode) {
+        NETWORK_LOG_ERR("Failed to enter GNSS fix mode");
+        return false;
+    }
+
+    // Both a successful fix (gps_available) and the gps_timeout_sec state timer leave gnss_fix_mode via
+    // ModemAction::leave_gnss_fix, so waiting for the state change here covers success and timeout.
+    while (state_ == NetworkLteState::gnss_fix_mode) {
+        loop();
+    }
+
+    if (gnssPosition.fix <= GnssFixType::invalid_fix) {
+        NETWORK_LOG_ERR("Failed to acquire a GNSS fix within the configured timeout");
+        return false;
+    }
+    pos = gnssPosition;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // loop — state-transition logic (keep it fed)
 // ---------------------------------------------------------------------------
@@ -586,8 +612,7 @@ NetworkLteState NetworkLte::loop(NetworkLteState target_state) {
             GnssPosition pos;
             modem_.get_gnss_position(pos);
             if (pos.fix > GnssFixType::invalid_fix) {
-                // dispatch message
-                // copy to global struct GnssPosition
+                gnssPosition = pos;
                 call_action(ModemAction::leave_gnss_fix);
             }
             // otherwise wait for timeout
@@ -651,12 +676,14 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
         // iterations.
         switch (state_) {
             case NetworkLteState::switched_off:
-                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::transparent_mode) {
+                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::transparent_mode ||
+                    target_state == NetworkLteState::gnss_fix_mode) {
                     call_action(ModemAction::power_on);
                 }
                 break;
             case NetworkLteState::off_mode:
-                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::transparent_mode) {
+                if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::transparent_mode ||
+                    target_state == NetworkLteState::gnss_fix_mode) {
                     call_action(ModemAction::turn_on_radio);
                 }
                 break;
@@ -666,6 +693,7 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
                 }
                 break;
             case NetworkLteState::transparent_mode:
+            case NetworkLteState::gnss_fix_mode:
                 if (target_state == NetworkLteState::data_ready || target_state == NetworkLteState::idle_mode) {
                     call_action(ModemAction::leave_transparent_mode); // exit transparent mode, re-enable URCs and
                                                                       // restart normal flow toward data_ready
@@ -682,6 +710,8 @@ bool NetworkLte::go_to_state(NetworkLteState target_state) {
             default:
                 if (target_state == NetworkLteState::transparent_mode) {
                     call_action(ModemAction::enter_transparent_mode);
+                } else if (target_state == NetworkLteState::gnss_fix_mode) {
+                    call_action(ModemAction::enter_gnss_fix);
                 }
                 break; // for other states, we will rely on the normal event flow to transition to the target state
         }
@@ -1192,14 +1222,27 @@ void NetworkLte::execute_actions() {
         case ModemAction::enter_gnss_fix: {
             // switch modem to GNSS fix mode
             NETWORK_LOG_INF("Modem entering GNSS fix mode");
-            auto status = modem_.set_gnss_power(true); // enable GNSS power
-            if (status != ModemStatus::ok) {
-                NETWORK_LOG_ERR("Failed to enable GNSS power");
-                call_action(ModemAction::leave_gnss_fix); // attempt to leave GNSS fix mode if enabling GNSS power fails
-            } else {
-                change_state(NetworkLteState::gnss_fix_mode);
-                modem_.set_gnss_urc(true); // enable GNSS NMEA URCs
+            modem_.set_psm_urc(false); // disable PSM URCs in GNSS fix mode to avoid interfering with raw data reception
+            modem_.set_cell_state_urc(false); // disable CELL scan events
+            modem_.set_registration_urc(
+                false); // disable registration URCs in GNSS fix mode to avoid interfering with raw data reception
+            modem_.set_pdp_urc(false); // disable PDP URCs in GNSS fix mode to avoid interfering with raw data reception
+            // modem_.disable_all_notifyev();
+            modem_.power_off_radio();
+            bool gnss_powered = false;
+            modem_.is_gnss_powered(gnss_powered); // check if GNSS is already powered on
+            if (!gnss_powered) {
+                auto status = modem_.set_gnss_power(true); // enable GNSS power
+                if (status != ModemStatus::ok) {
+                    NETWORK_LOG_ERR("Failed to enable GNSS power");
+                    call_action(
+                        ModemAction::leave_gnss_fix); // attempt to leave GNSS fix mode if enabling GNSS power fails
+                    break;
+                }
             }
+
+            change_state(NetworkLteState::gnss_fix_mode);
+            modem_.set_gnss_urc(true); // enable GNSS NMEA URCs
         } break;
 
         case ModemAction::leave_gnss_fix: {
@@ -1561,11 +1604,13 @@ void NetworkLte::handle_urc(std::string_view urc) {
             --conn_id;
         }
     }
-    if (urc.substr(0, 10) == "$GNSSNMEA:") {
-        NETWORK_LOG_DBG("GNSS NMEA URC received");
+    if (urc.substr(0, 7) == "$GPGSA,") {
+        NETWORK_LOG_DBG("GNSS NMEA URC fix report received");
         on_event(NetworkLteEvent::gps_available);
         return;
     }
+
+    NETWORK_LOG_DBG("Unhandled URC: %.*s", static_cast<int>(urc.size()), urc.data());
 }
 
 // replace all occurrences of event_ = with on_event(event) to ensure that all events go through the on_event handler

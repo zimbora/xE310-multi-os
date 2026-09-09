@@ -760,6 +760,28 @@ TEST_F(NetworkLteTest, GoToState_ModemFota_ReturnsFalse) {
     EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
 }
 
+TEST_F(NetworkLteTest, GoToState_GnssFixMode_EntersGnssFixMode) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::idle_mode);
+    bool result = sm.go_to_state(NetworkLteState::gnss_fix_mode);
+    EXPECT_TRUE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::gnss_fix_mode);
+}
+
+// ===========================================================================
+// acquire_gnss_position tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, AcquireGnssPosition_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    GnssPosition pos;
+    bool result = sm.acquire_gnss_position(pos);
+    EXPECT_FALSE(result);
+    // Failure to enter GNSS fix mode must not change state or spin the caller.
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
 // ===========================================================================
 // server_connect tests
 // ===========================================================================

@@ -30,6 +30,8 @@ public:
     void process_pending_commands();
     std::string run_network_command_sync(const std::function<std::string()>& command);
     std::pair<bool, std::string> send_at_command_sync(const std::string& cmd, uint32_t timeout_ms);
+    /// Trigger a GNSS fix acquisition on the network thread and return the position as JSON on success.
+    std::pair<bool, std::string> acquire_gnss_position_sync();
 
 private:
     void configure_data_ipc();

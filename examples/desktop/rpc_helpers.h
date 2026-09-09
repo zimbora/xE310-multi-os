@@ -95,6 +95,16 @@ inline const char* to_str(modem::SurvCellType v) {
     return "unknown";
 }
 
+inline const char* to_str(modem::GnssFixType v) {
+    switch (v) {
+        case modem::GnssFixType::invalid:     return "invalid";
+        case modem::GnssFixType::invalid_fix: return "invalid_fix";
+        case modem::GnssFixType::fix_2d:      return "fix_2d";
+        case modem::GnssFixType::fix_3d:      return "fix_3d";
+    }
+    return "unknown";
+}
+
 // ── JSON string escaping ──────────────────────────────────────────────────────
 
 inline std::string json_str(std::string_view s) {
@@ -162,6 +172,27 @@ inline std::string to_json(const modem::SignalQuality& v) {
         "{\"rssi\":%d,\"ber\":%d,\"rsrq\":%d,\"rsrp\":%d,\"rsrp_dbm\":%d}",
         v.rssi, v.ber, v.rsrq, v.rsrp, v.rsrp_dbm());
     return buf;
+}
+
+inline std::string to_json(const modem::GnssPosition& v) {
+    return "{\"utc\":"       + json_str(v.utc)       + ",\"latitude\":"  + json_str(v.latitude) +
+           ",\"longitude\":" + json_str(v.longitude) + ",\"hdop\":"      + json_str(v.hdop) +
+           ",\"altitude\":"  + json_str(v.altitude)  + ",\"fix\":\""     + to_str(v.fix) + "\"" +
+           ",\"cog\":"       + json_str(v.cog)       + ",\"spkm\":"      + json_str(v.spkm) +
+           ",\"spkn\":"      + json_str(v.spkn)      + ",\"date\":"      + json_str(v.date) +
+           ",\"nsat\":"      + std::to_string(static_cast<unsigned>(v.nsat)) +
+           ",\"hepe\":"      + json_str(v.hepe)      + ",\"vepe\":"      + json_str(v.vepe) + "}";
+}
+
+// Same field layout as GnssPosition, using the compact cross-thread GnssPositionMsg transport type.
+inline std::string to_json(const modem::GnssPositionMsg& v) {
+    return "{\"utc\":"       + json_str(v.utc)       + ",\"latitude\":"  + json_str(v.latitude) +
+           ",\"longitude\":" + json_str(v.longitude) + ",\"hdop\":"      + json_str(v.hdop) +
+           ",\"altitude\":"  + json_str(v.altitude)  + ",\"fix\":\""     + to_str(v.fix) + "\"" +
+           ",\"cog\":"       + json_str(v.cog)       + ",\"spkm\":"      + json_str(v.spkm) +
+           ",\"spkn\":"      + json_str(v.spkn)      + ",\"date\":"      + json_str(v.date) +
+           ",\"nsat\":"      + std::to_string(static_cast<unsigned>(v.nsat)) +
+           ",\"hepe\":"      + json_str(v.hepe)      + ",\"vepe\":"      + json_str(v.vepe) + "}";
 }
 
 inline std::string to_json(const modem::CpsmsConfig& v) {

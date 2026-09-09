@@ -104,11 +104,13 @@ SET SERVERCONNECT <conn_id> <protocol> <ip> <port>
 `CONFIG`, `MODEMINFO`, `SIMSTATUS`, `RADIOTECH`, `REGSTATUS`, `REGINFO`,
 `NETWORKINFO`, `SIGNALQUALITY`, `PSMMODE`, `CPSMSCONFIG`, `TELITCPSMSCONFIG`,
 `TELITCPSMSSTATUS`, `SURVEYRESULT`, `OPERATORLIST`, `SCANSURVEY`, `STATE`,
-`SERVERINFO [n]`, `ALL`
+`SERVERINFO [n]`, `GNSS`, `ALL`
 
 Notes:
 - `GET SCANSURVEY` actively triggers a scan (`network.scan_networks()`) before returning JSON.
 - `GET SERVERINFO` returns all server slots; `GET SERVERINFO <n>` returns one slot (`1..MAX_SERVER_CONNECTIONS`).
+- `GET GNSS` returns the last position acquired via `SET GNSS` (or `{"fix":"invalid",...}` if none yet), without
+  triggering a new fix.
 
 ### Supported SET operations
 
@@ -127,6 +129,10 @@ Notes:
   - `port`: remote port number (1–65535).
   - Returns JSON summary:
     `{"resource":"SERVERCONNECT","conn_id":<n>,"protocol":"<proto>","ip":"<addr>","port":<port>,"server_connect":<bool>}`
+- `SET GNSS`
+  - Triggers a GNSS fix acquisition (`network.acquire_gnss_position()`), blocking until a fix is obtained or the
+    configured `gps_timeout_sec` elapses.
+  - Returns the acquired position as JSON (same shape as `GET GNSS`), or `ERROR: ...` on timeout/failure.
 
 ### Example session
 

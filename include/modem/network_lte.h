@@ -223,6 +223,12 @@ public:
     /// @return True if the update was successful, false otherwise.
     bool update_modem(std::string_view firmware_url);
 
+    /// @brief Trigger a GNSS fix acquisition, blocking until a fix is obtained or the configured
+    /// gps_timeout_sec elapses.
+    /// @param pos Populated with the acquired position on success.
+    /// @return True if a valid (2D/3D) fix was acquired, false on timeout or failure to enter GNSS fix mode.
+    bool acquire_gnss_position(GnssPosition& pos);
+
     // --- Cached modem state accessors ---
 
     /// Last registration info read from the modem.
@@ -276,6 +282,9 @@ public:
 
     /// Result of the last AT#CSURV scan (populated by scan_networks()).
     const CsurvResult& csurv_result() const;
+
+    /// Last GNSS position acquired via acquire_gnss_position().
+    const GnssPosition& gnss_position() const;
 
     /// Run AT#CSURVF=2 + AT#CSURV and store results internally.
     /// Optionally restrict to channels [start_ch, end_ch]; pass 0 for both to scan full band.
@@ -374,6 +383,7 @@ private:
     NetworkSurveyResult networkSurveyResult;
     StaticVector<Operator, xE310::MAX_OPERATORS> operatorList;
     CsurvResult csurvResult;
+    GnssPosition gnssPosition;
     ServerInfo serverInfo[MAX_SERVER_CONNECTIONS];
 
     NetworkLteConfig lteConfig;

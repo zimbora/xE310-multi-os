@@ -507,6 +507,8 @@ public:
                                 uint32_t timeout_ms = 5000);
 
     // --- GNSS ---
+    /// AT$GPSP? — Query GNSS power state (0=off, 1=on).
+    ModemStatus is_gnss_powered(bool& powered);
 
     /// AT$GPSP=<status> — Start/stop the GNSS positioning session (also powers on the GNSS chip the first time).
     ModemStatus set_gnss_power(bool enable);

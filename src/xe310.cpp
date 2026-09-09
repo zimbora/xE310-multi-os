@@ -1310,14 +1310,34 @@ ModemStatus xE310::send_at_command(std::string_view command, FixedString<AT_RESP
 
 // --- GNSS ---
 
+ModemStatus xE310::is_gnss_powered(bool& powered) {
+    AtResponse response;
+    powered = false;
+
+    auto status = send_raw("AT$GPSP?", response);
+
+    if (status == ModemStatus::ok) {
+        powered = response.body.find("1") != FixedString<AT_RESPONSE_MAX>::NPOS;
+    }
+
+    return status;
+}
+
 ModemStatus xE310::set_gnss_power(bool enable) {
     AtResponse response;
-    return send_raw(enable ? "AT$GPSP=1" : "AT$GPSP=0", response);
+
+    auto status = send_raw(enable ? "AT$GPSP=1" : "AT$GPSP=0", response);
+
+    if (!enable) power_radio();
+
+    // power_radio()/power_off_radio() also update last_status_, so restore it to reflect the GPSP result
+    last_status_ = status;
+    return status;
 }
 
 ModemStatus xE310::set_gnss_urc(bool enable) {
     AtResponse response;
-    return send_raw(enable ? "AT$GNSSNMEA=1" : "AT$GNSSNMEA=0", response);
+    return send_raw(enable ? "AT$GNSSNMEA=1,4" : "AT$GNSSNMEA=0,0", response);
 }
 
 ModemStatus xE310::get_gnss_position(GnssPosition& pos) {
