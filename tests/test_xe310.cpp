@@ -946,36 +946,30 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
 
 // --- GNSS ---
 
+TEST_F(Xe310Test, IsGnssPoweredTrue) {
+    expect_command_ok("AT$GPSP?", "$GPSP: 1");
+    bool powered = false;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::ok);
+    EXPECT_TRUE(powered);
+}
+
+TEST_F(Xe310Test, IsGnssPoweredFalse) {
+    expect_command_ok("AT$GPSP?", "$GPSP: 0");
+    bool powered = true;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::ok);
+    EXPECT_FALSE(powered);
+}
+
+TEST_F(Xe310Test, IsGnssPoweredError) {
+    expect_command_error("AT$GPSP?");
+    bool powered = true;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::at_error);
+    EXPECT_FALSE(powered);
+}
+
 TEST_F(Xe310Test, SetGnssPowerEnable) {
-    // enable path: power off the radio (AT+CFUN=4) then start the GNSS session (AT$GPSP=1)
-    testing::InSequence seq;
-
-    EXPECT_CALL(*mock_uart_, write(_, _))
-        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
-            EXPECT_EQ(std::string(reinterpret_cast<const char*>(data), length), "AT+CFUN=4\r\n");
-            return UartError::ok;
-        }));
-    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
-            std::string resp = "\r\nOK\r\n";
-            std::memcpy(buffer, resp.c_str(), resp.size());
-            bytes_read = resp.size();
-            return UartError::ok;
-        }));
-
-    EXPECT_CALL(*mock_uart_, write(_, _))
-        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
-            EXPECT_EQ(std::string(reinterpret_cast<const char*>(data), length), "AT$GPSP=1\r\n");
-            return UartError::ok;
-        }));
-    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
-        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
-            std::string resp = "\r\nOK\r\n";
-            std::memcpy(buffer, resp.c_str(), resp.size());
-            bytes_read = resp.size();
-            return UartError::ok;
-        }));
-
+    // enable path: start the GNSS session directly (AT$GPSP=1), no radio power-cycle
+    expect_command_ok("AT$GPSP=1", "");
     EXPECT_EQ(modem_->set_gnss_power(true), ModemStatus::ok);
     EXPECT_EQ(modem_->last_status(), ModemStatus::ok);
 }
@@ -1042,7 +1036,7 @@ TEST_F(Xe310Test, SetGnssPowerDisableReportsGpspFailureNotRadioPower) {
 }
 
 TEST_F(Xe310Test, SetGnssUrcEnable) {
-    expect_command_ok("AT$GNSSNMEA=1,1", "");
+    expect_command_ok("AT$GNSSNMEA=1,4", "");
     EXPECT_EQ(modem_->set_gnss_urc(true), ModemStatus::ok);
 }
 

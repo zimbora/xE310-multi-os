@@ -242,3 +242,66 @@ TEST_F(IRadioLteTest, ServerDisconnectReturnsImmediateAckThenActionDone) {
 
     worker.join();
 }
+
+// ---------------------------------------------------------------------------
+// Non-blocking request: get_gnss_position
+// Verifies the compact GnssPositionMsg wire type round-trips through the
+// message channel (cached value, no fix acquired yet).
+// ---------------------------------------------------------------------------
+TEST_F(IRadioLteTest, GetGnssPositionReturnsImmediateResponse) {
+    auto radio = make_radio();
+    RadioLteChannels channels;
+
+    ModemTxMsg req{RadioLteRequestType::get_gnss_position, 0, 0};
+    ASSERT_EQ(channels.send_request(req, 1000), MessageChannelError::ok);
+
+    std::thread worker([&]() { process_radio_requests(channels, radio); });
+
+    uint32_t matched = channels.wait(MODEM_EVT_RESPONSE, true, 1000);
+    EXPECT_NE(matched & MODEM_EVT_RESPONSE, 0U);
+
+    uint32_t action_done = channels.wait(MODEM_EVT_ACTION_DONE, false, 0);
+    EXPECT_EQ(action_done & MODEM_EVT_ACTION_DONE, 0U);
+
+    ModemTypedResponseMsg<GnssPositionMsg> resp{};
+    EXPECT_EQ(channels.recv_typed_response(resp, 0), MessageChannelError::ok);
+    EXPECT_TRUE(resp.ok);
+    EXPECT_EQ(resp.value.fix, GnssFixType::invalid); // no fix acquired yet
+
+    worker.join();
+}
+
+// ---------------------------------------------------------------------------
+// Blocking request: acquire_gnss_position
+// Verifies the two-step protocol; uses a short gps_timeout_sec so the test
+// completes quickly when no fix URC ever arrives.
+// ---------------------------------------------------------------------------
+TEST_F(IRadioLteTest, AcquireGnssPositionReturnsImmediateAckThenActionDone) {
+    NetworkLteConfig cfg;
+    cfg.gps_timeout_sec = 1;
+    auto radio = make_radio(cfg);
+    RadioLteChannels channels;
+
+    ModemTxMsg req{RadioLteRequestType::acquire_gnss_position, 0, 0};
+    ASSERT_EQ(channels.send_request(req, 1000), MessageChannelError::ok);
+
+    std::thread worker([&]() { process_radio_requests(channels, radio); });
+
+    uint32_t ack_event = channels.wait(MODEM_EVT_RESPONSE, true, MODEM_ACK_TIMEOUT_MS);
+    EXPECT_NE(ack_event & MODEM_EVT_RESPONSE, 0U);
+
+    ModemTypedResponseMsg<bool> ack{};
+    ASSERT_EQ(channels.recv_typed_response(ack, 0), MessageChannelError::ok);
+    EXPECT_TRUE(ack.value);
+
+    // No NMEA fix URC ever arrives, so this only completes once gps_timeout_sec elapses.
+    uint32_t done_event = channels.wait(MODEM_EVT_ACTION_DONE, true, 5000);
+    EXPECT_NE(done_event & MODEM_EVT_ACTION_DONE, 0U);
+
+    ModemActionCompleteMsg complete{};
+    ASSERT_EQ(channels.recv_action_complete(complete, 0), MessageChannelError::ok);
+    EXPECT_EQ(complete.type, RadioLteRequestType::acquire_gnss_position);
+    EXPECT_FALSE(complete.result);
+
+    worker.join();
+}
