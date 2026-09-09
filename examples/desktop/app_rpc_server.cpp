@@ -17,6 +17,7 @@ constexpr uint32_t RPC_TIMEOUT_DEFAULT_MS = 5000U;
 constexpr uint32_t RPC_TIMEOUT_CONNECT_MS = 210000U;
 constexpr uint32_t RPC_TIMEOUT_DISCONNECT_MS = 60000U;
 constexpr uint32_t RPC_TIMEOUT_FORCE_PSM_MS = 30000U;
+constexpr uint32_t RPC_TIMEOUT_GNSS_MS = 90000U; // comfortably above the default gps_timeout_sec (60s)
 
 std::string to_upper(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -320,6 +321,20 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
             return wait_blocking_action_complete(modem::RadioLteRequestType::server_disconnect, timeout_ms);
         case modem::RadioLteRequestType::force_psm:
             return wait_blocking_action_complete(modem::RadioLteRequestType::force_psm, timeout_ms);
+        case modem::RadioLteRequestType::get_gnss_position: {
+            modem::ModemTypedResponseMsg<modem::GnssPositionMsg> resp{};
+            if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
+                return {false, "ERROR: invalid gnss_position response"};
+            }
+            return {resp.ok, rpc::to_json(resp.value)};
+        }
+        case modem::RadioLteRequestType::acquire_gnss_position: {
+            // Blocking op: ACK already received; wait for completion then fetch the acquired position.
+            auto [ok, err_msg] =
+                wait_blocking_action_complete(modem::RadioLteRequestType::acquire_gnss_position, timeout_ms);
+            if (!ok) return {false, err_msg};
+            return request_radio_state({modem::RadioLteRequestType::get_gnss_position, 0U, 0U}, timeout_ms);
+        }
         default: {
             modem::ModemTypedResponseMsg<bool> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
@@ -404,6 +419,10 @@ std::string RpcServer::handle_request(const std::string& request) {
         }
         if (sub == "TIMERS") {
             return request_radio_state({modem::RadioLteRequestType::get_timers, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS)
+                .second;
+        }
+        if (sub == "GNSS") {
+            return request_radio_state({modem::RadioLteRequestType::get_gnss_position, 0U, 0U}, RPC_TIMEOUT_DEFAULT_MS)
                 .second;
         }
         if (sub.rfind("SERVERINFO", 0) == 0) {
@@ -606,6 +625,13 @@ std::string RpcServer::handle_request(const std::string& request) {
                 request_radio_state({modem::RadioLteRequestType::force_psm, 0U, 0U}, RPC_TIMEOUT_FORCE_PSM_MS);
             if (!ok) return payload;
             return std::string("{") + "\"resource\":\"FORCEPSM\"," + "\"status\":" + payload + "}";
+        }
+
+        if (res == "GNSS") {
+            auto [ok, payload] =
+                request_radio_state({modem::RadioLteRequestType::acquire_gnss_position, 0U, 0U}, RPC_TIMEOUT_GNSS_MS);
+            if (!ok) return payload;
+            return payload; // already the JSON position from the get_gnss_position follow-up request
         }
 
         return "ERROR: unknown SET resource";

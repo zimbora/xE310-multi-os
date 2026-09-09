@@ -300,6 +300,10 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
                                             "NO CARRIER",  // connection terminated
                                             "BUSY",        // line busy
                                             "NO DIALTONE", // no dial tone
+                                            "$GPGGA,",     // GNSS NMEA fix report
+                                            "$GPGSA,",     // GNSS NMEA fix mode and satellites used
+                                            "$GPGSV,",     // GNSS NMEA satellites in view
+                                            "$GPRMC,",     // GNSS NMEA recommended minimum data
                                             nullptr};
 
     uint8_t buffer[512];
@@ -308,20 +312,28 @@ StaticVector<FixedString<URC_LINE_MAX>, ModemController::MAX_URC_LINES> ModemCon
     if (err == UartError::ok && bytes_read > 0) {
         buffer[bytes_read] = '\0';
         std::string_view raw_chunk(reinterpret_cast<const char*>(buffer), bytes_read);
+
         /*
         MODEM_LOG_DBG("<< (URC poll raw): %.*s [%zu bytes]", (int)bytes_read, reinterpret_cast<const char*>(buffer),
                       bytes_read);
         */
-        // Append and parse only complete CRLF-terminated lines.
+
+        // Append and parse only complete newline-terminated lines.
         urc_rx_buffer_.append(raw_chunk);
     } else if (err != UartError::timeout && err != UartError::ok) {
         return urcs;
     }
 
     size_t end = 0;
-    while ((end = urc_rx_buffer_.find("\r\n")) != FixedString<URC_RX_BUFFER_MAX>::NPOS) {
-        FixedString<URC_LINE_MAX> line(std::string_view(urc_rx_buffer_.data(), end));
-        urc_rx_buffer_.erase(0, end + 2);
+    // GNSS NMEA sentences are LF-terminated only, unlike AT URCs (CRLF), so split on '\n' and
+    // trim a trailing '\r' when present rather than requiring "\r\n".
+    while ((end = urc_rx_buffer_.find('\n')) != FixedString<URC_RX_BUFFER_MAX>::NPOS) {
+        size_t line_len = end;
+        if (line_len > 0 && urc_rx_buffer_[line_len - 1] == '\r') {
+            --line_len;
+        }
+        FixedString<URC_LINE_MAX> line(std::string_view(urc_rx_buffer_.data(), line_len));
+        urc_rx_buffer_.erase(0, end + 1);
 
         if (line.empty()) {
             continue;

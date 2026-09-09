@@ -760,6 +760,70 @@ TEST_F(NetworkLteTest, GoToState_ModemFota_ReturnsFalse) {
     EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
 }
 
+TEST_F(NetworkLteTest, GoToState_GnssFixMode_EntersGnssFixMode) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::idle_mode);
+    bool result = sm.go_to_state(NetworkLteState::gnss_fix_mode);
+    EXPECT_TRUE(result);
+    EXPECT_EQ(sm.state(), NetworkLteState::gnss_fix_mode);
+}
+
+// ===========================================================================
+// acquire_gnss_position tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, AcquireGnssPosition_ModemFota_ReturnsFalse) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::modem_fota);
+    GnssPosition pos;
+    bool result = sm.acquire_gnss_position(pos);
+    EXPECT_FALSE(result);
+    // Failure to enter GNSS fix mode must not change state or spin the caller.
+    EXPECT_EQ(sm.state(), NetworkLteState::modem_fota);
+}
+
+// ===========================================================================
+// gps_available event tests
+// ===========================================================================
+
+TEST_F(NetworkLteTest, GpsAvailableEvent_ValidFix_CachesPositionAndLeavesGnssFixMode) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::gnss_fix_mode);
+
+    // Override AT$GPSACP to report a valid 3D fix; everything else keeps the default OK.
+    ON_CALL(*mock_uart_, read(_, _, _, Gt(100u)))
+        .WillByDefault(Invoke([this](uint8_t* buf, size_t, size_t& n, uint32_t) {
+            std::string resp;
+            if (last_written_cmd_.find("AT$GPSACP") != std::string::npos) {
+                resp = "\r\n$GPSACP: 161229.000,3812.4200N,00913.2100E,1.2,50.1,3,0.0,0.0,0.0,090923,08,2.1,3.2\r\n"
+                       "\r\nOK\r\n";
+            } else {
+                resp = "\r\nOK\r\n";
+            }
+            std::memcpy(buf, resp.c_str(), resp.size());
+            n = resp.size();
+            return UartError::ok;
+        }));
+
+    sm.handle_urc("$GPGSA,A,3,14,05,17,20,22,19,15,24,,,,,2.3,1.4,1.8*31");
+    sm.step();
+
+    EXPECT_EQ(sm.gnss_position().fix, GnssFixType::fix_3d);
+    EXPECT_EQ(sm.state(), NetworkLteState::idle_mode);
+}
+
+TEST_F(NetworkLteTest, GpsAvailableEvent_NoFixYet_StaysInGnssFixMode) {
+    auto sm = make_sm();
+    sm.change_state(NetworkLteState::gnss_fix_mode);
+
+    // Default AT$GPSACP response ("OK" with no body) parses as an error, so fix stays invalid.
+    sm.handle_urc("$GPGSA,A,1,,,,,,,,,,,,,99.0,99.0,99.0*30");
+    sm.step();
+
+    EXPECT_EQ(sm.gnss_position().fix, GnssFixType::invalid);
+    EXPECT_EQ(sm.state(), NetworkLteState::gnss_fix_mode);
+}
+
 // ===========================================================================
 // server_connect tests
 // ===========================================================================

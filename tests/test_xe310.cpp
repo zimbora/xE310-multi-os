@@ -944,6 +944,107 @@ TEST_F(Xe310Test, UdpSendBinaryData) {
     EXPECT_EQ(modem_->udp_send(2, payload, sizeof(payload)), ModemStatus::ok);
 }
 
+// --- GNSS ---
+
+TEST_F(Xe310Test, IsGnssPoweredTrue) {
+    expect_command_ok("AT$GPSP?", "$GPSP: 1");
+    bool powered = false;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::ok);
+    EXPECT_TRUE(powered);
+}
+
+TEST_F(Xe310Test, IsGnssPoweredFalse) {
+    expect_command_ok("AT$GPSP?", "$GPSP: 0");
+    bool powered = true;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::ok);
+    EXPECT_FALSE(powered);
+}
+
+TEST_F(Xe310Test, IsGnssPoweredError) {
+    expect_command_error("AT$GPSP?");
+    bool powered = true;
+    EXPECT_EQ(modem_->is_gnss_powered(powered), ModemStatus::at_error);
+    EXPECT_FALSE(powered);
+}
+
+TEST_F(Xe310Test, SetGnssPowerEnable) {
+    // enable path: start the GNSS session directly (AT$GPSP=1), no radio power-cycle
+    expect_command_ok("AT$GPSP=1", "");
+    EXPECT_EQ(modem_->set_gnss_power(true), ModemStatus::ok);
+    EXPECT_EQ(modem_->last_status(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetGnssPowerDisable) {
+    // disable path: stop the GNSS session (AT$GPSP=0) then power the radio back on (AT+CFUN=1)
+    testing::InSequence seq;
+
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+            EXPECT_EQ(std::string(reinterpret_cast<const char*>(data), length), "AT$GPSP=0\r\n");
+            return UartError::ok;
+        }));
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    EXPECT_CALL(*mock_uart_, write(_, _))
+        .WillOnce(Invoke([](const uint8_t* data, size_t length) {
+            EXPECT_EQ(std::string(reinterpret_cast<const char*>(data), length), "AT+CFUN=1\r\n");
+            return UartError::ok;
+        }));
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    EXPECT_EQ(modem_->set_gnss_power(false), ModemStatus::ok);
+    EXPECT_EQ(modem_->last_status(), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetGnssPowerDisableReportsGpspFailureNotRadioPower) {
+    // AT$GPSP=0 fails but the subsequent AT+CFUN=1 (power_radio) succeeds; the returned status
+    // and last_status() must still reflect the GPSP failure, not the later radio power result.
+    testing::InSequence seq;
+
+    EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nERROR\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    EXPECT_CALL(*mock_uart_, write(_, _)).WillOnce(Return(UartError::ok));
+    EXPECT_CALL(*mock_uart_, read(_, _, _, _))
+        .WillOnce(Invoke([](uint8_t* buffer, size_t, size_t& bytes_read, uint32_t) {
+            std::string resp = "\r\nOK\r\n";
+            std::memcpy(buffer, resp.c_str(), resp.size());
+            bytes_read = resp.size();
+            return UartError::ok;
+        }));
+
+    EXPECT_EQ(modem_->set_gnss_power(false), ModemStatus::at_error);
+    EXPECT_EQ(modem_->last_status(), ModemStatus::at_error);
+}
+
+TEST_F(Xe310Test, SetGnssUrcEnable) {
+    expect_command_ok("AT$GNSSNMEA=1,4", "");
+    EXPECT_EQ(modem_->set_gnss_urc(true), ModemStatus::ok);
+}
+
+TEST_F(Xe310Test, SetGnssUrcDisable) {
+    expect_command_ok("AT$GNSSNMEA=0,0", "");
+    EXPECT_EQ(modem_->set_gnss_urc(false), ModemStatus::ok);
+}
+
 // --- Not Connected ---
 
 TEST_F(Xe310Test, CommandWhenNotConnected) {

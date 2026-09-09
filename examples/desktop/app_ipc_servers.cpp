@@ -110,6 +110,34 @@ std::pair<bool, std::string> IpcServers::send_at_command_sync(const std::string&
     return {command_result.ok, command_result.response};
 }
 
+std::pair<bool, std::string> IpcServers::acquire_gnss_position_sync() {
+    struct GnssResult {
+        bool ok = false;
+        std::string response;
+    };
+
+    auto run_command = [&]() {
+        modem::GnssPosition pos;
+        GnssResult result{};
+        result.ok = context_.network.acquire_gnss_position(pos);
+        result.response = result.ok ? rpc::to_json(pos) : "ERROR: failed to acquire GNSS fix";
+        return result;
+    };
+
+    if (!context_.network_worker_running.load()) {
+        std::scoped_lock network_lock(context_.network_mutex);
+        GnssResult result = run_command();
+        return {result.ok, result.response};
+    }
+
+    auto done = std::make_shared<std::promise<GnssResult>>();
+    auto result = done->get_future();
+    enqueue_network_command([run_command, done]() mutable { done->set_value(run_command()); });
+
+    GnssResult command_result = result.get();
+    return {command_result.ok, command_result.response};
+}
+
 void IpcServers::configure_data_ipc() {
     ipc_.set_callback([this](const uint8_t* data, uint16_t len) {
         std::vector<uint8_t> payload(data, data + len);
