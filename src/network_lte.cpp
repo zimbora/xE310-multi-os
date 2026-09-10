@@ -139,6 +139,11 @@ bool NetworkLte::network_connect() {
 
     // States that cannot transition to data_ready without explicit user action:
     // return false immediately to avoid an infinite loop inside go_to_state().
+
+    if(state_ == NetworkLteState::gnss_fix_mode) {
+        NETWORK_LOG_ERR("Cannot connect to network while in GNSS fix mode, exit GNSS fix mode first");
+        return false;
+    }
     if (state_ == NetworkLteState::transparent_mode) {
         NETWORK_LOG_ERR("Cannot connect to network while in transparent mode, exit transparent mode first");
         return false;
