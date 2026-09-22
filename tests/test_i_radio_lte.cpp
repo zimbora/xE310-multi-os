@@ -245,8 +245,8 @@ TEST_F(IRadioLteTest, ServerDisconnectReturnsImmediateAckThenActionDone) {
 
 // ---------------------------------------------------------------------------
 // Non-blocking request: get_gnss_position
-// Verifies the compact GnssPositionMsg wire type round-trips through the
-// message channel (cached value, no fix acquired yet).
+// Verifies GnssPosition round-trips through the message channel (cached value,
+// no fix acquired yet).
 // ---------------------------------------------------------------------------
 TEST_F(IRadioLteTest, GetGnssPositionReturnsImmediateResponse) {
     auto radio = make_radio();
@@ -263,7 +263,7 @@ TEST_F(IRadioLteTest, GetGnssPositionReturnsImmediateResponse) {
     uint32_t action_done = channels.wait(MODEM_EVT_ACTION_DONE, false, 0);
     EXPECT_EQ(action_done & MODEM_EVT_ACTION_DONE, 0U);
 
-    ModemTypedResponseMsg<GnssPositionMsg> resp{};
+    ModemTypedResponseMsg<GnssPosition> resp{};
     EXPECT_EQ(channels.recv_typed_response(resp, 0), MessageChannelError::ok);
     EXPECT_TRUE(resp.ok);
     EXPECT_EQ(resp.value.fix, GnssFixType::invalid); // no fix acquired yet

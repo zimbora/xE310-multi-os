@@ -176,23 +176,12 @@ inline std::string to_json(const modem::SignalQuality& v) {
 
 inline std::string to_json(const modem::GnssPosition& v) {
     return "{\"utc\":"       + json_str(v.utc)       + ",\"latitude\":"  + json_str(v.latitude) +
-           ",\"longitude\":" + json_str(v.longitude) + ",\"hdop\":"      + json_str(v.hdop) +
-           ",\"altitude\":"  + json_str(v.altitude)  + ",\"fix\":\""     + to_str(v.fix) + "\"" +
-           ",\"cog\":"       + json_str(v.cog)       + ",\"spkm\":"      + json_str(v.spkm) +
-           ",\"spkn\":"      + json_str(v.spkn)      + ",\"date\":"      + json_str(v.date) +
+           ",\"longitude\":" + json_str(v.longitude) + ",\"hdop\":"      + std::to_string(v.hdop) +
+           ",\"altitude\":"  + std::to_string(v.altitude) + ",\"fix\":\""     + to_str(v.fix) + "\"" +
+           ",\"cog\":"       + std::to_string(v.cog) + ",\"spkm\":"      + std::to_string(v.spkm) +
+           ",\"spkn\":"      + std::to_string(v.spkn) + ",\"date\":"      + json_str(v.date) +
            ",\"nsat\":"      + std::to_string(static_cast<unsigned>(v.nsat)) +
-           ",\"hepe\":"      + json_str(v.hepe)      + ",\"vepe\":"      + json_str(v.vepe) + "}";
-}
-
-// Same field layout as GnssPosition, using the compact cross-thread GnssPositionMsg transport type.
-inline std::string to_json(const modem::GnssPositionMsg& v) {
-    return "{\"utc\":"       + json_str(v.utc)       + ",\"latitude\":"  + json_str(v.latitude) +
-           ",\"longitude\":" + json_str(v.longitude) + ",\"hdop\":"      + json_str(v.hdop) +
-           ",\"altitude\":"  + json_str(v.altitude)  + ",\"fix\":\""     + to_str(v.fix) + "\"" +
-           ",\"cog\":"       + json_str(v.cog)       + ",\"spkm\":"      + json_str(v.spkm) +
-           ",\"spkn\":"      + json_str(v.spkn)      + ",\"date\":"      + json_str(v.date) +
-           ",\"nsat\":"      + std::to_string(static_cast<unsigned>(v.nsat)) +
-           ",\"hepe\":"      + json_str(v.hepe)      + ",\"vepe\":"      + json_str(v.vepe) + "}";
+           ",\"hepe\":"      + std::to_string(v.hepe) + ",\"vepe\":"      + std::to_string(v.vepe) + "}";
 }
 
 inline std::string to_json(const modem::CpsmsConfig& v) {

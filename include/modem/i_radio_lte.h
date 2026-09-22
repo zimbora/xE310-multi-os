@@ -99,25 +99,6 @@ struct ModemActionCompleteMsg {
 static_assert(sizeof(ModemActionCompleteMsg) <= MESSAGE_CHANNEL_MAX_DATA,
               "ModemActionCompleteMsg exceeds MESSAGE_CHANNEL_MAX_DATA");
 
-/// Compact cross-thread transport for GnssPosition — GnssPosition's FixedString<MODEM_SHORT_STR> fields
-/// don't fit in MESSAGE_CHANNEL_MAX_DATA once wrapped in ModemTypedResponseMsg, so fields are truncated
-/// to a smaller capacity here (still large enough for any AT$GPSACP token).
-struct GnssPositionMsg {
-    FixedString<16> utc;
-    FixedString<16> latitude;
-    FixedString<16> longitude;
-    FixedString<16> hdop;
-    FixedString<16> altitude;
-    GnssFixType fix = GnssFixType::invalid;
-    FixedString<16> cog;
-    FixedString<16> spkm;
-    FixedString<16> spkn;
-    FixedString<16> date;
-    uint8_t nsat = 0;
-    FixedString<16> hepe;
-    FixedString<16> vepe;
-};
-
 using RadioLteRequestMsg = ModemTxMsg;
 
 template<typename ValueType> struct ModemTypedResponseMsg {
@@ -128,8 +109,8 @@ template<typename ValueType> struct ModemTypedResponseMsg {
 static_assert(sizeof(ModemTypedResponseMsg<NetworkLteConfig>) <= MESSAGE_CHANNEL_MAX_DATA,
               "ModemTypedResponseMsg<NetworkLteConfig> exceeds MESSAGE_CHANNEL_MAX_DATA");
 
-static_assert(sizeof(ModemTypedResponseMsg<GnssPositionMsg>) <= MESSAGE_CHANNEL_MAX_DATA,
-              "ModemTypedResponseMsg<GnssPositionMsg> exceeds MESSAGE_CHANNEL_MAX_DATA");
+static_assert(sizeof(ModemTypedResponseMsg<GnssPosition>) <= MESSAGE_CHANNEL_MAX_DATA,
+              "ModemTypedResponseMsg<GnssPosition> exceeds MESSAGE_CHANNEL_MAX_DATA");
 
 /// Accumulated time (in milliseconds) spent in each timed state since the NetworkLte instance was created.
 /// Counters are incremented each time the state machine exits a timed state, by the number of milliseconds

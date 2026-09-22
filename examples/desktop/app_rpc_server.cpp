@@ -322,7 +322,7 @@ std::pair<bool, std::string> RpcServer::request_radio_state_impl(modem::RadioLte
         case modem::RadioLteRequestType::force_psm:
             return wait_blocking_action_complete(modem::RadioLteRequestType::force_psm, timeout_ms);
         case modem::RadioLteRequestType::get_gnss_position: {
-            modem::ModemTypedResponseMsg<modem::GnssPositionMsg> resp{};
+            modem::ModemTypedResponseMsg<modem::GnssPosition> resp{};
             if (context_.channels.recv_typed_response(resp, 0) != modem::MessageChannelError::ok) {
                 return {false, "ERROR: invalid gnss_position response"};
             }

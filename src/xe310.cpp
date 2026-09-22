@@ -1373,16 +1373,16 @@ ModemStatus xE310::get_gnss_position(GnssPosition& pos) {
     if (field_count >= 1) pos.utc = fields[0];
     if (field_count >= 2) pos.latitude = fields[1];
     if (field_count >= 3) pos.longitude = fields[2];
-    if (field_count >= 4) pos.hdop = fields[3];
-    if (field_count >= 5) pos.altitude = fields[4];
+    if (field_count >= 4) pos.hdop = std::strtof(fields[3].c_str(), nullptr);
+    if (field_count >= 5) pos.altitude = std::strtof(fields[4].c_str(), nullptr);
     if (field_count >= 6) pos.fix = static_cast<GnssFixType>(std::atoi(fields[5].c_str()));
-    if (field_count >= 7) pos.cog = fields[6];
-    if (field_count >= 8) pos.spkm = fields[7];
-    if (field_count >= 9) pos.spkn = fields[8];
+    if (field_count >= 7) pos.cog = static_cast<uint16_t>(std::strtoul(fields[6].c_str(), nullptr, 10));
+    if (field_count >= 8) pos.spkm = std::strtof(fields[7].c_str(), nullptr);
+    if (field_count >= 9) pos.spkn = std::strtof(fields[8].c_str(), nullptr);
     if (field_count >= 10) pos.date = fields[9];
     if (field_count >= 11) pos.nsat = static_cast<uint8_t>(std::atoi(fields[10].c_str()));
-    if (field_count >= 12) pos.hepe = fields[11];
-    if (field_count >= 13) pos.vepe = fields[12];
+    if (field_count >= 12) pos.hepe = std::strtof(fields[11].c_str(), nullptr);
+    if (field_count >= 13) pos.vepe = std::strtof(fields[12].c_str(), nullptr);
 
     return ModemStatus::ok;
 }

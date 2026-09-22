@@ -262,16 +262,16 @@ struct GnssPosition {
     FixedString<MODEM_SHORT_STR> utc;       ///< UTC time (hhmmss.sss)
     FixedString<MODEM_SHORT_STR> latitude;  ///< ddmm.mmmm N/S
     FixedString<MODEM_SHORT_STR> longitude; ///< dddmm.mmmm E/W
-    FixedString<MODEM_SHORT_STR> hdop;      ///< Horizontal dilution of precision
-    FixedString<MODEM_SHORT_STR> altitude;  ///< Mean-sea-level altitude in meters
+    float hdop = 0.0F;                      ///< Horizontal dilution of precision
+    float altitude = 0.0F;                  ///< Mean-sea-level altitude in meters
     GnssFixType fix = GnssFixType::invalid;
-    FixedString<MODEM_SHORT_STR> cog;  ///< Course over ground (degrees, true)
-    FixedString<MODEM_SHORT_STR> spkm; ///< Speed over ground (km/h)
-    FixedString<MODEM_SHORT_STR> spkn; ///< Speed over ground (knots)
+    uint16_t cog = 0;                  ///< Course over ground (degrees, true)
+    float spkm = 0.0F;                 ///< Speed over ground (km/h)
+    float spkn = 0.0F;                 ///< Speed over ground (knots)
     FixedString<MODEM_SHORT_STR> date; ///< Fix date (ddmmyy)
     uint8_t nsat = 0;                  ///< Total number of satellites in use
-    FixedString<MODEM_SHORT_STR> hepe; ///< Horizontal estimated position error (meters)
-    FixedString<MODEM_SHORT_STR> vepe; ///< Vertical estimated position error (meters)
+    float hepe = 0.0F;                 ///< Horizontal estimated position error (meters)
+    float vepe = 0.0F;                 ///< Vertical estimated position error (meters)
 };
 
 /// Telit ME310 modem — wraps ModemController with ME310-specific commands.

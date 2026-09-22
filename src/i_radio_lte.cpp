@@ -3,26 +3,6 @@
 
 namespace modem {
 
-namespace {
-GnssPositionMsg to_gnss_position_msg(const GnssPosition& pos) {
-    GnssPositionMsg msg;
-    msg.utc = pos.utc;
-    msg.latitude = pos.latitude;
-    msg.longitude = pos.longitude;
-    msg.hdop = pos.hdop;
-    msg.altitude = pos.altitude;
-    msg.fix = pos.fix;
-    msg.cog = pos.cog;
-    msg.spkm = pos.spkm;
-    msg.spkn = pos.spkn;
-    msg.date = pos.date;
-    msg.nsat = pos.nsat;
-    msg.hepe = pos.hepe;
-    msg.vepe = pos.vepe;
-    return msg;
-}
-} // namespace
-
 void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
     MessageFrame frame{};
     while (channels.recv_request_frame(frame) == MessageChannelError::ok) {
@@ -164,9 +144,7 @@ void process_radio_requests(RadioLteChannels& channels, NetworkLte& radio) {
 
             case RadioLteRequestType::get_timers: channels.publish_typed_response(radio.state_timers()); break;
 
-            case RadioLteRequestType::get_gnss_position:
-                channels.publish_typed_response(to_gnss_position_msg(radio.gnss_position()));
-                break;
+            case RadioLteRequestType::get_gnss_position: channels.publish_typed_response(radio.gnss_position()); break;
 
             case RadioLteRequestType::acquire_gnss_position: {
                 channels.publish_typed_response(true);
